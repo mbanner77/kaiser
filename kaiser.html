@@ -3,129 +3,173 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KAISER — Retro-Wirtschaftssimulation</title>
+<title>Kaiser — Wirtschaftssimulation</title>
 <style>
   :root{
-    --c64-border:#7869C4;
-    --c64-bg:#40318D;
-    --c64-txt:#7869C4;
-    --c64-bright:#B8AEEA;
-    --c64-white:#FFFFFF;
-    --c64-yellow:#DFDF8B;
-    --c64-green:#67B26F;
-    --c64-red:#B86962;
-    --c64-cyan:#84C5CC;
-    --c64-orange:#C09B62;
+    --bg:#0e1117; --panel:#161c26; --panel2:#1d2532; --border:#2a3446;
+    --txt:#dbe2ee; --muted:#8b96a8; --gold:#e0b458; --gold2:#c79a3d;
+    --green:#4cc38a; --red:#e5636f; --cyan:#5fb8d4; --orange:#d9973f;
+    --radius:14px;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
-  html,body{height:100%;}
   body{
-    background:var(--c64-border);
-    font-family:"Courier New",Courier,monospace;
-    display:flex;align-items:center;justify-content:center;
-    padding:24px;
+    background:radial-gradient(1200px 600px at 50% -100px,#1a2233 0%,var(--bg) 60%);
+    color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    min-height:100vh;
   }
-  #frame{
-    background:var(--c64-bg);
-    width:min(900px,100%);
-    min-height:640px;
-    padding:28px 30px;
-    box-shadow:0 0 0 4px #2a1f63 inset;
-    position:relative;
-    overflow:hidden;
+  header{
+    position:sticky;top:0;z-index:10;
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:12px 20px;background:rgba(14,17,23,.85);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border);
   }
-  /* CRT-Scanlines */
-  #frame::after{
-    content:"";position:absolute;inset:0;pointer-events:none;
-    background:repeating-linear-gradient(0deg,rgba(0,0,0,.12) 0 1px,transparent 1px 3px);
+  .brand{font-weight:800;font-size:20px;letter-spacing:2px;color:var(--gold);}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    background:var(--panel2);border:1px solid var(--border);border-radius:999px;
+    padding:5px 12px;font-size:13px;color:var(--muted);
   }
-  #screen{color:var(--c64-txt);text-transform:uppercase;letter-spacing:1px;font-size:15px;line-height:1.55;position:relative;z-index:1;}
-  h1,h2{color:var(--c64-white);font-weight:bold;letter-spacing:3px;margin-bottom:10px;}
-  h1{font-size:22px;} h2{font-size:17px;border-bottom:2px solid var(--c64-txt);padding-bottom:4px;margin-bottom:12px;}
-  .logo{color:var(--c64-yellow);white-space:pre;font-size:11px;line-height:1.15;text-align:center;margin:10px 0 18px;text-transform:none;}
-  .dim{color:var(--c64-txt);} .hi{color:var(--c64-white);} .gold{color:var(--c64-yellow);}
-  .grn{color:var(--c64-green);} .red{color:var(--c64-red);} .cyn{color:var(--c64-cyan);} .org{color:var(--c64-orange);}
+  .chip b{color:var(--txt);font-weight:600;}
+  .chip.warn{border-color:var(--red);color:var(--red);}
+  .spacer{flex:1;}
+  main{max-width:1080px;margin:0 auto;padding:22px 20px 60px;}
+  h1{font-size:30px;font-weight:800;margin-bottom:6px;}
+  h2{font-size:20px;font-weight:700;margin-bottom:14px;}
+  h3{font-size:15px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
+  p{line-height:1.6;}
+  .muted{color:var(--muted);} .gold{color:var(--gold);} .green{color:var(--green);}
+  .red{color:var(--red);} .cyan{color:var(--cyan);}
+  .small{font-size:13px;}
   .center{text-align:center;}
-  .row{display:flex;gap:18px;flex-wrap:wrap;}
-  .col{flex:1;min-width:260px;}
-  table{width:100%;border-collapse:collapse;margin:8px 0;}
-  td,th{padding:2px 6px;text-align:left;font-size:14px;}
-  td.r,th.r{text-align:right;}
-  tr.line td{border-top:1px solid #5a4bab;}
+  .card{
+    background:linear-gradient(180deg,var(--panel2) 0%,var(--panel) 100%);
+    border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;margin-bottom:16px;
+  }
+  .grid{display:grid;gap:14px;}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;}
+  .stat{
+    background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
+    padding:14px 16px;
+  }
+  .stat .ico{font-size:20px;}
+  .stat .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:4px 0 2px;}
+  .stat .val{font-size:19px;font-weight:700;}
+  .bar{height:8px;background:var(--border);border-radius:99px;overflow:hidden;margin-top:8px;}
+  .bar>div{height:100%;border-radius:99px;background:var(--gold);transition:width .4s;}
+  .stepper{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;}
+  .step{
+    font-size:12px;letter-spacing:.5px;padding:6px 12px;border-radius:999px;
+    border:1px solid var(--border);color:var(--muted);background:var(--panel);
+  }
+  .step.act{background:var(--gold);border-color:var(--gold);color:#1a1509;font-weight:700;}
+  .step.done{color:var(--green);border-color:var(--green);}
   button{
-    font-family:inherit;text-transform:uppercase;letter-spacing:1px;
-    background:var(--c64-bg);color:var(--c64-yellow);
-    border:2px solid var(--c64-txt);
-    padding:7px 14px;font-size:14px;cursor:pointer;margin:4px 6px 4px 0;
+    font-family:inherit;font-size:14.5px;font-weight:600;
+    background:var(--panel2);color:var(--txt);
+    border:1px solid var(--border);border-radius:10px;
+    padding:10px 18px;cursor:pointer;margin:4px 8px 4px 0;
+    transition:transform .06s, background .15s, border-color .15s;
   }
-  button:hover:not(:disabled){background:var(--c64-txt);color:var(--c64-bg);}
+  button:hover:not(:disabled){border-color:var(--gold);}
+  button:active:not(:disabled){transform:scale(.97);}
   button:disabled{opacity:.35;cursor:default;}
-  button.big{font-size:16px;padding:10px 22px;}
-  button.warn{color:var(--c64-red);border-color:var(--c64-red);}
-  button.warn:hover:not(:disabled){background:var(--c64-red);color:#fff;}
+  .btn-primary{background:linear-gradient(180deg,var(--gold) 0%,var(--gold2) 100%);color:#1a1509;border-color:var(--gold2);}
+  .btn-primary:hover:not(:disabled){filter:brightness(1.08);border-color:var(--gold);}
+  .btn-danger{background:transparent;color:var(--red);border-color:var(--red);}
+  .btn-danger:hover:not(:disabled){background:var(--red);color:#fff;border-color:var(--red);}
+  .btn-lg{font-size:16px;padding:13px 26px;border-radius:12px;}
+  .btn-sm{font-size:12.5px;padding:6px 10px;margin:2px 4px 2px 0;}
   input[type=text],input[type=number],select{
-    font-family:inherit;font-size:15px;text-transform:uppercase;letter-spacing:1px;
-    background:#2a1f63;color:var(--c64-white);border:2px solid var(--c64-txt);
-    padding:5px 8px;width:130px;
+    font-family:inherit;font-size:15px;
+    background:var(--bg);color:var(--txt);
+    border:1px solid var(--border);border-radius:10px;
+    padding:9px 12px;width:150px;
   }
-  input[type=text]{width:200px;}
-  input[type=range]{width:180px;accent-color:var(--c64-yellow);vertical-align:middle;}
-  .box{border:2px solid var(--c64-txt);padding:12px 14px;margin:10px 0;}
-  .kbd{color:var(--c64-yellow);}
-  .blink{animation:bl 1s steps(2) infinite;}
-  @keyframes bl{50%{opacity:0;}}
-  #map{display:flex;flex-wrap:wrap;gap:3px;margin:8px 0;}
-  .tile{width:22px;height:22px;display:flex;align-items:center;justify-content:center;
-    font-size:12px;font-weight:bold;border:1px solid #2a1f63;}
-  .t-frei{background:#2f7d43;color:#2f7d43;}
-  .t-acker{background:#8a7a2e;color:#8a7a2e;}
-  .t-markt{background:#C09B62;color:#40318D;}
-  .t-muehle{background:#84C5CC;color:#40318D;}
-  .t-palast{background:#ffffff;color:#40318D;}
-  .t-dom{background:#DFDF8B;color:#40318D;}
-  .legend span{display:inline-block;margin-right:14px;font-size:13px;}
-  .report td{font-size:14px;}
-  .small{font-size:12px;letter-spacing:0;}
-  #timer{position:absolute;top:8px;right:14px;font-size:12px;color:var(--c64-cyan);z-index:2;letter-spacing:0;}
+  input[type=text]{width:210px;}
+  input:focus,select:focus{outline:none;border-color:var(--gold);}
+  input[type=range]{width:100%;accent-color:var(--gold);}
+  table{width:100%;border-collapse:collapse;}
+  td,th{padding:7px 6px;text-align:left;font-size:14.5px;}
+  td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;}
+  tr+tr td{border-top:1px solid var(--border);}
+  th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:1px;}
+  #map{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 12px;}
+  .tile{
+    width:26px;height:26px;border-radius:6px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:700;color:rgba(0,0,0,.65);
+  }
+  .t-frei{background:#2e4638;} .t-acker{background:#6f8f3f;}
+  .t-markt{background:var(--orange);} .t-muehle{background:var(--cyan);}
+  .t-palast{background:#e8e6df;} .t-dom{background:var(--gold);}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:6px;}
+  .legend .tile{width:16px;height:16px;border-radius:4px;display:inline-flex;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .delta-pos{color:var(--green);font-weight:600;}
+  .delta-neg{color:var(--red);font-weight:600;}
+  .hero{padding:60px 20px;text-align:center;}
+  .hero .crown{font-size:64px;display:block;margin-bottom:14px;}
+  .hero h1{font-size:44px;letter-spacing:6px;color:var(--gold);}
+  .event{
+    border-left:3px solid var(--border);padding:8px 12px;margin:8px 0;
+    background:var(--panel);border-radius:0 10px 10px 0;font-size:14.5px;
+  }
+  .event.bad{border-color:var(--red);} .event.good{border-color:var(--green);}
+  .num{display:inline-flex;align-items:center;gap:6px;}
+  .num button{margin:0;padding:8px 12px;border-radius:8px;}
+  .rowflex{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0;}
+  .sliderrow{display:grid;grid-template-columns:170px 1fr 64px;gap:12px;align-items:center;margin:12px 0;}
+  .sliderrow .v{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;}
+  .goal{background:rgba(224,180,88,.08);border:1px solid rgba(224,180,88,.35);}
+  footer{margin-top:26px;text-align:center;font-size:12px;color:var(--muted);}
+  @media (max-width:640px){ .hero h1{font-size:32px;} .sliderrow{grid-template-columns:120px 1fr 52px;} }
 </style>
 </head>
 <body>
-<div id="frame">
-  <div id="timer"></div>
-  <div id="screen"></div>
-</div>
+<header>
+  <span class="brand">👑 KAISER</span>
+  <span class="chip" id="hJahr" style="display:none"></span>
+  <span class="chip" id="hSpieler" style="display:none"></span>
+  <span class="chip" id="hTimer" style="display:none"></span>
+  <span class="spacer"></span>
+  <button class="btn-sm" id="btnExport" style="display:none" onclick="exportSpielstand()">💾 Speichern</button>
+  <button class="btn-sm" onclick="$('#importFile').click()">📂 Laden</button>
+  <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
+</header>
+<main><div id="screen"></div>
+<footer>Kaiser · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+</main>
 <script>
 "use strict";
 /* ============================================================
    KAISER — Hommage an den C64-Klassiker von 1984
-   Eigenständige Neu-Implementierung (Hotseat, 1-4 Spieler)
+   Eigenständige Neu-Implementierung · Hotseat · 1-9 Spieler
    ============================================================ */
 
 const TITEL = [
-  ["BÜRGER","BÜRGERIN"],
-  ["BARON","BARONIN"],
-  ["LANDGRAF","LANDGRÄFIN"],
-  ["MARKGRAF","MARKGRÄFIN"],
-  ["FÜRST","FÜRSTIN"],
-  ["HERZOG","HERZOGIN"],
-  ["KURFÜRST","KURFÜRSTIN"],
-  ["KÖNIG","KÖNIGIN"],
-  ["KAISER","KAISERIN"]
+  ["Herr","Dame"],
+  ["Baron","Baronin"],
+  ["Landgraf","Landgräfin"],
+  ["Markgraf","Markgräfin"],
+  ["Fürst","Fürstin"],
+  ["Herzog","Herzogin"],
+  ["Kurfürst","Kurfürstin"],
+  ["König","Königin"],
+  ["Kaiser","Kaiserin"]
 ];
-
+const NAMEN = ["Friedrich","Anna","Wilhelm","Luise","Karl","Sophie","Otto","Marie","Georg"];
 const KOSTEN = { markt:1000, muehle:2000, palastTeil:5000, domTeil:9000 };
-const LAND   = { markt:1000, muehle:1000, palast:13000, dom:25000 };
+const LAND   = { palast:13000, dom:25000 };
 const PALAST_TEILE = 16, DOM_TEILE = 14;
-const JUSTIZ = ["","SEHR FAIR","FAIR","STRENG","GIERIG"];
+const JUSTIZ = ["","sehr fair","fair","streng","gierig"];
+const PHASEN = ["Status","Korn","Handel","Steuern","Bauen","Bilanz"];
 
-const G = {
-  spieler: [], aktiv: 0, jahr: 1700,
-  tempo: 1,            // 1 = normal, 1.8 = kurzspiel-wachstum
-  screen: "title",
-  sieger: null
-};
+const G = { spieler:[], aktiv:0, jahr:1700, tempo:1, screen:"title", sieger:null };
 
-/* ---------- Hilfsfunktionen ---------- */
+/* ---------- Helfer ---------- */
 const $  = s => document.querySelector(s);
 const fmt = n => Math.round(n).toLocaleString("de-DE");
 const ri  = (a,b) => a + Math.floor(Math.random()*(b-a+1));
@@ -133,7 +177,7 @@ const rf  = (a,b) => a + Math.random()*(b-a);
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 const cur = () => G.spieler[G.aktiv];
 const titelName = p => TITEL[p.titel][p.w?1:0];
-const anrede = p => (p.w?"IHRE":"SEINE") + " " + (p.titel>=7?"MAJESTÄT":p.titel>=4?"HOHEIT":"EXZELLENZ");
+const anrede = p => (p.w?"Ihre":"Seine") + " " + (p.titel>=7?"Majestät":p.titel>=4?"Hoheit":"Exzellenz");
 
 function neuerSpieler(name,w){
   return {
@@ -144,17 +188,15 @@ function neuerSpieler(name,w){
     titel:0, stimmung:60,
     kornPreis:ri(70,120), landPreis:ri(16,70),
     todesJahr: (G.tempo>1 ? ri(1739,1746) : ri(1760,1768)) + Math.random(),
-    tot:false, todGemeldet:false,
+    tot:false,
     ausgabe:0, kriegGefuehrt:false,
     turnStart:0, report:null
   };
 }
 
-/* "Pro 1.000 ha Land kann ein Gebäude gebaut werden" — Besitz-Voraussetzung, kein Verbrauch.
-   Palast erfordert ein Gut von 13.000 ha, die Kathedrale 25.000 ha. */
 const bauplaetze = p => Math.floor(p.land/1000);
 const minLand = p => Math.max((p.maerkte+p.muehlen)*1000, p.palast>0?LAND.palast:0, p.dom>0?LAND.dom:0);
-const freiLand  = p => Math.max(0, p.land - minLand(p));   /* verkäufliches Land */
+const freiLand  = p => Math.max(0, p.land - minLand(p));
 const staedte   = p => Math.min(Math.floor(p.maerkte/5), Math.floor(p.muehlen/3));
 const noetigKorn = p => Math.ceil(p.pop/10);
 const miliz     = p => p.maerkte*50;
@@ -162,15 +204,15 @@ const miliz     = p => p.maerkte*50;
 /* Beförderungs-Bedingungen: Index = Ziel-Titel */
 const BEDINGUNGEN = [
   null,
-  { txt:"3.000 EINWOHNER",                          ok:p=>p.pop>=3000 },
-  { txt:"4.000 EINWOHNER, 2 MÄRKTE",                ok:p=>p.pop>=4000 && p.maerkte>=2 },
-  { txt:"5.000 EINWOHNER, 4 MÄRKTE, 1 MÜHLE",       ok:p=>p.pop>=5000 && p.maerkte>=4 && p.muehlen>=1 },
-  { txt:"6.500 EINWOHNER, 1 STADT (5 MÄRKTE+3 MÜHLEN)", ok:p=>p.pop>=6500 && staedte(p)>=1 },
-  { txt:"8.000 EINWOHNER, 2 STÄDTE",                ok:p=>p.pop>=8000 && staedte(p)>=2 },
-  { txt:"10.000 EINWOHNER, 2 STÄDTE, 50.000 TALER", ok:p=>p.pop>=10000 && staedte(p)>=2 && p.geld>=50000 },
-  { txt:"PALAST VOLLENDET (16 TEILE), 12.000 EINWOHNER", ok:p=>p.palast>=PALAST_TEILE && p.pop>=12000 },
-  { txt:"KATHEDRALE VOLLENDET (14 TEILE), 25.000 HA LAND, 100.000 TALER",
-    ok:p=>p.dom>=DOM_TEILE && p.land>=25000 && p.geld>=100000 }
+  { txt:"3.000 Einwohner",                              ok:p=>p.pop>=3000 },
+  { txt:"4.000 Einwohner, 2 Märkte",                    ok:p=>p.pop>=4000 && p.maerkte>=2 },
+  { txt:"5.000 Einwohner, 4 Märkte, 1 Mühle",           ok:p=>p.pop>=5000 && p.maerkte>=4 && p.muehlen>=1 },
+  { txt:"6.500 Einwohner, 1 Stadt (5 Märkte + 3 Mühlen)", ok:p=>p.pop>=6500 && staedte(p)>=1 },
+  { txt:"8.000 Einwohner, 2 Städte",                    ok:p=>p.pop>=8000 && staedte(p)>=2 },
+  { txt:"10.000 Einwohner, 2 Städte, 50.000 Taler",     ok:p=>p.pop>=10000 && staedte(p)>=2 && p.geld>=50000 },
+  { txt:"Palast vollendet (16 Teile), 12.000 Einwohner", ok:p=>p.palast>=PALAST_TEILE && p.pop>=12000 },
+  { txt:"Kathedrale vollendet (14 Teile), 5 Städte, 25.000 ha, 100.000 Taler",
+    ok:p=>p.dom>=DOM_TEILE && staedte(p)>=5 && p.land>=25000 && p.geld>=100000 }
 ];
 
 function score(p){
@@ -184,48 +226,43 @@ function jahresabschluss(p){
   const noetig = noetigKorn(p);
   const f = noetig>0 ? p.ausgabe/noetig : 1;
 
-  /* Ernte: das Volk bestellt das Land (max. 4 ha pro kopf) */
   const bearbeitet = Math.min(p.pop*4, p.land);
   let ertrag = rf(0.035,0.055) * (1 + Math.min(p.muehlen*0.05,0.6));
 
-  /* Ereignisse */
   const ev = Math.random();
   if(ev < 0.07){
     const verlust = Math.round(p.korn * rf(0.2,0.4));
     p.korn -= verlust;
-    r.ereignisse.push({t:`RATTEN IM KORNSPEICHER! ${fmt(verlust)} FUDER VERNICHTET.`,c:"red"});
+    r.ereignisse.push({t:`Ratten im Kornspeicher! ${fmt(verlust)} Fuder vernichtet.`,c:"bad"});
   } else if(ev < 0.13){
     ertrag *= 0.5;
-    r.ereignisse.push({t:"DÜRRE UND MISSERNTE! DIE ERNTE FÄLLT MAGER AUS.",c:"red"});
+    r.ereignisse.push({t:"Dürre und Missernte — die Ernte fällt mager aus.",c:"bad"});
   } else if(ev < 0.19){
     ertrag *= 1.4;
-    r.ereignisse.push({t:"PRÄCHTIGES WETTER — EINE REKORDERNTE!",c:"grn"});
+    r.ereignisse.push({t:"Prächtiges Wetter — eine Rekordernte!",c:"good"});
   } else if(ev < 0.24 && p.pop > 1200){
     const opfer = Math.round(p.pop * rf(0.12,0.28));
     p.pop -= opfer;
-    r.ereignisse.push({t:`DIE PEST WÜTET IM LAND! ${fmt(opfer)} UNTERTANEN STERBEN.`,c:"red"});
+    r.ereignisse.push({t:`Die Pest wütet im Land! ${fmt(opfer)} Untertanen sterben.`,c:"bad"});
   } else if(ev < 0.28 && (p.maerkte>0 || p.muehlen>0)){
-    if(p.maerkte>0 && (p.muehlen===0 || Math.random()<0.5)){ p.maerkte--; r.ereignisse.push({t:"FEUERSBRUNST! EIN MARKT BRENNT NIEDER.",c:"red"}); }
-    else { p.muehlen--; r.ereignisse.push({t:"FEUERSBRUNST! EINE MÜHLE BRENNT NIEDER.",c:"red"}); }
+    if(p.maerkte>0 && (p.muehlen===0 || Math.random()<0.5)){ p.maerkte--; r.ereignisse.push({t:"Feuersbrunst! Ein Markt brennt nieder.",c:"bad"}); }
+    else { p.muehlen--; r.ereignisse.push({t:"Feuersbrunst! Eine Mühle brennt nieder.",c:"bad"}); }
   } else if(ev < 0.33){
     const zuzug = Math.round(p.pop * rf(0.02,0.05));
     p.pop += zuzug;
-    r.ereignisse.push({t:`EIN TRECK VON SIEDLERN TRIFFT EIN: +${fmt(zuzug)} EINWOHNER.`,c:"grn"});
+    r.ereignisse.push({t:`Ein Treck von Siedlern trifft ein: +${fmt(zuzug)} Einwohner.`,c:"good"});
   }
 
   r.ernte = Math.round(bearbeitet * ertrag);
   p.korn += r.ernte;
 
-  /* Steuern — märkte kurbeln die wirtschaft an */
   r.steuern = Math.round(p.pop*(p.einkSt*0.08 + p.mwSt*0.05)/10)*10
             + p.zoll*p.maerkte*6 + p.maerkte*150 + staedte(p)*2000;
   p.geld += r.steuern;
 
-  /* Stimmung */
   p.stimmung = Math.round(clamp(
     90 - (p.einkSt+p.mwSt)*0.8 - p.zoll*0.4 - (p.justiz-2)*10 + (f-1)*40, 5, 100));
 
-  /* Bevölkerung */
   const g = G.tempo;
   r.geburten   = Math.round(p.pop * 0.04 * (0.5 + p.stimmung/100) * g);
   r.tote       = Math.round(p.pop * 0.018);
@@ -233,7 +270,6 @@ function jahresabschluss(p){
   r.migration  = Math.round(p.pop * 0.05 * (p.stimmung-50)/100 * g);
   p.pop = Math.max(50, p.pop + r.geburten - r.tote - r.verhungert + r.migration);
 
-  /* Zeitfaktor: mehr als 90 sek pro zug kostet lebenszeit */
   const dauer = (Date.now() - p.turnStart)/1000;
   r.ueberzeit = Math.max(0, dauer - 90);
   if(r.ueberzeit > 0) p.todesJahr -= r.ueberzeit/180;
@@ -264,30 +300,72 @@ function fuehreKrieg(p, ziel, inf, kav, art){
     ziel.pop -= gefallene;
     ziel.stimmung = clamp(ziel.stimmung-10,5,100);
     p.stimmung = clamp(p.stimmung-5,5,100);
-    txt = `SIEG! EURE TRUPPEN EROBERN ${fmt(beute)} HA VON ${ziel.name}. ${fmt(gefallene)} FEINDE FALLEN.`;
+    txt = `Sieg! Eure Truppen erobern ${fmt(beute)} ha von ${ziel.name}. ${fmt(gefallene)} Feinde fallen.`;
   } else {
     const tribut = Math.round(Math.max(0,p.geld)*0.2);
     p.geld -= tribut; ziel.geld += tribut;
     p.stimmung = clamp(p.stimmung-15,5,100);
-    txt = `NIEDERLAGE! EUER HEER WIRD GESCHLAGEN. IHR ZAHLT ${fmt(tribut)} TALER TRIBUT AN ${ziel.name}.`;
+    txt = `Niederlage! Euer Heer wird geschlagen. Ihr zahlt ${fmt(tribut)} Taler Tribut an ${ziel.name}.`;
   }
   p.kriegGefuehrt = true;
   return {sieg, txt, kosten};
 }
 
-/* ---------- Ablaufsteuerung ---------- */
+/* ---------- Speichern & Laden ---------- */
+function storageOK(){
+  try{ const t="__kaiser_t"; window.localStorage.setItem(t,"1"); window.localStorage.removeItem(t); return true; }
+  catch(e){ return false; }
+}
+function spielstand(){ return JSON.stringify({v:2, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler}); }
+function ladeSpielstand(json){
+  const d = JSON.parse(json);
+  if(!d || !Array.isArray(d.spieler) || !d.spieler.length) throw new Error("ungültig");
+  G.jahr = d.jahr; G.tempo = d.tempo; G.aktiv = clamp(d.aktiv||0,0,d.spieler.length-1);
+  G.spieler = d.spieler; G.sieger = null;
+  zeige("handoff");
+}
+function exportSpielstand(){
+  const blob = new Blob([spielstand()], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `kaiser-anno-${G.jahr}.json`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+}
+function importSpielstand(inp){
+  const file = inp.files && inp.files[0];
+  if(!file) return;
+  const rd = new FileReader();
+  rd.onload = () => { try{ ladeSpielstand(rd.result); }catch(e){ alertMsg("Diese Datei ist kein gültiger Kaiser-Spielstand."); } };
+  rd.readAsText(file);
+  inp.value = "";
+}
+function quicksave(){
+  if(!storageOK() || !G.spieler.length) return;
+  try{ window.localStorage.setItem("kaiser_save", spielstand()); }catch(e){}
+}
+function quickload(){
+  try{
+    const s = window.localStorage.getItem("kaiser_save");
+    if(s) ladeSpielstand(s);
+  }catch(e){}
+}
+function hatQuicksave(){
+  try{ return storageOK() && !!window.localStorage.getItem("kaiser_save"); }catch(e){ return false; }
+}
+
+/* ---------- Ablauf ---------- */
 function starteSpiel(anzahl, namen, geschlechter, tempo){
   G.tempo = tempo; G.spieler = [];
   for(let i=0;i<anzahl;i++)
-    G.spieler.push(neuerSpieler(namen[i]||("SPIELER "+(i+1)), geschlechter[i]));
+    G.spieler.push(neuerSpieler(namen[i]||("Spieler "+(i+1)), geschlechter[i]));
   G.jahr = 1700; G.aktiv = 0; G.sieger = null;
   zeige("handoff");
 }
-
 function beginneZug(){
   const p = cur();
   let kp = p.kornPreis + (110 - p.kornPreis)*0.2 + rf(-45,45);
-  if(Math.random() < 0.06) kp *= rf(1.6,2.6);      /* seltene preisspitzen bis 430 */
+  if(Math.random() < 0.06) kp *= rf(1.6,2.6);
   p.kornPreis = clamp(Math.round(kp), 20, 430);
   p.landPreis = ri(16,70);
   p.kriegGefuehrt = false;
@@ -295,8 +373,8 @@ function beginneZug(){
   p.turnStart = Date.now();
   zeige("status");
 }
-
 function naechsterSpieler(){
+  quicksave();
   do {
     G.aktiv++;
     if(G.aktiv >= G.spieler.length){ G.aktiv = 0; G.jahr++; }
@@ -312,392 +390,445 @@ const alleTot = () => G.spieler.every(p=>p.tot);
 let timerIv = null;
 function zeige(s){ G.screen = s; render(); }
 
-function render(){
-  const el = $("#screen");
-  clearInterval(timerIv); $("#timer").textContent = "";
-  const R = SCREENS[G.screen];
-  el.innerHTML = R ? R() : "FEHLER: UNBEKANNTER BILDSCHIRM";
-  if(["status","korn","handel","steuern","bauen","krieg"].includes(G.screen)){
-    timerIv = setInterval(()=>{
-      const p = cur(); if(!p||!p.turnStart) return;
-      const t = Math.floor((Date.now()-p.turnStart)/1000);
-      $("#timer").textContent = "ZUGZEIT " + t + "S" + (t>90 ? " — EUER LEBEN VERRINNT!" : " / 90S");
-      $("#timer").style.color = t>90 ? "var(--c64-red)" : "var(--c64-cyan)";
-    }, 1000);
+function kopf(){
+  const inSpiel = G.spieler.length>0;
+  $("#hJahr").style.display = inSpiel ? "" : "none";
+  $("#btnExport").style.display = inSpiel ? "" : "none";
+  if(inSpiel) $("#hJahr").innerHTML = `Anno <b>${G.jahr}</b>`;
+  const turnScreens = ["status","korn","handel","steuern","bauen","krieg","kriegErgebnis"];
+  const p = inSpiel ? cur() : null;
+  $("#hSpieler").style.display = (inSpiel && p && !p.tot && turnScreens.concat(["bilanz"]).includes(G.screen)) ? "" : "none";
+  if(p) $("#hSpieler").innerHTML = `${p.w?"♛":"♚"} <b>${titelName(p)} ${p.name}</b>`;
+  $("#hTimer").style.display = "none";
+  clearInterval(timerIv);
+  if(inSpiel && turnScreens.includes(G.screen)){
+    $("#hTimer").style.display = "";
+    const tick = () => {
+      const t = Math.floor((Date.now()-cur().turnStart)/1000);
+      $("#hTimer").innerHTML = t>90 ? `⏳ <b>${t}s</b> — Euer Leben verrinnt!` : `⏱ <b>${t}s</b> / 90s`;
+      $("#hTimer").className = "chip" + (t>90 ? " warn" : "");
+    };
+    tick(); timerIv = setInterval(tick, 1000);
   }
 }
 
-const LOGO =
-`██   ██  █████  ██ ███████ ███████ ██████
-██  ██  ██   ██ ██ ██      ██      ██   ██
-█████   ███████ ██ ███████ █████   ██████
-██  ██  ██   ██ ██      ██ ██      ██   ██
-██   ██ ██   ██ ██ ███████ ███████ ██   ██`;
+function stepper(akt){
+  const i = PHASEN.indexOf(akt);
+  return `<div class="stepper">` + PHASEN.map((ph,j)=>
+    `<span class="step ${j===i?'act':j<i?'done':''}">${j<i?'✓ ':''}${ph}</span>`).join("") + `</div>`;
+}
+
+function statKarten(p){
+  return `<div class="stats">
+    <div class="stat"><span class="ico">💰</span><div class="lbl">Vermögen</div>
+      <div class="val ${p.geld<0?'red':''}">${fmt(p.geld)} T</div></div>
+    <div class="stat"><span class="ico">🌍</span><div class="lbl">Land</div>
+      <div class="val">${fmt(p.land)} ha</div></div>
+    <div class="stat"><span class="ico">🌾</span><div class="lbl">Kornspeicher</div>
+      <div class="val">${fmt(p.korn)} Fuder</div></div>
+    <div class="stat"><span class="ico">👥</span><div class="lbl">Untertanen</div>
+      <div class="val">${fmt(p.pop)}</div></div>
+    <div class="stat"><span class="ico">${p.stimmung>=60?'😊':p.stimmung>=35?'😐':'😠'}</span><div class="lbl">Stimmung</div>
+      <div class="val">${p.stimmung}/100</div>
+      <div class="bar"><div style="width:${p.stimmung}%;background:${p.stimmung>=60?'var(--green)':p.stimmung>=35?'var(--gold)':'var(--red)'}"></div></div></div>
+  </div>`;
+}
+
+function render(){
+  kopf();
+  const R = SCREENS[G.screen];
+  $("#screen").innerHTML = R ? R() : "<p>Unbekannter Bildschirm.</p>";
+  window.scrollTo(0,0);
+}
+function alertMsg(t){
+  const el = $("#screen");
+  const div = document.createElement("div");
+  div.className = "card"; div.style.borderColor = "var(--red)";
+  div.innerHTML = `<p class="red">${t}</p>`;
+  el.prepend(div);
+  setTimeout(()=>div.remove(), 4000);
+}
 
 const SCREENS = {
 
-  /* ---- Titel ---- */
   title(){ return `
-    <div class="center" style="padding-top:40px">
-      <div class="logo">${LOGO}</div>
-      <p class="hi">EIN WIRTSCHAFTSSPIEL AUS DEM 18. JAHRHUNDERT</p>
-      <p class="dim small" style="margin-top:6px">HOMMAGE AN DEN C64-KLASSIKER VON 1984 · NEU-IMPLEMENTIERUNG · 1-4 SPIELER (HOTSEAT)</p>
-      <div class="box" style="max-width:560px;margin:26px auto;text-align:left">
-        <p>FÜHRT EUER VOLK VOM EINFACHEN BÜRGER ZUM <span class="gold">KAISER</span>:
-        VERTEILT KORN, HANDELT MIT LAND, ERHEBT STEUERN, BAUT MÄRKTE, MÜHLEN,
-        PALAST UND KATHEDRALE — UND FÜHRT NOTFALLS KRIEG.</p>
-        <p style="margin-top:8px" class="cyn">ABER BEDENKT: EURE LEBENSZEIT IST BEGRENZT.
-        WER LÄNGER ALS 90 SEKUNDEN PRO ZUG GRÜBELT, ALTERT SCHNELLER!</p>
-      </div>
-      <button class="big" onclick="zeige('setup')">SPIEL STARTEN <span class="blink">▮</span></button>
+    <div class="hero">
+      <span class="crown">👑</span>
+      <h1>KAISER</h1>
+      <p class="muted" style="margin:10px 0 4px">Wirtschaftssimulation im 18. Jahrhundert</p>
+      <p class="muted small">Hommage an den C64-Klassiker von 1984 · 1–9 Spieler (Hotseat)</p>
+    </div>
+    <div class="card" style="max-width:640px;margin:0 auto 16px">
+      <p>Führt Euer Volk vom einfachen <b>Herrn</b> zum <b class="gold">Kaiser</b>:
+      Verteilt Korn, spekuliert mit Land, erhebt Steuern, baut Märkte, Mühlen,
+      Palast und Kathedrale — und führt notfalls Krieg.</p>
+      <p class="muted" style="margin-top:10px">Aber bedenkt: Eure Lebenszeit ist begrenzt.
+      Wer länger als 90 Sekunden pro Zug grübelt, altert schneller.</p>
+    </div>
+    <div class="center">
+      <button class="btn-primary btn-lg" onclick="zeige('setup')">Neues Spiel</button>
+      ${hatQuicksave()?`<button class="btn-lg" onclick="quickload()">Fortsetzen</button>`:""}
+      <button class="btn-lg" onclick="$('#importFile').click()">Spielstand laden</button>
     </div>`;
   },
 
-  /* ---- Setup ---- */
   setup(){
     let rows = "";
-    for(let i=0;i<4;i++){
-      rows += `<tr id="prow${i}" style="${i>0?'opacity:.35':''}">
-        <td>SPIELER ${i+1}</td>
-        <td><input type="text" id="pname${i}" maxlength="12" value="${["FRIEDRICH","ANNA","WILHELM","LUISE"][i]}" ${i>0?'disabled':''}></td>
-        <td>
-          <select id="pw${i}" ${i>0?'disabled':''}>
-            <option value="0">HERR</option><option value="1" ${i%2?'selected':''}>DAME</option>
-          </select>
-        </td></tr>`;
+    for(let i=0;i<9;i++){
+      rows += `<tr id="prow${i}" style="${i>1?'opacity:.3':''}">
+        <td class="muted">${i+1}</td>
+        <td><input type="text" id="pname${i}" maxlength="14" value="${NAMEN[i]}" ${i>1?'disabled':''}></td>
+        <td><select id="pw${i}" ${i>1?'disabled':''}>
+          <option value="0" ${i%2?'':'selected'}>Herr</option><option value="1" ${i%2?'selected':''}>Dame</option>
+        </select></td></tr>`;
     }
     return `
-      <h2>NEUES SPIEL</h2>
-      <div class="box">
-        <p>ANZAHL DER SPIELER:
-          <select id="anz" onchange="setupAnzahl()">
-            <option>1</option><option selected>2</option><option>3</option><option>4</option>
-          </select>
-        </p>
-        <table>${rows}</table>
+      <h2>Neues Spiel</h2>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Spieler</h3>
+          <div class="rowflex">Anzahl:
+            <select id="anz" onchange="setupAnzahl()">
+              ${[1,2,3,4,5,6,7,8,9].map(n=>`<option ${n===2?'selected':''}>${n}</option>`).join("")}
+            </select>
+          </div>
+          <table>${rows}</table>
+        </div>
+        <div class="card">
+          <h3>Spiellänge</h3>
+          <div class="rowflex">
+            <select id="tempo" style="width:100%">
+              <option value="1">Original — Leben bis ca. 1760–1768 (lange Partie)</option>
+              <option value="1.8" selected>Kurzspiel — schnelleres Wachstum, Leben bis ca. 1739–1746</option>
+            </select>
+          </div>
+          <p class="muted small" style="margin-top:10px">Jeder beginnt im Jahr 1700 mit
+          15.000 Talern, 10.000 Hektar Land, 400 Fuder Korn und 2.500 Untertanen.</p>
+        </div>
       </div>
-      <div class="box">
-        <p>SPIELLÄNGE:
-          <select id="tempo">
-            <option value="1">ORIGINAL — LEBEN BIS CA. 1760-1768 (LANGES SPIEL)</option>
-            <option value="1.8" selected>KURZSPIEL — SCHNELLERES WACHSTUM, LEBEN BIS CA. 1739-1746</option>
-          </select>
-        </p>
-      </div>
-      <p class="dim small">JEDER BEGINNT IM JAHR 1700 MIT 15.000 TALERN, 10.000 HEKTAR LAND, 400 FUDER KORN UND 2.500 UNTERTANEN.</p>
-      <button class="big" onclick="setupStart()">LOS GEHT'S</button>
-      <button onclick="zeige('title')">ZURÜCK</button>`;
+      <button class="btn-primary btn-lg" onclick="setupStart()">Los geht's</button>
+      <button class="btn-lg" onclick="zeige('title')">Zurück</button>`;
   },
 
-  /* ---- Übergabe ---- */
   handoff(){
     const p = cur();
     return `
-      <div class="center" style="padding-top:120px">
-        <h1>ANNO ${G.jahr}</h1>
-        <p style="font-size:18px;margin:20px 0">
-          <span class="gold">${titelName(p)} ${p.name}</span> IST AM ZUG
-        </p>
-        <p class="dim">BITTE AN DAS GERÄT TRETEN.</p>
-        <br>
-        <button class="big" onclick="beginneZug()">ZUG BEGINNEN</button>
+      <div class="hero">
+        <span class="crown">${p.w?"♛":"♚"}</span>
+        <h1 style="font-size:32px;letter-spacing:2px">Anno ${G.jahr}</h1>
+        <p style="font-size:19px;margin:16px 0 6px"><b class="gold">${titelName(p)} ${p.name}</b> ist am Zug.</p>
+        <p class="muted">Bitte an das Gerät treten. Der 90-Sekunden-Zähler startet mit dem Zug.</p>
+        <div style="margin-top:26px"><button class="btn-primary btn-lg" onclick="beginneZug()">Zug beginnen</button></div>
       </div>`;
   },
 
-  /* ---- Status ---- */
   status(){
     const p = cur();
-    const ziel = p.titel<8 ? BEDINGUNGEN[p.titel+1].txt : "—";
+    const ziel = p.titel<8 ? BEDINGUNGEN[p.titel+1] : null;
     return `
-      <h2>ANNO ${G.jahr} — ${anrede(p)}, ${titelName(p)} ${p.name}</h2>
-      <div class="row">
-        <div class="col box">
+      ${stepper("Status")}
+      <h2>${anrede(p)}, ${titelName(p)} ${p.name}</h2>
+      ${statKarten(p)}
+      <div class="grid g2">
+        <div class="card">
+          <h3>Reich</h3>
           <table>
-            <tr><td>VERMÖGEN</td><td class="r ${p.geld<0?'red':'gold'}">${fmt(p.geld)} TALER</td></tr>
-            <tr><td>LAND</td><td class="r hi">${fmt(p.land)} HA</td></tr>
-            <tr><td class="dim">· BAUPLÄTZE (1/1.000 HA)</td><td class="r dim">${p.maerkte+p.muehlen} / ${bauplaetze(p)}</td></tr>
-            <tr><td>KORNSPEICHER</td><td class="r hi">${fmt(p.korn)} FUDER</td></tr>
-            <tr><td>UNTERTANEN</td><td class="r hi">${fmt(p.pop)}</td></tr>
-            <tr><td>STIMMUNG DES VOLKES</td><td class="r ${p.stimmung>=60?'grn':p.stimmung>=35?'org':'red'}">${p.stimmung} / 100</td></tr>
+            <tr><td>Märkte</td><td class="r">${p.maerkte}</td></tr>
+            <tr><td>Kornmühlen</td><td class="r">${p.muehlen}</td></tr>
+            <tr><td>Städte <span class="muted small">(5 Märkte + 3 Mühlen)</span></td><td class="r">${staedte(p)}</td></tr>
+            <tr><td>Bauplätze <span class="muted small">(1 je 1.000 ha)</span></td><td class="r">${p.maerkte+p.muehlen} / ${bauplaetze(p)}</td></tr>
           </table>
         </div>
-        <div class="col box">
-          <table>
-            <tr><td>MÄRKTE</td><td class="r hi">${p.maerkte}</td></tr>
-            <tr><td>KORNMÜHLEN</td><td class="r hi">${p.muehlen}</td></tr>
-            <tr><td>STÄDTE</td><td class="r hi">${staedte(p)}</td></tr>
-            <tr><td>PALAST</td><td class="r hi">${p.palast} / ${PALAST_TEILE} TEILE</td></tr>
-            <tr><td>KATHEDRALE</td><td class="r hi">${p.dom} / ${DOM_TEILE} TEILE</td></tr>
-          </table>
+        <div class="card">
+          <h3>Monumente</h3>
+          <p style="margin-bottom:4px">Palast <span class="muted small">${p.palast}/${PALAST_TEILE} Teile</span></p>
+          <div class="bar"><div style="width:${p.palast/PALAST_TEILE*100}%;background:#e8e6df"></div></div>
+          <p style="margin:12px 0 4px">Kathedrale <span class="muted small">${p.dom}/${DOM_TEILE} Teile</span></p>
+          <div class="bar"><div style="width:${p.dom/DOM_TEILE*100}%"></div></div>
         </div>
       </div>
-      <div class="box">
-        <p class="cyn">NÄCHSTE BEFÖRDERUNG (${p.titel<8?TITEL[p.titel+1][p.w?1:0]:"—"}): ${ziel}</p>
-        <p class="dim small">BEFÖRDERUNG NUR BEI POSITIVEM KONTOSTAND.</p>
-      </div>
-      <button class="big" onclick="zeige('korn')">WEITER: KORNAUSGABE</button>`;
+      ${ziel?`<div class="card goal"><h3>Nächste Beförderung: ${TITEL[p.titel+1][p.w?1:0]}</h3>
+        <p>${ziel.txt}</p>
+        <p class="muted small" style="margin-top:6px">Beförderung nur bei positivem Kontostand.</p></div>`:""}
+      <button class="btn-primary btn-lg" onclick="zeige('korn')">Weiter: Kornausgabe</button>`;
   },
 
-  /* ---- Kornausgabe ---- */
   korn(){
     const p = cur(), n = noetigKorn(p);
     return `
-      <h2>KORNAUSGABE AN DAS VOLK</h2>
-      <div class="box">
-        <table>
-          <tr><td>KORNSPEICHER</td><td class="r hi">${fmt(p.korn)} FUDER</td></tr>
-          <tr><td>NÖTIGES KORN (${fmt(p.pop)} UNTERTANEN)</td><td class="r gold">${fmt(n)} FUDER</td></tr>
-        </table>
-        <p class="dim small">WER MEHR ALS DAS NÖTIGE KORN AUSGIBT, LOCKT EINWANDERER AN UND HEBT DIE STIMMUNG.
-        WER WENIGER AUSGIBT, LÄSST SEIN VOLK HUNGERN.</p>
+      ${stepper("Korn")}
+      <h2>Kornausgabe an das Volk</h2>
+      <div class="grid g2">
+        <div class="card">
+          <table>
+            <tr><td>Kornspeicher</td><td class="r"><b>${fmt(p.korn)} Fuder</b></td></tr>
+            <tr><td>Nötiges Korn <span class="muted small">(${fmt(p.pop)} Untertanen)</span></td><td class="r"><b class="gold">${fmt(n)} Fuder</b></td></tr>
+          </table>
+          <p class="muted small" style="margin-top:10px">Wer mehr als das nötige Korn ausgibt,
+          lockt Einwanderer an und hebt die Stimmung. Wer weniger ausgibt, lässt sein Volk hungern.</p>
+        </div>
+        <div class="card">
+          <h3>Ausgabe festlegen</h3>
+          <div class="rowflex">
+            <input type="number" id="ausg" min="0" max="${p.korn}" value="${Math.min(n,p.korn)}"> Fuder
+          </div>
+          <div class="rowflex">
+            <button class="btn-sm" onclick="$('#ausg').value=${Math.min(n,p.korn)}">Nötig</button>
+            <button class="btn-sm" onclick="$('#ausg').value=${Math.min(Math.ceil(n*1.25),p.korn)}">+25 %</button>
+            <button class="btn-sm" onclick="$('#ausg').value=${Math.min(Math.ceil(n*1.5),p.korn)}">+50 %</button>
+            <button class="btn-sm" onclick="$('#ausg').value=${p.korn}">Alles</button>
+          </div>
+        </div>
       </div>
-      <p>AUSGABE:
-        <input type="number" id="ausg" min="0" max="${p.korn}" value="${Math.min(n,p.korn)}">
-        FUDER
-        <button onclick="$('#ausg').value=${Math.min(n,p.korn)}">NÖTIG</button>
-        <button onclick="$('#ausg').value=${Math.min(Math.ceil(n*1.25),p.korn)}">+25%</button>
-        <button onclick="$('#ausg').value=${Math.min(Math.ceil(n*1.5),p.korn)}">+50%</button>
-        <button onclick="$('#ausg').value=${p.korn}">ALLES</button>
-      </p>
-      <button class="big" onclick="kornAusgeben()">AUSGEBEN &amp; WEITER</button>`;
+      <button class="btn-primary btn-lg" onclick="kornAusgeben()">Ausgeben &amp; weiter</button>`;
   },
 
-  /* ---- Handel ---- */
   handel(){
     const p = cur();
     return `
-      <h2>MARKT — KORN- UND LANDHANDEL</h2>
-      <div class="row">
-        <div class="col box">
-          <p class="gold">KORNPREIS: ${fmt(p.kornPreis)} TALER / FUDER</p>
-          <p class="dim small">(SCHWANKT ZWISCHEN 20 UND 430 TALERN. BEIM VERKAUF WERDEN 10% PROVISION ABGEZOGEN.)</p>
-          <p>LAGER: <span class="hi">${fmt(p.korn)} FUDER</span></p>
-          <p style="margin-top:8px">KAUFEN: <input type="number" id="kkauf" min="0" value="0"> <button onclick="handelKorn(1)">KAUF</button></p>
-          <p>VERKAUFEN: <input type="number" id="kverk" min="0" max="${p.korn}" value="0"> <button onclick="handelKorn(-1)">VERKAUF</button></p>
+      ${stepper("Handel")}
+      <h2>Markt — Korn- und Landhandel</h2>
+      <div class="grid g2">
+        <div class="card">
+          <h3>🌾 Korn — ${fmt(p.kornPreis)} Taler / Fuder</h3>
+          <p class="muted small">Schwankt zwischen 20 und 430 Talern. Auf Verkäufe werden 10 % Provision fällig.</p>
+          <p style="margin-top:8px">Lager: <b>${fmt(p.korn)} Fuder</b></p>
+          <div class="rowflex">Kaufen: <input type="number" id="kkauf" min="0" value="0">
+            <button onclick="handelKorn(1)">Kauf</button></div>
+          <div class="rowflex">Verkaufen: <input type="number" id="kverk" min="0" max="${p.korn}" value="0">
+            <button onclick="handelKorn(-1)">Verkauf</button></div>
         </div>
-        <div class="col box">
-          <p class="gold">LANDPREIS: ${fmt(p.landPreis)} TALER / HA</p>
-          <p class="dim small">(SCHWANKT ZWISCHEN 16 UND 70 TALERN. LAND, DAS EURE GEBÄUDE TRAGEN, IST UNVERKÄUFLICH.)</p>
-          <p>VERKÄUFLICHES LAND: <span class="hi">${fmt(freiLand(p))} HA</span></p>
-          <p style="margin-top:8px">KAUFEN: <input type="number" id="lkauf" min="0" value="0"> <button onclick="handelLand(1)">KAUF</button></p>
-          <p>VERKAUFEN: <input type="number" id="lverk" min="0" max="${freiLand(p)}" value="0"> <button onclick="handelLand(-1)">VERKAUF</button></p>
+        <div class="card">
+          <h3>🌍 Land — ${fmt(p.landPreis)} Taler / ha</h3>
+          <p class="muted small">Schwankt zwischen 16 und 70 Talern. Auf Verkäufe werden 10 % Provision fällig.
+          Land unter Euren Gebäuden ist unverkäuflich.</p>
+          <p style="margin-top:8px">Verkäuflich: <b>${fmt(freiLand(p))} ha</b></p>
+          <div class="rowflex">Kaufen: <input type="number" id="lkauf" min="0" value="0">
+            <button onclick="handelLand(1)">Kauf</button></div>
+          <div class="rowflex">Verkaufen: <input type="number" id="lverk" min="0" max="${freiLand(p)}" value="0">
+            <button onclick="handelLand(-1)">Verkauf</button></div>
         </div>
       </div>
-      <p>VERMÖGEN: <span class="${p.geld<0?'red':'gold'}">${fmt(p.geld)} TALER</span>
-         <span id="hmsg" class="cyn" style="margin-left:20px"></span></p>
-      <button class="big" onclick="zeige('steuern')">WEITER: STEUERN</button>`;
+      <div class="card"><b>Vermögen: <span class="${p.geld<0?'red':'gold'}">${fmt(p.geld)} Taler</span></b>
+        <span id="hmsg" class="red" style="margin-left:16px"></span></div>
+      <button class="btn-primary btn-lg" onclick="zeige('steuern')">Weiter: Steuern</button>`;
   },
 
-  /* ---- Steuern ---- */
   steuern(){
     const p = cur();
+    const slider = (id,lbl,min,max,val) => `
+      <div class="sliderrow">
+        <span>${lbl}</span>
+        <input type="range" id="${id}" min="${min}" max="${max}" value="${val}"
+          oninput="$('#${id}v').textContent=this.value+' %'">
+        <span class="v" id="${id}v">${val} %</span>
+      </div>`;
     return `
-      <h2>STEUERN &amp; JUSTIZ</h2>
-      <div class="box">
-        <table>
-          <tr><td>ZÖLLE</td>
-              <td><input type="range" id="zoll" min="0" max="40" value="${p.zoll}" oninput="$('#zv').textContent=this.value+'%'"></td>
-              <td class="r hi" style="width:60px"><span id="zv">${p.zoll}%</span></td></tr>
-          <tr><td>EINKOMMENSTEUER</td>
-              <td><input type="range" id="einkSt" min="0" max="60" value="${p.einkSt}" oninput="$('#ev').textContent=this.value+'%'"></td>
-              <td class="r hi"><span id="ev">${p.einkSt}%</span></td></tr>
-          <tr><td>MEHRWERTSTEUER</td>
-              <td><input type="range" id="mwSt" min="0" max="40" value="${p.mwSt}" oninput="$('#mv').textContent=this.value+'%'"></td>
-              <td class="r hi"><span id="mv">${p.mwSt}%</span></td></tr>
-          <tr><td>JUSTIZ</td>
-              <td colspan="2">
-                <select id="justiz">
-                  ${[1,2,3,4].map(j=>`<option value="${j}" ${p.justiz===j?'selected':''}>${JUSTIZ[j]}</option>`).join("")}
-                </select>
-              </td></tr>
-        </table>
-        <p class="dim small">HOHE STEUERN FÜLLEN DIE KASSE, ABER DRÜCKEN DIE STIMMUNG —
-        UNZUFRIEDENE UNTERTANEN WANDERN AB. GIERIGE JUSTIZ VERGRÄMT DAS VOLK.</p>
+      ${stepper("Steuern")}
+      <h2>Steuern &amp; Justiz</h2>
+      <div class="card">
+        ${slider("zoll","Zölle",0,40,p.zoll)}
+        ${slider("einkSt","Einkommensteuer",0,99,p.einkSt)}
+        ${slider("mwSt","Mehrwertsteuer",0,40,p.mwSt)}
+        <div class="sliderrow">
+          <span>Justiz</span>
+          <select id="justiz">
+            ${[1,2,3,4].map(j=>`<option value="${j}" ${p.justiz===j?'selected':''}>${JUSTIZ[j]}</option>`).join("")}
+          </select><span></span>
+        </div>
+        <p class="muted small">Hohe Steuern füllen die Kasse, aber drücken die Stimmung —
+        unzufriedene Untertanen wandern ab. Gierige Justiz vergrämt das Volk.</p>
       </div>
-      <button class="big" onclick="steuernSetzen()">WEITER: LANDKARTE &amp; BAUEN</button>`;
+      <button class="btn-primary btn-lg" onclick="steuernSetzen()">Weiter: Landkarte &amp; Bauen</button>`;
   },
 
-  /* ---- Landkarte & Bauen ---- */
   bauen(){
     const p = cur();
     const kachel = [];
-    for(let i=0;i<Math.ceil(p.dom/4);i++)    kachel.push(["t-dom","D"]);
-    for(let i=0;i<Math.ceil(p.palast/4);i++) kachel.push(["t-palast","P"]);
-    for(let i=0;i<p.muehlen;i++)             kachel.push(["t-muehle","K"]);
-    for(let i=0;i<p.maerkte;i++)             kachel.push(["t-markt","M"]);
+    for(let i=0;i<Math.ceil(p.dom/4);i++)    kachel.push(["t-dom","⛪"]);
+    for(let i=0;i<Math.ceil(p.palast/4);i++) kachel.push(["t-palast","🏛"]);
+    for(let i=0;i<p.muehlen;i++)             kachel.push(["t-muehle","M"]);
+    for(let i=0;i<p.maerkte;i++)             kachel.push(["t-markt","€"]);
     const acker = Math.floor(Math.min(p.pop*4, p.land)/1000);
-    for(let i=0;i<acker && kachel.length<118;i++) kachel.push(["t-acker","·"]);
+    for(let i=0;i<acker && kachel.length<118;i++) kachel.push(["t-acker",""]);
     const rest = clamp(Math.floor(p.land/1000) - kachel.length, 0, 120-kachel.length);
-    for(let i=0;i<rest;i++)                  kachel.push(["t-frei","·"]);
+    for(let i=0;i<rest;i++)                  kachel.push(["t-frei",""]);
     const map = kachel.slice(0,120).map(k=>`<div class="tile ${k[0]}">${k[1]}</div>`).join("");
 
     const platz = (p.maerkte+p.muehlen) < bauplaetze(p);
     const bBtn = (label,fn,ok) => `<button onclick="${fn}" ${ok?'':'disabled'}>${label}</button>`;
     const kriegOk = p.titel>=1 && !p.kriegGefuehrt && G.spieler.some(s=>s!==p && !s.tot);
     return `
-      <h2>LANDKARTE VON ${p.name}S REICH — ${fmt(p.land)} HA</h2>
-      <div id="map">${map}</div>
-      <p class="legend">
-        <span><span class="tile t-markt" style="display:inline-flex">M</span> MARKT</span>
-        <span><span class="tile t-muehle" style="display:inline-flex">K</span> KORNMÜHLE</span>
-        <span><span class="tile t-palast" style="display:inline-flex">P</span> PALAST</span>
-        <span><span class="tile t-dom" style="display:inline-flex">D</span> KATHEDRALE</span>
-        <span><span class="tile t-acker" style="display:inline-flex">·</span> ACKERLAND</span>
-        <span><span class="tile t-frei" style="display:inline-flex">·</span> BRACHLAND</span>
-      </p>
-      <div class="box">
-        <p class="dim small">JE 1.000 HA LAND EIN BAUPLATZ (${p.maerkte+p.muehlen}/${bauplaetze(p)} BELEGT). EINE STADT = 5 MÄRKTE + 3 MÜHLEN.
-          MÄRKTE BRINGEN ZÖLLE &amp; MILIZ (JE 50 MANN), MÜHLEN STEIGERN DIE ERNTE (+5%).
-          DER PALAST (16 TEILE À 5.000 T) ERFORDERT EIN GUT VON 13.000 HA,
-          DIE KATHEDRALE (14 TEILE À 9.000 T) EIN GUT VON 25.000 HA.</p>
-        ${bBtn(`MARKT BAUEN (${fmt(KOSTEN.markt)} T)`,"baue('markt')", p.geld>=KOSTEN.markt && platz)}
-        ${bBtn(`MÜHLE BAUEN (${fmt(KOSTEN.muehle)} T)`,"baue('muehle')", p.geld>=KOSTEN.muehle && platz)}
-        ${bBtn(`PALAST-TEIL ${p.palast}/${PALAST_TEILE} (${fmt(KOSTEN.palastTeil)} T)`,"baue('palast')",
-            p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast)}
-        ${bBtn(`DOM-TEIL ${p.dom}/${DOM_TEILE} (${fmt(KOSTEN.domTeil)} T)`,"baue('dom')",
-            p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom)}
-        ${p.land<LAND.palast?`<p class="dim small">FÜR DEN PALAST FEHLEN EUCH NOCH ${fmt(LAND.palast-p.land)} HA LAND.</p>`:""}
+      ${stepper("Bauen")}
+      <h2>Landkarte — ${fmt(p.land)} ha</h2>
+      <div class="card">
+        <div class="legend">
+          <span><span class="tile t-markt"></span> Markt</span>
+          <span><span class="tile t-muehle"></span> Kornmühle</span>
+          <span><span class="tile t-palast"></span> Palast</span>
+          <span><span class="tile t-dom"></span> Kathedrale</span>
+          <span><span class="tile t-acker"></span> Ackerland</span>
+          <span><span class="tile t-frei"></span> Brachland</span>
+        </div>
+        <div id="map">${map}</div>
+        <p class="muted small">Je 1.000 ha Land ein Bauplatz (${p.maerkte+p.muehlen}/${bauplaetze(p)} belegt) ·
+        eine Stadt = 5 Märkte + 3 Mühlen · Märkte bringen Zölle und Miliz (je 50 Mann),
+        Mühlen steigern die Ernte (+5 %) · Palast: Gut von 13.000 ha nötig · Kathedrale: Gut von 25.000 ha.</p>
       </div>
-      <p>VERMÖGEN: <span class="${p.geld<0?'red':'gold'}">${fmt(p.geld)} TALER</span></p>
-      <button class="warn" onclick="zeige('krieg')" ${kriegOk?'':'disabled'}>KRIEG FÜHREN</button>
-      <button class="big" onclick="jahrAbschliessen()">JAHR ABSCHLIESSEN</button>
-      ${p.titel<1?'<p class="dim small">KRIEG IST ERST AB DEM RANG BARON MÖGLICH. EIN FELDZUG PRO JAHR.</p>':''}`;
+      <div class="card">
+        <h3>Bauen</h3>
+        ${bBtn(`Markt — ${fmt(KOSTEN.markt)} T`,"baue('markt')", p.geld>=KOSTEN.markt && platz)}
+        ${bBtn(`Mühle — ${fmt(KOSTEN.muehle)} T`,"baue('muehle')", p.geld>=KOSTEN.muehle && platz)}
+        ${bBtn(`Palast-Teil ${p.palast}/${PALAST_TEILE} — ${fmt(KOSTEN.palastTeil)} T`,"baue('palast')",
+            p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast)}
+        ${bBtn(`Dom-Teil ${p.dom}/${DOM_TEILE} — ${fmt(KOSTEN.domTeil)} T`,"baue('dom')",
+            p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom)}
+        ${p.land<LAND.palast?`<p class="muted small">Für den Palast fehlen Euch noch ${fmt(LAND.palast-p.land)} ha Land.</p>`:
+          p.land<LAND.dom && p.palast>=PALAST_TEILE?`<p class="muted small">Für die Kathedrale fehlen Euch noch ${fmt(LAND.dom-p.land)} ha Land.</p>`:""}
+        <p style="margin-top:8px"><b>Vermögen: <span class="${p.geld<0?'red':'gold'}">${fmt(p.geld)} Taler</span></b></p>
+      </div>
+      <button class="btn-danger" onclick="zeige('krieg')" ${kriegOk?'':'disabled'}>⚔️ Krieg führen</button>
+      <button class="btn-primary btn-lg" onclick="jahrAbschliessen()">Jahr abschließen</button>
+      ${p.titel<1?'<p class="muted small">Krieg ist erst ab dem Rang Baron möglich. Ein Feldzug pro Jahr.</p>':''}`;
   },
 
-  /* ---- Krieg ---- */
   krieg(){
     const p = cur();
     const ziele = G.spieler.filter(s=>s!==p && !s.tot);
     return `
-      <h2>FELDZUG</h2>
-      <div class="box">
-        <p>GEGNER:
-          <select id="ziel">${ziele.map(z=>`<option value="${G.spieler.indexOf(z)}">${titelName(z)} ${z.name} (${fmt(z.land)} HA, ${fmt(z.pop)} EINW.)</option>`).join("")}</select>
-        </p>
+      ${stepper("Bauen")}
+      <h2>⚔️ Feldzug</h2>
+      <div class="card">
+        <div class="rowflex">Gegner:
+          <select id="ziel">${ziele.map(z=>`<option value="${G.spieler.indexOf(z)}">${titelName(z)} ${z.name} — ${fmt(z.land)} ha, ${fmt(z.pop)} Einw.</option>`).join("")}</select>
+        </div>
         <table>
-          <tr><td>INFANTERIE (100 T/MANN)</td><td><input type="number" id="inf" min="0" value="0"></td></tr>
-          <tr><td>KAVALLERIE (250 T/MANN)</td><td><input type="number" id="kav" min="0" value="0"></td></tr>
-          <tr><td>ARTILLERIE (500 T/GESCHÜTZ)</td><td><input type="number" id="art" min="0" value="0"></td></tr>
-          <tr><td>EIGENE MILIZ (AUS ${p.maerkte} MÄRKTEN)</td><td class="hi">${fmt(miliz(p))} MANN (GRATIS)</td></tr>
+          <tr><td>Infanterie <span class="muted small">(100 T/Mann)</span></td><td><input type="number" id="inf" min="0" value="0"></td></tr>
+          <tr><td>Kavallerie <span class="muted small">(250 T/Mann)</span></td><td><input type="number" id="kav" min="0" value="0"></td></tr>
+          <tr><td>Artillerie <span class="muted small">(500 T/Geschütz)</span></td><td><input type="number" id="art" min="0" value="0"></td></tr>
+          <tr><td>Eigene Miliz <span class="muted small">(aus ${p.maerkte} Märkten)</span></td><td><b>${fmt(miliz(p))} Mann</b> <span class="muted small">gratis</span></td></tr>
         </table>
-        <p class="dim small">DER VERTEIDIGER KÄMPFT MIT MILIZ UND VOLKSAUFGEBOT UND HAT EINEN HEIMVORTEIL.
-        BEI SIEG EROBERT IHR BIS ZU 15% DES GEGNERISCHEN LANDES — BEI NIEDERLAGE ZAHLT IHR TRIBUT.</p>
+        <p class="muted small" style="margin-top:8px">Der Verteidiger kämpft mit Miliz und Volksaufgebot
+        und hat einen Heimvorteil. Bei Sieg erobert Ihr bis zu 15 % des gegnerischen Landes —
+        bei Niederlage zahlt Ihr Tribut.</p>
       </div>
-      <p>VERMÖGEN: <span class="gold">${fmt(p.geld)} TALER</span></p>
-      <button class="warn big" onclick="kriegStarten()">ANGRIFF!</button>
-      <button onclick="zeige('bauen')">DOCH KEIN KRIEG</button>`;
+      <div class="card"><b>Vermögen: <span class="gold">${fmt(p.geld)} Taler</span></b></div>
+      <button class="btn-danger btn-lg" onclick="kriegStarten()">Angriff!</button>
+      <button class="btn-lg" onclick="zeige('bauen')">Doch kein Krieg</button>`;
   },
 
-  /* ---- Kriegsergebnis ---- */
   kriegErgebnis(){
     return `
-      <h2>SCHLACHTBERICHT</h2>
-      <div class="box"><p class="${G._kr.sieg?'grn':'red'}" style="font-size:16px">${G._kr.txt}</p>
-      <p class="dim" style="margin-top:8px">KOSTEN DES FELDZUGS: ${fmt(G._kr.kosten)} TALER</p></div>
-      <button class="big" onclick="zeige('bauen')">WEITER</button>`;
+      <h2>Schlachtbericht</h2>
+      <div class="card">
+        <p class="${G._kr.sieg?'green':'red'}" style="font-size:17px;font-weight:600">${G._kr.txt}</p>
+        <p class="muted" style="margin-top:8px">Kosten des Feldzugs: ${fmt(G._kr.kosten)} Taler</p>
+      </div>
+      <button class="btn-primary btn-lg" onclick="zeige('bauen')">Weiter</button>`;
   },
 
-  /* ---- Jahresbilanz ---- */
   bilanz(){
     const p = cur(), r = p.report;
     const evHtml = r.ereignisse.length
-      ? r.ereignisse.map(e=>`<p class="${e.c}">» ${e.t}</p>`).join("")
-      : `<p class="dim">KEINE BESONDEREN VORKOMMNISSE.</p>`;
+      ? r.ereignisse.map(e=>`<div class="event ${e.c}">${e.t}</div>`).join("")
+      : `<div class="event">Keine besonderen Vorkommnisse.</div>`;
+    const row = (lbl,val,cls="") => `<tr><td>${lbl}</td><td class="r ${cls}">${val}</td></tr>`;
     return `
-      <h2>JAHRESBILANZ ANNO ${G.jahr} — ${titelName(p)} ${p.name}</h2>
-      <div class="box">${evHtml}</div>
-      <div class="row">
-        <div class="col box">
-          <table class="report">
-            <tr><td>ERNTE</td><td class="r grn">+${fmt(r.ernte)} FUDER</td></tr>
-            <tr><td>KORNSPEICHER JETZT</td><td class="r hi">${fmt(p.korn)} FUDER</td></tr>
-            <tr class="line"><td>STEUEREINNAHMEN</td><td class="r grn">+${fmt(r.steuern)} TALER</td></tr>
-            <tr><td>VERMÖGEN JETZT</td><td class="r ${p.geld<0?'red':'gold'}">${fmt(p.geld)} TALER</td></tr>
+      ${stepper("Bilanz")}
+      <h2>Jahresbilanz Anno ${G.jahr}</h2>
+      <div class="card">${evHtml}</div>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Wirtschaft</h3>
+          <table>
+            ${row("Ernte", "+"+fmt(r.ernte)+" Fuder", "delta-pos")}
+            ${row("Kornspeicher jetzt", fmt(p.korn)+" Fuder")}
+            ${row("Steuereinnahmen", "+"+fmt(r.steuern)+" Taler", "delta-pos")}
+            ${row("Vermögen jetzt", fmt(p.geld)+" Taler", p.geld<0?"red":"")}
           </table>
         </div>
-        <div class="col box">
-          <table class="report">
-            <tr><td>GEBURTEN</td><td class="r grn">+${fmt(r.geburten)}</td></tr>
-            <tr><td>NATÜRLICHE TODESFÄLLE</td><td class="r red">-${fmt(r.tote)}</td></tr>
-            ${r.verhungert?`<tr><td>VERHUNGERT</td><td class="r red">-${fmt(r.verhungert)}</td></tr>`:""}
-            <tr><td>${r.migration>=0?"EINWANDERUNG":"ABWANDERUNG"}</td><td class="r ${r.migration>=0?'grn':'red'}">${r.migration>=0?"+":""}${fmt(r.migration)}</td></tr>
-            <tr class="line"><td>UNTERTANEN JETZT</td><td class="r hi">${fmt(p.pop)}</td></tr>
-            <tr><td>STIMMUNG</td><td class="r ${p.stimmung>=60?'grn':p.stimmung>=35?'org':'red'}">${p.stimmung}/100</td></tr>
+        <div class="card">
+          <h3>Bevölkerung</h3>
+          <table>
+            ${row("Geburten", "+"+fmt(r.geburten), "delta-pos")}
+            ${row("Natürliche Todesfälle", "−"+fmt(r.tote), "delta-neg")}
+            ${r.verhungert?row("Verhungert", "−"+fmt(r.verhungert), "delta-neg"):""}
+            ${row(r.migration>=0?"Einwanderung":"Abwanderung", (r.migration>=0?"+":"−")+fmt(Math.abs(r.migration)), r.migration>=0?"delta-pos":"delta-neg")}
+            ${row("Untertanen jetzt", fmt(p.pop))}
+            ${row("Stimmung", p.stimmung+"/100")}
           </table>
         </div>
       </div>
-      ${r.verhungert?'<p class="red">EUER VOLK HUNGERT! DAS SPRICHT SICH IM REICH HERUM.</p>':""}
-      ${r.ueberzeit>0?`<p class="red small">IHR HABT ${Math.round(r.ueberzeit)} SEKUNDEN ZU LANGE REGIERT — DIE SORGEN NAGEN AN EURER GESUNDHEIT.</p>`:""}
-      <button class="big" onclick="nachBilanz()">WEITER</button>`;
+      ${r.verhungert?'<div class="event bad">Euer Volk hungert! Das spricht sich im Reich herum.</div>':""}
+      ${r.ueberzeit>0?`<div class="event bad">Ihr habt ${Math.round(r.ueberzeit)} Sekunden zu lange regiert — die Sorgen nagen an Eurer Gesundheit.</div>`:""}
+      <button class="btn-primary btn-lg" onclick="nachBilanz()">Weiter</button>`;
   },
 
-  /* ---- Beförderung ---- */
   befoerderung(){
     const p = cur();
     if(p.titel===8){ G.sieger = p; }
     return `
-      <div class="center" style="padding-top:90px">
-        <p class="gold" style="font-size:18px">TROMPETEN ERSCHALLEN!</p>
-        <h1 style="margin:22px 0">${p.name} WIRD ZU${p.w?"R":"M"} <span class="gold">${titelName(p)}</span> ERHOBEN!</h1>
+      <div class="hero">
+        <span class="crown">🎺</span>
+        <p class="gold" style="font-size:17px;letter-spacing:2px">Trompeten erschallen!</p>
+        <h1 style="font-size:30px;margin:18px 0">${p.name} wird zu${p.w?"r":"m"} <span class="gold">${titelName(p)}</span> erhoben!</h1>
         ${p.titel===8
-          ? `<p class="grn" style="font-size:16px">DIE KATHEDRALE IST VOLLENDET — DAS REICH HAT EINEN NEUEN ${titelName(p)}!</p>
-             <br><button class="big" onclick="zeige('sieg')">ZUR KRÖNUNG</button>`
-          : `<br><button class="big" onclick="naechsterSpieler()">WEITER</button>`}
+          ? `<p class="green" style="font-size:16px">Die Kathedrale ist vollendet — das Reich hat einen neuen ${titelName(p)}!</p>
+             <div style="margin-top:24px"><button class="btn-primary btn-lg" onclick="zeige('sieg')">Zur Krönung</button></div>`
+          : `<div style="margin-top:24px"><button class="btn-primary btn-lg" onclick="naechsterSpieler()">Weiter</button></div>`}
       </div>`;
   },
 
-  /* ---- Tod ---- */
   tod(){
     const p = cur();
-    const alter = Math.floor(G.jahr - 1700 + ri(25,40));
     return `
-      <div class="center" style="padding-top:100px">
-        <h1 class="red">DIE GLOCKEN LÄUTEN...</h1>
-        <p style="font-size:16px;margin:18px 0">${titelName(p)} ${p.name} IST ANNO ${G.jahr} VERSTORBEN.</p>
-        <p class="dim">HÖCHSTER RANG: ${titelName(p)} · ${fmt(p.land)} HA · ${fmt(p.pop)} UNTERTANEN</p>
-        <br><button class="big" onclick="naechsterSpieler()">WEITER</button>
+      <div class="hero">
+        <span class="crown">🕯️</span>
+        <h1 class="red" style="font-size:28px">Die Glocken läuten …</h1>
+        <p style="font-size:17px;margin:14px 0">${titelName(p)} ${p.name} ist Anno ${G.jahr} verstorben.</p>
+        <p class="muted">Höchster Rang: ${titelName(p)} · ${fmt(p.land)} ha · ${fmt(p.pop)} Untertanen</p>
+        <div style="margin-top:24px"><button class="btn-primary btn-lg" onclick="naechsterSpieler()">Weiter</button></div>
       </div>`;
   },
 
-  /* ---- Sieg ---- */
   sieg(){
     const p = G.sieger;
     return `
-      <div class="center" style="padding-top:70px">
-        <div class="logo" style="color:var(--c64-yellow)">${LOGO}</div>
-        <h1 class="gold">HEIL ${p.w?"DER KAISERIN":"DEM KAISER"} ${p.name}!</h1>
-        <p style="margin:16px 0">ANNO ${G.jahr} · ${fmt(p.pop)} UNTERTANEN · ${fmt(p.land)} HA · ${fmt(p.geld)} TALER</p>
-        <p class="dim">VOM EINFACHEN BÜRGER ZUM HERRSCHER DES REICHES — DAS SPIEL IST GEWONNEN.</p>
-        <br><button class="big" onclick="zeige('ende')">SCHLUSSWERTUNG</button>
+      <div class="hero">
+        <span class="crown">👑</span>
+        <h1 style="font-size:36px">Heil ${p.w?"der Kaiserin":"dem Kaiser"} ${p.name}!</h1>
+        <p style="margin:14px 0">Anno ${G.jahr} · ${fmt(p.pop)} Untertanen · ${fmt(p.land)} ha · ${fmt(p.geld)} Taler</p>
+        <p class="muted">Vom einfachen ${p.w?"Fräulein":"Herrn"} zur Herrschaft über das Reich — das Spiel ist gewonnen.</p>
+        <div style="margin-top:24px"><button class="btn-primary btn-lg" onclick="zeige('ende')">Schlusswertung</button></div>
       </div>`;
   },
 
-  /* ---- Ende / Wertung ---- */
   ende(){
     const sortiert = [...G.spieler].sort((a,b)=>score(b)-score(a));
     const rows = sortiert.map((p,i)=>`
-      <tr ${i===0?'class="gold"':''}>
+      <tr style="${i===0?'color:var(--gold);font-weight:700':''}">
         <td>${i+1}.</td><td>${titelName(p)} ${p.name}${p.tot?" †":""}</td>
         <td class="r">${fmt(p.pop)}</td><td class="r">${fmt(p.land)}</td>
         <td class="r">${fmt(p.geld)}</td><td class="r">${fmt(score(p))}</td>
       </tr>`).join("");
     return `
-      <h2>SCHLUSSWERTUNG ANNO ${G.jahr}</h2>
-      <table>
-        <tr class="dim"><th></th><th>NAME</th><th class="r">UNTERTANEN</th><th class="r">LAND (HA)</th><th class="r">TALER</th><th class="r">PUNKTE</th></tr>
-        ${rows}
-      </table>
-      <br>
-      <button class="big" onclick="zeige('title')">NEUES SPIEL</button>`;
+      <h2>Schlusswertung Anno ${G.jahr}</h2>
+      <div class="card">
+        <table>
+          <tr><th></th><th>Name</th><th class="r">Untertanen</th><th class="r">Land (ha)</th><th class="r">Taler</th><th class="r">Punkte</th></tr>
+          ${rows}
+        </table>
+      </div>
+      <button class="btn-primary btn-lg" onclick="G.spieler=[];zeige('title')">Neues Spiel</button>`;
   }
 };
 
-/* ---------- Aktionen (von Buttons aufgerufen) ---------- */
+/* ---------- Aktionen ---------- */
 function setupAnzahl(){
   const n = +$("#anz").value;
-  for(let i=0;i<4;i++){
+  for(let i=0;i<9;i++){
     const on = i<n;
-    $("#prow"+i).style.opacity = on?1:.35;
+    $("#prow"+i).style.opacity = on?1:.3;
     $("#pname"+i).disabled = !on;
     $("#pw"+i).disabled = !on;
   }
@@ -706,7 +837,7 @@ function setupStart(){
   const n = +$("#anz").value;
   const namen=[], w=[];
   for(let i=0;i<n;i++){
-    namen.push(($("#pname"+i).value.trim()||("SPIELER "+(i+1))).toUpperCase());
+    namen.push(($("#pname"+i).value.trim()||("Spieler "+(i+1))));
     w.push($("#pw"+i).value==="1");
   }
   starteSpiel(n, namen, w, +$("#tempo").value);
@@ -723,7 +854,7 @@ function handelKorn(dir){
     const m = Math.floor(+$("#kkauf").value||0);
     const kosten = m*p.kornPreis;
     if(m<=0) return;
-    if(kosten>p.geld){ $("#hmsg").textContent="ZU WENIG TALER!"; return; }
+    if(kosten>p.geld){ $("#hmsg").textContent="Zu wenig Taler!"; return; }
     p.geld -= kosten; p.korn += m;
   } else {
     const m = clamp(Math.floor(+$("#kverk").value||0),0,p.korn);
@@ -738,12 +869,12 @@ function handelLand(dir){
     const m = Math.floor(+$("#lkauf").value||0);
     const kosten = m*p.landPreis;
     if(m<=0) return;
-    if(kosten>p.geld){ $("#hmsg").textContent="ZU WENIG TALER!"; return; }
+    if(kosten>p.geld){ $("#hmsg").textContent="Zu wenig Taler!"; return; }
     p.geld -= kosten; p.land += m;
   } else {
     const m = clamp(Math.floor(+$("#lverk").value||0),0,freiLand(p));
     if(m<=0) return;
-    p.land -= m; p.geld += m*p.landPreis;
+    p.land -= m; p.geld += Math.round(m*p.landPreis*0.9);
   }
   render();
 }
@@ -769,17 +900,12 @@ function kriegStarten(){
   const kav = Math.max(0,Math.floor(+$("#kav").value||0));
   const art = Math.max(0,Math.floor(+$("#art").value||0));
   const kosten = inf*100+kav*250+art*500;
-  if(kosten > p.geld){ alert2("ZU WENIG TALER FÜR DIESES HEER!"); return; }
+  if(kosten > p.geld){ alertMsg("Zu wenig Taler für dieses Heer!"); return; }
   G._kr = fuehreKrieg(p, ziel, inf, kav, art);
   zeige("kriegErgebnis");
 }
-function alert2(t){ /* kein browser-alert (blockiert) — inline-hinweis */
-  const el = $("#screen").querySelector("h2");
-  if(el){ el.innerHTML += ` <span class="red small">${t}</span>`; }
-}
 function jahrAbschliessen(){
-  const p = cur();
-  jahresabschluss(p);
+  jahresabschluss(cur());
   zeige("bilanz");
 }
 function nachBilanz(){

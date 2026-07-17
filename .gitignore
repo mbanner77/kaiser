@@ -5,3 +5,4 @@ package-lock.json
 test*.mjs
 shots.mjs
 *.zip
+shots*.mjs
