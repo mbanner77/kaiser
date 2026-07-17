@@ -33,7 +33,25 @@
     padding:12px 20px;background:rgba(14,17,23,.85);backdrop-filter:blur(8px);
     border-bottom:1px solid var(--border);
   }
-  .brand{font-weight:800;font-size:20px;letter-spacing:2px;color:var(--gold);}
+  .brand{font-weight:800;font-size:20px;letter-spacing:2px;color:var(--gold);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;}
+  /* --- Systemmenü --- */
+  details.menu{position:relative;}
+  details.menu summary{
+    list-style:none;cursor:pointer;font-size:14.5px;font-weight:600;
+    background:var(--panel2);border:1px solid var(--border);border-radius:10px;
+    padding:6px 12px;user-select:none;
+  }
+  details.menu summary::-webkit-details-marker{display:none;}
+  details.menu[open] summary{border-color:var(--gold);}
+  .menu-inhalt{
+    position:absolute;right:0;top:calc(100% + 6px);z-index:60;
+    background:var(--panel2);border:1px solid var(--border);border-radius:12px;
+    padding:8px;min-width:200px;box-shadow:0 14px 40px rgba(0,0,0,.55);
+    display:flex;flex-direction:column;gap:2px;
+  }
+  .menu-inhalt button{margin:0;text-align:left;border:none;background:transparent;border-radius:8px;}
+  .menu-inhalt button:hover{background:var(--panel);border:none;}
   .chip{
     display:inline-flex;align-items:center;gap:6px;
     background:var(--panel2);border:1px solid var(--border);border-radius:999px;
@@ -45,8 +63,10 @@
   main{max-width:1080px;margin:0 auto;padding:22px 20px 60px;}
   #screen{animation:fadein .28s ease;}
   @keyframes fadein{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
-  h1{font-size:30px;font-weight:800;margin-bottom:6px;}
-  h2{font-size:20px;font-weight:700;margin-bottom:14px;}
+  h1{font-size:30px;font-weight:800;margin-bottom:6px;
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;letter-spacing:.5px;}
+  h2{font-size:21px;font-weight:700;margin-bottom:14px;
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;letter-spacing:.3px;}
   h3{font-size:14px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
   p{line-height:1.6;}
   .muted{color:var(--muted);} .gold{color:var(--gold);} .green{color:var(--green);}
@@ -240,15 +260,21 @@
   <span class="chip" id="hSpieler" style="display:none"></span>
   <span class="chip" id="hTimer" style="display:none"></span>
   <span class="spacer"></span>
-  <button class="btn-sm" onclick="hilfeAuf()">❓</button>
   <button class="btn-sm" id="btnMusik" onclick="toggleMusik()" title="Hintergrundmusik">🎼</button>
-  <button class="btn-sm" id="btnMute" onclick="toggleMute()">🔊</button>
-  <button class="btn-sm" id="btnExport" style="display:none" onclick="exportSpielstand()">💾 Speichern</button>
-  <button class="btn-sm" onclick="$('#importFile').click()">📂 Laden</button>
+  <button class="btn-sm" id="btnMute" onclick="toggleMute()" title="Klänge">🔊</button>
+  <details class="menu" id="sysmenu">
+    <summary>☰ Menü</summary>
+    <div class="menu-inhalt" onclick="$('#sysmenu').removeAttribute('open')">
+      <button id="btnExport" style="display:none" onclick="exportSpielstand()">💾 Spielstand speichern</button>
+      <button onclick="$('#importFile').click()">📂 Spielstand laden</button>
+      <button onclick="erfolgeAuf()">🏅 Erfolge</button>
+      <button onclick="hilfeAuf()">❓ Spielhilfe</button>
+    </div>
+  </details>
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser v1.0 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v1.4 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <script>
@@ -354,30 +380,75 @@ function score(p){
        + p.palast*5000 + p.dom*9000;
 }
 
-/* ---------- Sound (Web Audio, eigene kleine Fanfaren) ---------- */
-let _ac = null, muted = false;
+/* ---------- Sound-Design (Web Audio: Synthese, Rauschen, Hall) ---------- */
+let _ac = null, muted = false, _master = null, _delay = null;
 function toggleMute(){ muted = !muted; $("#btnMute").textContent = muted ? "🔇" : "🔊"; }
-function beep(freq, dur, delay=0, type="triangle", vol=0.12){
+function audioCtx(){
+  if(_ac) return _ac;
+  _ac = new (window.AudioContext||window.webkitAudioContext)();
+  _master = _ac.createGain(); _master.gain.value = 0.9;
+  _master.connect(_ac.destination);
+  /* leichter Echo-Hall für Fanfaren, Glocken und Kanonen */
+  _delay = _ac.createDelay(0.7); _delay.delayTime.value = 0.22;
+  const rueck = _ac.createGain(); rueck.gain.value = 0.28;
+  const nass  = _ac.createGain(); nass.gain.value  = 0.16;
+  _delay.connect(rueck); rueck.connect(_delay);
+  _delay.connect(nass);  nass.connect(_master);
+  return _ac;
+}
+function beep(freq, dur, delay=0, type="triangle", vol=0.12, hall=false){
   if(muted) return;
   try{
-    _ac = _ac || new (window.AudioContext||window.webkitAudioContext)();
-    const t = _ac.currentTime + delay;
-    const o = _ac.createOscillator(), g = _ac.createGain();
+    const ac = audioCtx();
+    const t = ac.currentTime + delay;
+    const o = ac.createOscillator(), g = ac.createGain();
     o.type = type; o.frequency.value = freq;
-    o.connect(g); g.connect(_ac.destination);
-    g.gain.setValueAtTime(vol, t);
+    o.connect(g); g.connect(_master); if(hall) g.connect(_delay);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.014);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.start(t); o.stop(t + dur);
+    o.start(t); o.stop(t + dur + 0.05);
   }catch(e){}
 }
-const sKlick    = () => beep(660, .04, 0, "sine", .05);
-const sMuenze   = () => { beep(880,.07,0,"square",.06); beep(1320,.09,.06,"square",.05); };
-const sFanfare  = () => [392,523,659,784].forEach((f,i)=>beep(f,.28,i*.14,"triangle",.14));
-const sKroenung = () => [392,523,659,784,1047,784,1047].forEach((f,i)=>beep(f,.3,i*.18,"triangle",.15));
-const sTrommel  = () => { for(let i=0;i<4;i++) beep(98,.09,i*.16,"square",.1); };
-const sSchlag   = () => beep(140,.12,0,"sawtooth",.09);
-const sGlocke   = () => [660,587,523].forEach((f,i)=>beep(f,.6,i*.5,"sine",.12));
-const sNieder   = () => [330,294,262,196].forEach((f,i)=>beep(f,.25,i*.15,"sawtooth",.08));
+function rausch(dur, delay=0, vol=0.2, tief=false, hall=false){
+  if(muted) return;
+  try{
+    const ac = audioCtx();
+    const t = ac.currentTime + delay;
+    const len = Math.max(1, Math.ceil(ac.sampleRate * dur));
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2);
+    const src = ac.createBufferSource(); src.buffer = buf;
+    const f = ac.createBiquadFilter();
+    f.type = tief ? "lowpass" : "highpass";
+    f.frequency.value = tief ? 320 : 2400;
+    const g = ac.createGain(); g.gain.value = vol;
+    src.connect(f); f.connect(g); g.connect(_master); if(hall) g.connect(_delay);
+    src.start(t);
+  }catch(e){}
+}
+const sKlick    = () => beep(700, .03, 0, "sine", .028);
+const sMuenze   = () => { beep(1245,.06,0,"triangle",.07); beep(1865,.09,.05,"triangle",.055); };
+const sFanfare  = () => {
+  [[392,0],[523,.14],[659,.28],[784,.42]].forEach(([f,d])=>{
+    beep(f,.34,d,"sawtooth",.075,true); beep(f/2,.34,d,"triangle",.06,true);
+  });
+  beep(988,.5,.58,"sawtooth",.07,true); beep(784,.5,.58,"sawtooth",.05,true);
+};
+const sKroenung = () => {
+  [[392,0],[523,.17],[659,.34],[784,.51],[1047,.72]].forEach(([f,d])=>{
+    beep(f,.4,d,"sawtooth",.075,true); beep(f/2,.4,d,"triangle",.055,true);
+  });
+  [523,659,784,1047].forEach(f=>beep(f,1.4,1.05,"sawtooth",.05,true));
+  rausch(.9,1.05,.05,false,true);   /* Jubel-Schimmer */
+};
+const sTrommel  = () => { for(let i=0;i<5;i++){ rausch(.09,i*.15,.16,true); beep(92,.1,i*.15,"sine",.12); } };
+const sKanone   = () => { rausch(.4,0,.26,true,true); beep(55,.35,0,"sine",.22); };
+const sKlirren  = () => { rausch(.09,0,.10); beep(415+ri(-30,60),.06,0,"square",.045); beep(620+ri(-40,80),.05,.03,"square",.035); };
+const sSchlag   = () => { rausch(.12,0,.1,true); beep(140,.12,0,"sawtooth",.07); };
+const sGlocke   = () => [660,587,523].forEach((f,i)=>{ beep(f,1.2,i*.55,"sine",.13,true); beep(f*2.76,.5,i*.55,"sine",.04,true); });
+const sNieder   = () => [330,294,262,196].forEach((f,i)=>beep(f,.3,i*.16,"sawtooth",.07,true));
 document.addEventListener("click", e => { if(e.target.closest("button")) sKlick(); }, true);
 
 /* Sanfte generative Hintergrundmusik (Laute am Hofe) */
@@ -394,9 +465,10 @@ function starteMusik(){
   musikIv = setInterval(()=>{
     if(muted || !musikAn) return;
     pos = clamp(pos + ri(-2,2), 0, skala.length-1);
-    if(Math.random() < 0.8) beep(skala[pos], .55, 0, "triangle", .026);
-    if(musikStep % 8 === 0)  beep(98,  1.3, 0, "sine", .035);
-    if(musikStep % 16 === 8) beep(147, 1.3, 0, "sine", .03);
+    if(Math.random() < 0.8) beep(skala[pos], .6, 0, "triangle", .024, true);
+    if(Math.random() < 0.25) beep(skala[pos]*1.5, .4, .17, "sine", .014, true);
+    if(musikStep % 8 === 0)  beep(98,  1.4, 0, "sine", .034);
+    if(musikStep % 16 === 8) beep(147, 1.4, 0, "sine", .028);
     musikStep++;
   }, 350);
 }
@@ -811,7 +883,12 @@ function einTick(s, leise){
   if(gefA+gefD > 0 && (s.tick%2===0 || gefA+gefD>20))
     s.log.unshift(`Gefecht ${s.tick}: Angreifer verliert ${fmt(gefA)}, Verteidiger ${fmt(gefD)} Mann.`);
   if(s.log.length>14) s.log.length = 14;
-  if(!leise && s.tick%2===0) sSchlag();
+  if(!leise){
+    const fern = s.lanes.some(l=>l.dist>0 && laneGroesse(l.A)>0 && laneGroesse(l.D)>0 && (l.A.art>0||l.D.art>0));
+    const nah  = s.lanes.some(l=>l.dist===0 && laneGroesse(l.A)>0 && laneGroesse(l.D)>0);
+    if(fern && s.tick%2===0) sKanone();
+    if(nah) sKlirren();
+  }
   if(s.partikel.length>70) s.partikel.splice(0, s.partikel.length-70);
   /* Ende: Flucht, Vernichtung oder Erschöpfung */
   const endeA = sRest(s,"A")===0, endeD = sRest(s,"D")===0;
@@ -1237,6 +1314,15 @@ function zeichneKarte(p, canvasId, t=0){
   ctx.stroke();
   ctx.strokeStyle = "#4f89aa"; ctx.lineWidth = 4;
   ctx.stroke();
+  /* Wasserglitzern (wandernde Strichel-Linie) */
+  ctx.save();
+  ctx.strokeStyle = "rgba(220,240,255,.35)"; ctx.lineWidth = 1.6;
+  ctx.setLineDash([7,13]); ctx.lineDashOffset = -t/45;
+  ctx.beginPath();
+  ctx.moveTo(cx-rr*1.5, fy-rr*0.4);
+  ctx.bezierCurveTo(cx-rr*0.5, fy+rr*0.35, cx+rr*0.4, fy-rr*0.45, cx+rr*1.5, fy+rr*0.1);
+  ctx.stroke();
+  ctx.restore();
   /* Brücke */
   ctx.strokeStyle = "#7a5c37"; ctx.lineWidth = 5;
   ctx.beginPath(); ctx.moveTo(cx-14, fy+2); ctx.lineTo(cx+14, fy-4); ctx.stroke();
@@ -1288,6 +1374,13 @@ function zeichneKarte(p, canvasId, t=0){
     const a = rng()*6.2832, d = rng()*rr*0.24;
     malHaus(ctx, cx+Math.cos(a)*d*1.3, cy+10+Math.sin(a)*d*0.7, 9, "#b09877", "#8a4a35");
   }
+  /* Schornsteinrauch aus dem Dorf */
+  for(let r=0;r<3;r++){
+    const phase = (t/2600 + r*0.37) % 1;
+    const sx2 = cx - 10 + r*12, sy2 = cy + 2 - phase*30;
+    ctx.fillStyle = `rgba(200,200,205,${0.20*(1-phase)})`;
+    ctx.beginPath(); ctx.arc(sx2 + Math.sin(phase*7+r)*4, sy2, 2.5+phase*5, 0, 7); ctx.fill();
+  }
   /* Städte: Mauerringe */
   for(let s=0;s<staedte(p);s++){
     const a = 1.1 + s*1.35, d = rr*0.52;
@@ -1330,6 +1423,12 @@ function zeichneKarte(p, canvasId, t=0){
   if(p._neu==="dom" && p.dom>0){
     ctx.strokeStyle="rgba(224,180,88,.9)"; ctx.lineWidth=2;
     ctx.strokeRect(cx+rr*0.52-28, cy-rr*0.36-46, 56, 58);
+  }
+  /* Wolkenschatten ziehen über das Land */
+  for(let w=0;w<2;w++){
+    const wx2 = cx - rr*1.4 + (((t/95) + w*rr*1.7) % (rr*3.2));
+    ctx.fillStyle = "rgba(0,0,10,.07)";
+    ctx.beginPath(); ctx.ellipse(wx2, cy + (w?rr*0.3:-rr*0.25), rr*0.5, rr*0.22, 0.3, 0, 7); ctx.fill();
   }
   ctx.restore();
   /* Grenze */
@@ -1483,7 +1582,17 @@ function zeichneFeld(t=0){
       dot(Math.ceil(u.inf/skala), 2.5, farbe);
       dot(Math.ceil(u.miliz/skala), 2.1, farbe+"99");
       dot(Math.ceil(u.auf/skala), 1.9, farbe+"77");
-      dot(Math.ceil(u.kav/skala), 3.4, farbe);
+      /* Kavallerie mit Bewegungs-Streifen während des Vormarschs */
+      const kavN = Math.ceil(u.kav/skala);
+      if(kavN>0 && lane.dist>0 && !s.fertig){
+        ctx.strokeStyle = farbe+"55"; ctx.lineWidth = 2;
+        for(let k=0;k<Math.min(kavN,10);k++){
+          const reihe = (n+k) % reihen, spalte = Math.floor((n+k)/reihen);
+          const x = front - richt*(spalte*7), y = y0 + reihe*9;
+          ctx.beginPath(); ctx.moveTo(x - richt*11, y); ctx.lineTo(x - richt*3, y); ctx.stroke();
+        }
+      }
+      dot(kavN, 3.4, farbe);
       /* Artillerie als Quadrate an der Basis */
       const artN = Math.min(6, u.art>0 ? Math.max(1, Math.ceil(u.art/Math.max(1,skala))) : 0);
       for(let k=0;k<artN;k++){
@@ -1522,6 +1631,13 @@ function zeichneFeld(t=0){
     if(alter < 0) continue;
     if(pk.typ==="kugel" && alter < 900){
       const q = alter/900;
+      /* Mündungsfeuer beim Abschuss */
+      if(q < 0.14){
+        const mx = pk.von==="A" ? basisA-16 : basisD+16;
+        const my = oben + pk.lane*laneH + laneH/2;
+        ctx.fillStyle = `rgba(255,225,140,${0.9*(1-q/0.14)})`;
+        ctx.beginPath(); ctx.arc(mx, my, 5+q*30, 0, 7); ctx.fill();
+      }
       const lane = s.lanes[pk.lane];
       const y0 = oben + pk.lane*laneH + laneH/2;
       const dist = lane ? lane.dist : 50;
@@ -2045,7 +2161,7 @@ const SCREENS = {
       <h2>🏅 Erfolge — ${erfolge().size} von ${ERFOLGE.length}</h2>
       <div class="grid g2">${karten}</div>
       <p class="muted small">Erfolge gelten für menschliche Regenten und bleiben auf diesem Gerät erhalten.</p>
-      <button class="btn-primary btn-lg" onclick="zeige(G.spieler.length?'handoff':'title')">Zurück</button>`;
+      <button class="btn-primary btn-lg" onclick="zeige(G._vorErf || (G.spieler.length?'handoff':'title'))">Zurück</button>`;
   },
 
   setup(){
@@ -2863,6 +2979,11 @@ function nachBilanz(){
   naechsterSpieler();
 }
 
+function erfolgeAuf(){
+  if(G.screen === "erfolge" || G.screen === "schlacht") return;
+  G._vorErf = G.screen;
+  zeige("erfolge");
+}
 function hilfeAuf(){
   if(G.screen === "hilfe" || G.screen === "schlacht") return;
   G._vorHilfe = G.screen;
