@@ -1,0 +1,14 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deployment: Render-Dashboard -> New -> Blueprint -> dieses Repo auswaehlen.
+services:
+  - type: web
+    name: kaiser
+    runtime: static
+    plan: free
+    # Eine einzige HTML-Datei — als index.html veroeffentlichen:
+    buildCommand: mkdir -p public && cp kaiser.html public/index.html
+    staticPublishPath: public
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
