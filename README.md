@@ -25,10 +25,14 @@ Eine vollständige GAP-Analyse gegenüber dem C64-Original liegt in `GAP-ANALYSE
 - Stehendes Heer mit Sold (steigt mit dem Rang), Kriege ab Baronsrang
 - Kriegs-Diplomatie: Mitspieler unterstützen Angreifer oder Verteidiger mit ihrem Heer,
   gewähren oder verweigern Durchmarschrechte (Sitzreihenfolge = Nachbarschaft)
-- Animierte Schlachten mit Gefechtsprotokoll, Kampfkraftbalken und Sound
+- Taktische Schlachten: Angreifer-Taktik vs. geheime Verteidiger-Order (Schere-Stein-Papier),
+  drei Gefechtsphasen (Artillerie-Duell, Kavallerie-Attacke, Nahkampf), Moral & Flucht,
+  Canvas-Schlachtfeld mit Truppenformationen und Explosionen, Gefechtsprotokoll, Sound
 - Begrenzte Lebenszeit (Todesjahr ca. 1760–1768) und 90-Sekunden-Zeitfaktor pro Zug
 - Zwischenbilanz-Phase, Wettermodell für Ernten, wachsende SVG-Monumente
 - Web-Audio-Soundkulisse (abschaltbar), Konfetti-Zeremonien, Enter-Taste als Hauptaktion
+- Kornkurs-Chart im Handel, Jahres-Deltas auf den Statuskarten, Reichsvergleich bei der
+  Zugübergabe, animierte Zähler, Spielhilfe (❓)
 - Zwei Modi: Original (lange Partie) und Kurzspiel
 
 ## Lizenz

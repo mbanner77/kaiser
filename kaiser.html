@@ -146,6 +146,32 @@
   /* --- Monumente --- */
   .monu{display:flex;gap:20px;align-items:flex-end;justify-content:center;padding:6px 0 2px;}
   .monu svg{display:block;}
+  /* --- Schlachtfeld-Canvas --- */
+  #feld{width:100%;height:auto;display:block;border-radius:12px;border:1px solid var(--border);
+    background:linear-gradient(180deg,#1c2637 0%,#2a3a2a 45%,#22301f 100%);margin-bottom:12px;}
+  .phasebadge{display:inline-block;padding:4px 14px;border-radius:999px;background:var(--panel2);
+    border:1px solid var(--gold);color:var(--gold);font-size:13px;font-weight:700;margin-bottom:10px;}
+  .moral{height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-top:6px;}
+  .moral>div{height:100%;background:var(--green);transition:width .4s;}
+  /* --- Taktik-Wahl --- */
+  .taktik{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:12px 0;}
+  .taktik .opt{border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;
+    background:var(--panel);text-align:left;transition:border-color .15s, background .15s;}
+  .taktik .opt:hover{border-color:var(--gold);}
+  .taktik .opt.sel{border-color:var(--gold);background:rgba(224,180,88,.1);}
+  .taktik .opt b{display:block;margin-bottom:4px;}
+  .taktik .opt span{font-size:12.5px;color:var(--muted);line-height:1.4;display:block;}
+  /* --- Sparkline & Deltas --- */
+  .spark{display:block;width:100%;height:58px;margin-top:6px;}
+  .up{color:var(--green);font-size:12px;font-weight:700;} .down{color:var(--red);font-size:12px;font-weight:700;}
+  /* --- Titel-Glanz --- */
+  .pulse{animation:pulse 2.6s ease-in-out infinite;display:inline-block;}
+  @keyframes pulse{0%,100%{text-shadow:0 0 16px rgba(224,180,88,.2);transform:scale(1);}
+    50%{text-shadow:0 0 42px rgba(224,180,88,.7);transform:scale(1.04);}}
+  .shine{background:linear-gradient(90deg,var(--gold) 20%,#fff3cf 50%,var(--gold) 80%);
+    background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:shine 4.5s linear infinite;}
+  @keyframes shine{to{background-position:-200% center;}}
   @media (max-width:640px){ .hero h1{font-size:32px;} .sliderrow{grid-template-columns:120px 1fr 52px;} .battlefield{grid-template-columns:1fr;} .vs{padding:4px;} }
 </style>
 </head>
@@ -156,6 +182,7 @@
   <span class="chip" id="hSpieler" style="display:none"></span>
   <span class="chip" id="hTimer" style="display:none"></span>
   <span class="spacer"></span>
+  <button class="btn-sm" onclick="hilfeAuf()">❓</button>
   <button class="btn-sm" id="btnMute" onclick="toggleMute()">🔊</button>
   <button class="btn-sm" id="btnExport" style="display:none" onclick="exportSpielstand()">💾 Speichern</button>
   <button class="btn-sm" onclick="$('#importFile').click()">📂 Laden</button>
@@ -211,6 +238,7 @@ function neuerSpieler(name,w){
     zoll:10, einkSt:20, mwSt:15, justiz:2,
     titel:0, stimmung:60,
     kornPreis:ri(70,120), landPreis:ri(16,70),
+    kornHist:[], snap:null, delta:null,
     todesJahr: (G.tempo>1 ? ri(1739,1746) : ri(1760,1768)) + Math.random(),
     tot:false,
     ausgabe:0, kriegGefuehrt:false,
@@ -435,9 +463,10 @@ function kriegVorbereiten(zielIdx){
   const a = G.aktiv, d = zielIdx;
   const weg = wegZwischen(a,d);
   const fragen = lebende().map(x=>x.i).filter(i=>i!==a && i!==d);
-  G._kr = { a, d, weg, fragen, frageIdx:0, wahl:{}, abgebrochen:false };
+  G._kr = { a, d, weg, fragen, frageIdx:0, wahl:{}, abgebrochen:false,
+            taktikA: G._taktikA || "sturm", taktikD: null };
   if(fragen.length) zeige("diplomatie");
-  else schlachtStarten();
+  else zeige("taktikDef");
 }
 function diploWahl(wahl){
   const kr = G._kr;
@@ -452,6 +481,10 @@ function diploWahl(wahl){
     zeige("kriegAbbruch");
     return;
   }
+  zeige("taktikDef");
+}
+function taktikDefWahl(k){
+  G._kr.taktikD = k;
   schlachtStarten();
 }
 
@@ -473,21 +506,51 @@ function seiteBauen(besitzerIdx, unterstuetzer, verteidigt){
 const seiteStaerke = s =>
   s.inf + s.kav*2.5 + s.art*4 + s.miliz*0.8 + s.aufgebot*0.5;
 
+/* Taktiken: Angreifer wählt offen, Verteidiger gibt geheime Order */
+const TAKTIK_A = [
+  { k:"sturm",    n:"Sturmangriff",           d:"Alles nach vorn — stark in der offenen Feldschlacht, verlustreich gegen Wälle und Fallen." },
+  { k:"umfass",   n:"Umfassung",              d:"Die Flanken umgehen — hebelt Verschanzungen aus, anfällig für Hinterhalte." },
+  { k:"beschuss", n:"Belagerung & Beschuss",  d:"Die Artillerie wirken lassen — zermürbt Verschanzte, schwach im offenen Feld." }
+];
+const TAKTIK_D = [
+  { k:"feld",       n:"Offene Feldschlacht", d:"Dem Feind mutig entgegentreten." },
+  { k:"wall",       n:"Verschanzen",         d:"Hinter Wällen und Gräben ausharren." },
+  { k:"hinterhalt", n:"Hinterhalt",          d:"Den Feind in die Falle locken — riskant, aber verheerend gegen Stürmende." }
+];
+const TAKTIK_MOD = {
+  sturm:    { feld:+0.12, wall:-0.15, hinterhalt:-0.25 },
+  umfass:   { feld: 0.00, wall:+0.15, hinterhalt:-0.10 },
+  beschuss: { feld:-0.10, wall:+0.20, hinterhalt:+0.10 }
+};
+const PHASEN_NAMEN = { art:"💣 Artillerie-Duell", kav:"🐎 Kavallerie-Attacke", inf:"⚔️ Nahkampf" };
+const phaseBei = t => t<=2 ? "art" : t<=4 ? "kav" : "inf";
+function effStaerke(S, phase, mod){
+  const m = phase==="art" ? {i:.35,k:.35,a:2.2,mi:.3,v:.25}
+        : phase==="kav" ? {i:.7, k:1.8,a:.8, mi:.6,v:.4}
+        :                 {i:1,  k:1,  a:1,  mi:1, v:1};
+  return (S.inf*m.i + S.kav*2.5*m.k + S.art*4*m.a + S.miliz*0.8*m.mi + S.aufgebot*0.5*m.v) * mod;
+}
+
 function schlachtStarten(){
   const kr = G._kr;
   const helferA = kr.fragen.filter(i=>kr.wahl[i]==="atk");
   const helferD = kr.fragen.filter(i=>kr.wahl[i]==="def");
   const A = seiteBauen(kr.a, helferA, false);
   const D = seiteBauen(kr.d, helferD, true);
+  const kopie = S => ({inf:S.inf,kav:S.kav,art:S.art,miliz:S.miliz,aufgebot:S.aufgebot});
+  const mod = TAKTIK_MOD[kr.taktikA][kr.taktikD] ?? 0;
   G._s = {
     A, D, helferA, helferD,
-    strA0: Math.max(1,seiteStaerke(A)), strD0: Math.max(1,seiteStaerke(D)*1.2),
-    tick:0, maxTicks:6, log:[], fertig:false, sieger:null, iv:null
+    start:{ A:kopie(A), D:kopie(D) },
+    modA: 1 + mod,
+    strA0: Math.max(1,seiteStaerke(A)), strD0: Math.max(1,seiteStaerke(D)*1.25),
+    moralA:100, moralD:100, routA:false, routD:false,
+    tick:0, maxTicks:8, log:[], fertig:false, sieger:null, iv:null, boom:0
   };
   cur().kriegGefuehrt = true;
   sTrommel();
   zeige("schlacht");
-  G._s.iv = setInterval(schlachtTick, 850);
+  G._s.iv = setInterval(schlachtTick, 950);
 }
 function schaden(seite, anteil){
   const q = 1 - anteil;
@@ -496,47 +559,110 @@ function schaden(seite, anteil){
   seite.aufgebot = Math.floor(seite.aufgebot*q);
   for(const p of seite.pools){ p.inf=Math.floor(p.inf*q); p.kav=Math.floor(p.kav*q); p.art=Math.floor(p.art*q); }
 }
-function schlachtTick(){
-  const s = G._s;
-  if(!s || s.fertig) return;
+function einTick(s, leise){
   s.tick++;
-  const strA = seiteStaerke(s.A)*rf(0.85,1.15);
-  const strD = seiteStaerke(s.D)*1.2*rf(0.85,1.15);
-  const dmgD = strA/(strA+strD) * 0.22;
-  const dmgA = strD/(strA+strD) * 0.22;
+  const phase = phaseBei(s.tick);
+  const strA = effStaerke(s.A, phase, s.modA) * rf(0.85,1.15);
+  const strD = effStaerke(s.D, phase, 1) * 1.25 * rf(0.85,1.15);
+  const dmgD = strA/(strA+strD) * 0.17;
+  const dmgA = strD/(strA+strD) * 0.17;
   const vorherA = s.A.inf+s.A.kav+s.A.art+s.A.miliz;
   const vorherD = s.D.inf+s.D.kav+s.D.art+s.D.miliz+s.D.aufgebot;
   schaden(s.A, dmgA); schaden(s.D, dmgD);
   const gefA = vorherA - (s.A.inf+s.A.kav+s.A.art+s.A.miliz);
   const gefD = vorherD - (s.D.inf+s.D.kav+s.D.art+s.D.miliz+s.D.aufgebot);
-  s.log.unshift(`Gefecht ${s.tick}: Angreifer verliert ${fmt(gefA)}, Verteidiger ${fmt(gefD)} Mann.`);
-  sSchlag();
-  if(s.tick >= s.maxTicks){
+  s.moralA = Math.max(0, s.moralA - dmgA*170*rf(0.8,1.2));
+  s.moralD = Math.max(0, s.moralD - dmgD*170*rf(0.8,1.2));
+  s.boom = ri(4,9);
+  s.log.unshift(`${PHASEN_NAMEN[phase]} — Gefecht ${s.tick}: Angreifer verliert ${fmt(gefA)}, Verteidiger ${fmt(gefD)} Mann.`);
+  if(!leise) sSchlag();
+  /* Flucht? */
+  if(s.moralA < 32 || s.moralD < 32 || s.tick >= s.maxTicks){
+    s.routA = s.moralA < 32; s.routD = s.moralD < 32;
+    if(s.routA && !s.routD){ s.sieger = "D"; schaden(s.A, 0.08); s.log.unshift("Die Moral der Angreifer bricht — das Heer flieht vom Feld!"); }
+    else if(s.routD && !s.routA){ s.sieger = "A"; schaden(s.D, 0.08); s.log.unshift("Die Verteidiger werfen die Waffen fort und fliehen!"); }
+    else s.sieger = effStaerke(s.A,"inf",s.modA) > effStaerke(s.D,"inf",1)*1.25 ? "A" : "D";
     s.fertig = true;
-    clearInterval(s.iv);
-    s.sieger = seiteStaerke(s.A) > seiteStaerke(s.D)*1.2 ? "A" : "D";
-    schlachtAbschliessen();
   }
+}
+function schlachtTick(){
+  const s = G._s;
+  if(!s || s.fertig) return;
+  einTick(s, false);
+  if(s.fertig){ clearInterval(s.iv); schlachtAbschliessen(); }
   if(G.screen === "schlacht") render();
 }
 function schlachtUeberspringen(){
   const s = G._s;
   if(!s) return;
   clearInterval(s.iv);
-  while(!s.fertig){
-    s.tick++;
-    const strA = seiteStaerke(s.A)*rf(0.85,1.15);
-    const strD = seiteStaerke(s.D)*1.2*rf(0.85,1.15);
-    schaden(s.A, strD/(strA+strD)*0.22);
-    schaden(s.D, strA/(strA+strD)*0.22);
-    if(s.tick >= s.maxTicks){
-      s.fertig = true;
-      s.sieger = seiteStaerke(s.A) > seiteStaerke(s.D)*1.2 ? "A" : "D";
-    }
-  }
+  while(!s.fertig) einTick(s, true);
   schlachtAbschliessen();
   render();
 }
+/* Schlachtfeld-Canvas: Truppen als Formationen, Explosionen an der Front */
+function zeichneFeld(){
+  const c = $("#feld"), s = G._s;
+  if(!c || !s) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
+  /* Bodenlinien */
+  ctx.strokeStyle = "rgba(255,255,255,.05)";
+  for(let y=H*0.35;y<H;y+=18){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  const prog = Math.min(1, s.tick/4);
+  const frontA = W*0.12 + prog*W*0.30, frontD = W*0.88 - prog*W*0.30;
+  const skala = Math.max(1, Math.ceil((seiteGroesse(s.A)+seiteGroesse(s.D))/380));
+  const malSeite = (S, farbe, hell, vonX, richt) => {
+    const einheiten = [
+      {n:Math.ceil(S.inf/skala),    f:farbe, r:2.6},
+      {n:Math.ceil(S.miliz/skala),  f:hell,  r:2.2},
+      {n:Math.ceil((S.aufgebot||0)/skala), f:hell, r:2.0},
+      {n:Math.ceil(S.kav/skala),    f:farbe, r:3.6},
+    ];
+    let col = 0;
+    for(const e of einheiten){
+      for(let i=0;i<e.n;i++){
+        const reihe = i % 12, spalte = Math.floor(i/12);
+        const x = vonX - richt*(col*9 + spalte*8) + rf(-1.5,1.5);
+        const y = H*0.42 + reihe*13 + rf(-2,2);
+        ctx.beginPath(); ctx.arc(x, y, e.r, 0, 7); ctx.fillStyle = e.f; ctx.fill();
+      }
+      col += Math.ceil(e.n/12) + 1;
+    }
+    /* Artillerie als Quadrate hinten */
+    const artN = Math.min(14, Math.ceil(S.art/Math.max(1,skala/3)));
+    for(let i=0;i<artN;i++){
+      const x = vonX - richt*(col*9 + 30 + (i%3)*12);
+      const y = H*0.45 + Math.floor(i/3)*20;
+      ctx.fillStyle = farbe;
+      ctx.fillRect(x-4, y-4, 8, 8);
+    }
+  };
+  malSeite(s.A, "#5fb8d4", "#3d7d92", frontA, 1);
+  malSeite(s.D, "#d9973f", "#96682c", frontD, -1);
+  /* Explosionen an der Front */
+  if(s.tick>0 && !s.fertig){
+    for(let i=0;i<(s.boom||5);i++){
+      const x = (frontA+frontD)/2 + rf(-40,40), y = rf(H*0.4, H*0.9);
+      const r = rf(3,11);
+      const grad = ctx.createRadialGradient(x,y,0,x,y,r);
+      grad.addColorStop(0,"rgba(255,230,140,.95)");
+      grad.addColorStop(0.5,"rgba(230,120,60,.7)");
+      grad.addColorStop(1,"rgba(230,120,60,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
+    }
+  }
+  /* Fluchtpfeile */
+  if(s.fertig){
+    ctx.font = "22px sans-serif"; ctx.textAlign = "center";
+    if(s.sieger==="A"){ ctx.fillText("🏳️", frontD+40, H*0.35); }
+    else { ctx.fillText("🏳️", frontA-40, H*0.35); }
+  }
+}
+const seiteGroesse = S => S.inf+S.kav+S.art+S.miliz+(S.aufgebot||0);
+
 function schlachtAbschliessen(){
   const s = G._s, kr = G._kr;
   const ang = G.spieler[kr.a], ver = G.spieler[kr.d];
@@ -567,13 +693,18 @@ function storageOK(){
   try{ const t="__kaiser_t"; window.localStorage.setItem(t,"1"); window.localStorage.removeItem(t); return true; }
   catch(e){ return false; }
 }
-function spielstand(){ return JSON.stringify({v:3, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler}); }
+function spielstand(){ return JSON.stringify({v:4, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler}); }
 function ladeSpielstand(json){
   const d = JSON.parse(json);
   if(!d || !Array.isArray(d.spieler) || !d.spieler.length) throw new Error("ungültig");
   G.jahr = d.jahr; G.tempo = d.tempo; G.aktiv = clamp(d.aktiv||0,0,d.spieler.length-1);
   G.spieler = d.spieler;
-  for(const p of G.spieler){ if(!p.heer) p.heer = {inf:0,kav:0,art:0}; }
+  for(const p of G.spieler){
+    if(!p.heer) p.heer = {inf:0,kav:0,art:0};
+    if(!p.kornHist) p.kornHist = [];
+    if(p.snap===undefined) p.snap = null;
+    if(p.delta===undefined) p.delta = null;
+  }
   G.sieger = null;
   zeige("handoff");
 }
@@ -618,6 +749,12 @@ function beginneZug(){
   if(Math.random() < 0.06) kp *= rf(1.6,2.6);
   p.kornPreis = clamp(Math.round(kp), 20, 430);
   p.landPreis = ri(16,70);
+  p.kornHist = (p.kornHist||[]).concat(p.kornPreis).slice(-32);
+  if(p.snap){
+    p.delta = { geld:p.geld-p.snap.geld, land:p.land-p.snap.land,
+                korn:p.korn-p.snap.korn, pop:p.pop-p.snap.pop };
+  }
+  p.snap = { geld:p.geld, land:p.land, korn:p.korn, pop:p.pop };
   p.kriegGefuehrt = false;
   p.ausgabe = 0;
   p.turnStart = Date.now();
@@ -669,15 +806,20 @@ function stepper(akt){
 }
 
 function statKarten(p){
+  const d = p.delta || {};
   return `<div class="stats">
     <div class="stat"><span class="ico">💰</span><div class="lbl">Vermögen</div>
-      <div class="val ${p.geld<0?'red':''}">${fmt(p.geld)} T</div></div>
+      <div class="val ${p.geld<0?'red':''}" data-cnt="${Math.round(p.geld)}" data-suf=" T">${fmt(p.geld)} T</div>
+      ${deltaBadge(d.geld," T")}</div>
     <div class="stat"><span class="ico">🌍</span><div class="lbl">Land</div>
-      <div class="val">${fmt(p.land)} ha</div></div>
+      <div class="val" data-cnt="${p.land}" data-suf=" ha">${fmt(p.land)} ha</div>
+      ${deltaBadge(d.land," ha")}</div>
     <div class="stat"><span class="ico">🌾</span><div class="lbl">Kornspeicher</div>
-      <div class="val">${fmt(p.korn)} Fuder</div></div>
+      <div class="val" data-cnt="${p.korn}" data-suf=" Fuder">${fmt(p.korn)} Fuder</div>
+      ${deltaBadge(d.korn)}</div>
     <div class="stat"><span class="ico">👥</span><div class="lbl">Untertanen</div>
-      <div class="val">${fmt(p.pop)}</div></div>
+      <div class="val" data-cnt="${p.pop}">${fmt(p.pop)}</div>
+      ${deltaBadge(d.pop)}</div>
     <div class="stat"><span class="ico">${p.stimmung>=60?'😊':p.stimmung>=35?'😐':'😠'}</span><div class="lbl">Stimmung</div>
       <div class="val">${p.stimmung}/100</div>
       <div class="bar"><div style="width:${p.stimmung}%;background:${p.stimmung>=60?'var(--green)':p.stimmung>=35?'var(--gold)':'var(--red)'}"></div></div></div>
@@ -688,9 +830,43 @@ function render(){
   kopf();
   const R = SCREENS[G.screen];
   const el = $("#screen");
-  el.style.animation = "none"; void el.offsetWidth; el.style.animation = "";
+  if(G.screen !== "schlacht"){ el.style.animation = "none"; void el.offsetWidth; el.style.animation = ""; }
   el.innerHTML = R ? R() : "<p>Unbekannter Bildschirm.</p>";
-  window.scrollTo(0,0);
+  if(G.screen === "schlacht") zeichneFeld();
+  else window.scrollTo(0,0);
+  zaehlerAnimieren();
+}
+/* Zahlen zählen weich hoch (Statuskarten) */
+function zaehlerAnimieren(){
+  document.querySelectorAll("[data-cnt]").forEach(el=>{
+    const ziel = +el.dataset.cnt, suf = el.dataset.suf || "";
+    if(!isFinite(ziel)) return;
+    const start = ziel * 0.85, t0 = performance.now(), dauer = 450;
+    const step = t => {
+      const q = Math.min(1,(t-t0)/dauer), e = 1-Math.pow(1-q,3);
+      el.textContent = fmt(start + (ziel-start)*e) + suf;
+      if(q<1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+/* Kornkurs-Verlauf als Mini-Chart */
+function sparkline(hist){
+  if(!hist || hist.length<2) return "";
+  const w = 280, h = 54, min = Math.min(...hist), max = Math.max(...hist);
+  const sp = Math.max(1, max-min);
+  const pt = hist.map((v,i)=>`${(i/(hist.length-1)*w).toFixed(1)},${(h-6-(v-min)/sp*(h-14)).toFixed(1)}`);
+  const letzt = pt[pt.length-1].split(",");
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polyline points="${pt.join(" ")}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${letzt[0]}" cy="${letzt[1]}" r="3.5" fill="var(--gold)"/>
+    <text x="2" y="10" font-size="9" fill="#8b96a8">${fmt(max)}</text>
+    <text x="2" y="${h-2}" font-size="9" fill="#8b96a8">${fmt(min)}</text>
+  </svg>`;
+}
+function deltaBadge(v, einheit=""){
+  if(v===undefined || v===null || v===0 || !isFinite(v)) return "";
+  return v>0 ? `<span class="up">▲ ${fmt(v)}${einheit}</span>` : `<span class="down">▼ ${fmt(Math.abs(v))}${einheit}</span>`;
 }
 function alertMsg(t){
   const el = $("#screen");
@@ -705,8 +881,8 @@ const SCREENS = {
 
   title(){ return `
     <div class="hero">
-      <span class="crown">👑</span>
-      <h1>KAISER</h1>
+      <span class="crown pulse">👑</span>
+      <h1 class="shine">KAISER</h1>
       <p class="muted" style="margin:10px 0 4px">Wirtschaftssimulation im 18. Jahrhundert</p>
       <p class="muted small">Hommage an den C64-Klassiker von 1984 · 1–9 Spieler (Hotseat)</p>
     </div>
@@ -767,14 +943,30 @@ const SCREENS = {
 
   handoff(){
     const p = cur();
+    const rang = [...G.spieler].sort((a,b)=>score(b)-score(a));
+    const zeilen = rang.map(s=>`
+      <tr style="${s===p?'color:var(--gold);font-weight:600':''}">
+        <td>${titelName(s)} ${s.name}${s.tot?" †":""}</td>
+        <td class="r">${fmt(s.land)} ha</td>
+        <td class="r">${fmt(s.pop)}</td>
+        <td class="r">${staedte(s)}</td>
+      </tr>`).join("");
     return `
-      <div class="hero">
-        <span class="crown">${p.w?"♛":"♚"}</span>
+      <div class="hero" style="padding-bottom:20px">
+        <span class="crown pulse">${p.w?"♛":"♚"}</span>
         <h1 style="font-size:32px;letter-spacing:2px">Anno ${G.jahr}</h1>
         <p style="font-size:19px;margin:16px 0 6px"><b class="gold">${titelName(p)} ${p.name}</b> ist am Zug.</p>
         <p class="muted">Bitte an das Gerät treten. Der 90-Sekunden-Zähler startet mit dem Zug.</p>
-        <div style="margin-top:26px"><button class="btn-primary btn-lg" onclick="beginneZug()">Zug beginnen</button></div>
-      </div>`;
+        <div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="beginneZug()">Zug beginnen</button></div>
+      </div>
+      ${G.spieler.length>1?`
+      <div class="card" style="max-width:560px;margin:0 auto">
+        <h3>Die Reiche im Vergleich</h3>
+        <table>
+          <tr><th>Regent</th><th class="r">Land</th><th class="r">Untertanen</th><th class="r">Städte</th></tr>
+          ${zeilen}
+        </table>
+      </div>`:""}`;
   },
 
   status(){
@@ -848,11 +1040,14 @@ const SCREENS = {
       <div class="grid g2">
         <div class="card">
           <h3>🌾 Korn — ${fmt(p.kornPreis)} Taler / Fuder</h3>
-          <p class="muted small">Schwankt zwischen 20 und 430 Talern. Auf Verkäufe werden 10 % Provision fällig.</p>
+          ${sparkline(p.kornHist)}
+          <p class="muted small">Kursverlauf der letzten Jahre. Spanne 20–430 Taler, 10 % Provision auf Verkäufe.</p>
           <p style="margin-top:8px">Lager: <b>${fmt(p.korn)} Fuder</b></p>
           <div class="rowflex">Kaufen: <input type="number" id="kkauf" min="0" value="0">
+            <button class="btn-sm" onclick="$('#kkauf').value=${Math.max(0,Math.floor(p.geld/p.kornPreis))}">Max</button>
             <button onclick="handelKorn(1)">Kauf</button></div>
           <div class="rowflex">Verkaufen: <input type="number" id="kverk" min="0" max="${p.korn}" value="0">
+            <button class="btn-sm" onclick="$('#kverk').value=${p.korn}">Max</button>
             <button onclick="handelKorn(-1)">Verkauf</button></div>
         </div>
         <div class="card">
@@ -861,8 +1056,10 @@ const SCREENS = {
           Land unter Euren Gebäuden ist unverkäuflich.</p>
           <p style="margin-top:8px">Verkäuflich: <b>${fmt(freiLand(p))} ha</b></p>
           <div class="rowflex">Kaufen: <input type="number" id="lkauf" min="0" value="0">
+            <button class="btn-sm" onclick="$('#lkauf').value=${Math.max(0,Math.floor(p.geld/p.landPreis))}">Max</button>
             <button onclick="handelLand(1)">Kauf</button></div>
           <div class="rowflex">Verkaufen: <input type="number" id="lverk" min="0" max="${freiLand(p)}" value="0">
+            <button class="btn-sm" onclick="$('#lverk').value=${freiLand(p)}">Max</button>
             <button onclick="handelLand(-1)">Verkauf</button></div>
         </div>
       </div>
@@ -1020,8 +1217,17 @@ const SCREENS = {
         <p class="muted small" style="margin-top:8px">Vor der Schlacht werden die übrigen Regenten
         befragt: Sie können Euch oder den Verteidiger mit ihrem Heer unterstützen (die Miliz bleibt
         stets daheim) oder neutral bleiben. Liegt das Ziel nicht an Eurer Grenze, braucht Ihr
-        Durchmarschrechte aller Reiche auf dem Weg. Der Verteidiger hat Heimvorteil und ruft
-        zusätzlich das Volksaufgebot.</p>
+        Durchmarschrechte aller Reiche auf dem Weg. Der Verteidiger hat Heimvorteil, ruft das
+        Volksaufgebot und gibt seinen Truppen eine geheime Order.</p>
+      </div>
+      <div class="card">
+        <h3>Eure Taktik</h3>
+        <div class="taktik">
+          ${TAKTIK_A.map(t=>`
+            <div class="opt ${(G._taktikA||'sturm')===t.k?'sel':''}" onclick="G._taktikA='${t.k}';render()">
+              <b>${t.n}</b><span>${t.d}</span>
+            </div>`).join("")}
+        </div>
       </div>
       <button class="btn-danger btn-lg" onclick="kriegVorbereiten(+$('#ziel').value)">Zu den Waffen!</button>
       <button class="btn-lg" onclick="zeige('bauen')">Doch kein Krieg</button>`;
@@ -1069,12 +1275,34 @@ const SCREENS = {
       <button class="btn-primary btn-lg" onclick="zeige('bauen')">Weiter</button>`;
   },
 
+  taktikDef(){
+    const kr = G._kr;
+    const ver = G.spieler[kr.d], ang = G.spieler[kr.a];
+    const tA = TAKTIK_A.find(t=>t.k===kr.taktikA);
+    return `
+      <div class="hero" style="padding-top:26px">
+        <span class="crown">🛡️</span>
+        <h2 style="font-size:24px">Geheime Order, ${titelName(ver)} ${ver.name}!</h2>
+        <p style="margin:10px auto;max-width:560px">${titelName(ang)} ${ang.name} rückt mit
+        <b>${tA?tA.n.toLowerCase():"unbekannter Taktik"}</b> gegen Euer Reich vor.
+        Wie stellt Ihr Eure Truppen auf?</p>
+        <div class="taktik" style="max-width:680px;margin:16px auto">
+          ${TAKTIK_D.map(t=>`
+            <div class="opt" onclick="taktikDefWahl('${t.k}')">
+              <b>${t.n}</b><span>${t.d}</span>
+            </div>`).join("")}
+        </div>
+        <p class="muted small">Danach beginnt die Schlacht — Trommelwirbel!</p>
+      </div>`;
+  },
+
   schlacht(){
     const s = G._s, kr = G._kr;
     const ang = G.spieler[kr.a], ver = G.spieler[kr.d];
     const pctA = clamp(seiteStaerke(s.A)/s.strA0*100,0,100);
-    const pctD = clamp(seiteStaerke(s.D)*1.2/s.strD0*100,0,100);
-    const seite = (S,t,helfer) => `
+    const pctD = clamp(seiteStaerke(s.D)*1.25/s.strD0*100,0,100);
+    const phase = s.tick===0 ? null : phaseBei(Math.min(s.tick,s.maxTicks));
+    const seite = (S,t,helfer,moral) => `
       <div class="armee ${s.tick>0 && !s.fertig ? 'shake':''}">
         <h4>${t}</h4>
         <div class="u"><span>⚔️ Infanterie</span><b>${fmt(S.inf)}</b></div>
@@ -1082,19 +1310,24 @@ const SCREENS = {
         <div class="u"><span>💣 Artillerie</span><b>${fmt(S.art)}</b></div>
         <div class="u"><span>🛡️ Miliz</span><b>${fmt(S.miliz)}</b></div>
         ${S.aufgebot?`<div class="u"><span>🔥 Volksaufgebot</span><b>${fmt(S.aufgebot)}</b></div>`:""}
+        <div class="u muted small"><span>Moral</span><span>${Math.round(moral)} %</span></div>
+        <div class="moral"><div style="width:${moral}%;background:${moral>60?'var(--green)':moral>32?'var(--gold)':'var(--red)'}"></div></div>
         ${helfer.length?`<p class="muted small" style="margin-top:6px">Verbündete: ${helfer.map(i=>G.spieler[i].name).join(", ")}</p>`:""}
       </div>`;
+    const verlust = (st,jetzt) => fmt(seiteGroesse(st)-seiteGroesse(jetzt));
     return `
-      <h2>⚔️ Schlacht um ${ver.name}s Land — Gefecht ${Math.min(s.tick,s.maxTicks)}/${s.maxTicks}</h2>
+      <h2>⚔️ Schlacht um ${ver.name}s Land</h2>
+      ${phase?`<span class="phasebadge">${PHASEN_NAMEN[phase]} · Gefecht ${Math.min(s.tick,s.maxTicks)}/${s.maxTicks}</span>`:""}
+      <canvas id="feld" width="900" height="240"></canvas>
       <div class="battlefield">
         <div>
-          ${seite(s.A, `Angreifer: ${ang.name}`, s.helferA)}
+          ${seite(s.A, `Angreifer: ${ang.name} (${TAKTIK_A.find(t=>t.k===kr.taktikA)?.n||""})`, s.helferA, s.moralA)}
           <div class="strbar a"><div style="width:${pctA}%"></div></div>
           <p class="muted small center">Kampfkraft ${Math.round(pctA)} %</p>
         </div>
         <div class="vs">⚔️</div>
         <div>
-          ${seite(s.D, `Verteidiger: ${ver.name}`, s.helferD)}
+          ${seite(s.D, `Verteidiger: ${ver.name} (${TAKTIK_D.find(t=>t.k===kr.taktikD)?.n||""})`, s.helferD, s.moralD)}
           <div class="strbar d"><div style="width:${pctD}%"></div></div>
           <p class="muted small center">Kampfkraft ${Math.round(pctD)} %</p>
         </div>
@@ -1103,6 +1336,12 @@ const SCREENS = {
       ${s.fertig
         ? `<div class="card" style="border-color:${s.sieger==='A'?'var(--green)':'var(--red)'}">
              <p class="${s.sieger==='A'?'green':'red'}" style="font-size:17px;font-weight:700">${s.ergebnis}</p>
+             <table style="margin-top:10px">
+               <tr><th></th><th class="r">Angreifer gefallen</th><th class="r">Verteidiger gefallen</th></tr>
+               <tr><td>Verluste gesamt</td>
+                   <td class="r red">${verlust(s.start.A,s.A)}</td>
+                   <td class="r red">${verlust(s.start.D,s.D)}</td></tr>
+             </table>
            </div>
            <button class="btn-primary btn-lg" onclick="zeige('bauen')">Weiter</button>`
         : `<button class="btn-lg" onclick="schlachtUeberspringen()">Schlacht überspringen ⏩</button>`}`;
@@ -1185,6 +1424,44 @@ const SCREENS = {
         <p class="muted">Vom einfachen ${p.w?"Fräulein":"Herrn"} zur Herrschaft über das Reich — das Spiel ist gewonnen.</p>
         <div style="margin-top:24px"><button class="btn-primary btn-lg" onclick="zeige('ende')">Schlusswertung</button></div>
       </div>`;
+  },
+
+  hilfe(){
+    return `
+      <h2>❓ Spielhilfe</h2>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Ziel & Aufstieg</h3>
+          <p class="small">Steigt in 8 Beförderungen vom Herrn zum Kaiser auf. Jede Stufe verlangt
+          Einwohner, Bauwerke oder Vermögen (im Status stets angezeigt) — und einen positiven
+          Kontostand. Für den Kaiser braucht Ihr die vollendete Kathedrale, 5 Städte,
+          25.000 ha und 100.000 Taler. Eure Lebenszeit ist begrenzt; wer über 90 Sekunden
+          pro Zug braucht, altert schneller.</p>
+        </div>
+        <div class="card">
+          <h3>Wirtschaft</h3>
+          <p class="small">Gebt dem Volk mehr als das nötige Korn — das lockt Einwanderer.
+          Kauft Korn und Land billig, verkauft teuer (10 % Provision). Märkte bringen
+          Steuern und Miliz, Mühlen steigern die Ernte, Städte (5 Märkte + 3 Mühlen)
+          kurbeln die Wirtschaft kräftig an. Achtung: Bebauung verringert die Anbaufläche,
+          und das Wetter macht jede Ernte zum Glücksspiel.</p>
+        </div>
+        <div class="card">
+          <h3>Steuern & Volk</h3>
+          <p class="small">Zölle, Einkommen- und Mehrwertsteuer füllen die Kasse, drücken aber
+          die Stimmung — unzufriedene Untertanen wandern ab, hungernde sterben. Die Justiz
+          wirkt ebenso auf die Stimmung. Hohe Stimmung bedeutet Geburten und Zuzug.</p>
+        </div>
+        <div class="card">
+          <h3>Krieg & Diplomatie</h3>
+          <p class="small">Ab Baron dürft Ihr Krieg führen. Unterhaltet ein stehendes Heer
+          (der Sold steigt mit dem Rang). Die Sitzreihenfolge ist der Nachbarschaftskreis —
+          Nicht-Nachbarn erreicht Ihr nur mit Durchmarschrechten. Vor der Schlacht wählen
+          beide Seiten eine Taktik (Schere-Stein-Papier-Prinzip), Mitspieler können Truppen
+          leihen. Sinkt die Moral einer Seite unter ein Drittel, flieht ihr Heer.</p>
+        </div>
+      </div>
+      <button class="btn-primary btn-lg" onclick="hilfeZu()">Zurück zum Spiel</button>`;
   },
 
   ende(){
@@ -1303,6 +1580,13 @@ function nachBilanz(){
   if(pruefeBefoerderung(p)){ zeige("befoerderung"); return; }
   naechsterSpieler();
 }
+
+function hilfeAuf(){
+  if(G.screen === "hilfe" || G.screen === "schlacht") return;
+  G._vorHilfe = G.screen;
+  zeige("hilfe");
+}
+function hilfeZu(){ zeige(G._vorHilfe || "title"); }
 
 /* ---------- Tastatur: Enter = Hauptaktion ---------- */
 document.addEventListener("keydown", e => {
