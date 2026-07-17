@@ -4,3 +4,4 @@ package-lock.json
 *.png
 test*.mjs
 shots.mjs
+*.zip
