@@ -51,8 +51,18 @@
     background:linear-gradient(180deg,var(--panel2) 0%,var(--panel) 100%);
     border:1px solid var(--border);border-radius:var(--radius);
     padding:18px 20px;margin-bottom:16px;
-    transition:border-color .2s;
+    transition:border-color .2s, transform .15s, box-shadow .2s;
   }
+  .card:hover{border-color:#3a4759;}
+  ::selection{background:rgba(224,180,88,.35);}
+  :focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:#2a3446;border-radius:99px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  #titelbild{width:100%;height:auto;display:block;border-radius:14px;border:1px solid var(--border);}
+  .wetter-ico{font-size:30px;display:inline-block;vertical-align:middle;margin-right:8px;
+    animation:wippen 3s ease-in-out infinite;}
+  @keyframes wippen{0%,100%{transform:translateY(0) rotate(-3deg);}50%{transform:translateY(-4px) rotate(3deg);}}
   .grid{display:grid;gap:14px;}
   .g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));}
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;}
@@ -690,7 +700,15 @@ function einTick(s, leise){
   const gefD = vorherD - (s.D.inf+s.D.kav+s.D.art+s.D.miliz+s.D.aufgebot);
   s.moralA = Math.max(0, s.moralA - dmgA*170*rf(0.8,1.2));
   s.moralD = Math.max(0, s.moralD - dmgD*170*rf(0.8,1.2));
-  s.boom = ri(4,9);
+  /* Partikel: Explosionen und Rauch an der Front */
+  s.partikel = s.partikel || [];
+  const jetzt = performance.now();
+  const anz = phase==="art" ? 8 : phase==="kav" ? 5 : 6;
+  for(let i=0;i<anz;i++)
+    s.partikel.push({ rx:0.5+rf(-0.06,0.06), ry:rf(0.42,0.9), born:jetzt+rf(0,500), typ:"boom" });
+  for(let i=0;i<3;i++)
+    s.partikel.push({ rx:0.5+rf(-0.08,0.08), ry:rf(0.35,0.7), born:jetzt+rf(0,600), typ:"rauch" });
+  if(s.partikel.length>90) s.partikel.splice(0, s.partikel.length-90);
   s.log.unshift(`${PHASEN_NAMEN[phase]} — Gefecht ${s.tick}: Angreifer verliert ${fmt(gefA)}, Verteidiger ${fmt(gefD)} Mann.`);
   if(!leise) sSchlag();
   /* Flucht? */
@@ -717,6 +735,71 @@ function schlachtUeberspringen(){
   schlachtAbschliessen();
   render();
 }
+/* ---------- Titelpanorama (prozedural gemalt) ---------- */
+function zeichneTitel(t){
+  const c = document.getElementById("titelbild");
+  if(!c) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  /* Morgenhimmel */
+  const himmel = ctx.createLinearGradient(0,0,0,H);
+  himmel.addColorStop(0,"#1b2436"); himmel.addColorStop(0.55,"#3a3552"); himmel.addColorStop(1,"#7a5a48");
+  ctx.fillStyle = himmel; ctx.fillRect(0,0,W,H);
+  /* Sonne mit Strahlen */
+  const sx = W*0.72, sy = H*0.62;
+  ctx.save(); ctx.translate(sx,sy); ctx.rotate(t/14000);
+  for(let i=0;i<12;i++){
+    ctx.rotate(Math.PI/6);
+    ctx.fillStyle = "rgba(224,180,88,.06)";
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(240,-26); ctx.lineTo(240,26); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  const sonne = ctx.createRadialGradient(sx,sy,4,sx,sy,46);
+  sonne.addColorStop(0,"#ffe9b0"); sonne.addColorStop(0.5,"#e0b458"); sonne.addColorStop(1,"rgba(224,180,88,0)");
+  ctx.fillStyle = sonne; ctx.beginPath(); ctx.arc(sx,sy,46,0,7); ctx.fill();
+  /* Wolken ziehen */
+  ctx.fillStyle = "rgba(220,215,230,.10)";
+  for(let i=0;i<4;i++){
+    const wx = ((t/(90+i*25) + i*260) % (W+260)) - 130;
+    const wy = 34 + i*26;
+    for(let b=0;b<4;b++){ ctx.beginPath(); ctx.arc(wx+b*26, wy+(b%2)*5, 16+(b%3)*6, 0, 7); ctx.fill(); }
+  }
+  /* Hügel */
+  ctx.fillStyle = "#22301f";
+  ctx.beginPath(); ctx.moveTo(0,H);
+  ctx.quadraticCurveTo(W*0.2,H-58,W*0.45,H-30);
+  ctx.quadraticCurveTo(W*0.7,H-10,W,H-40);
+  ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+  /* Burg-Silhouette */
+  ctx.fillStyle = "#10151d";
+  const bx = W*0.28, by = H-28;
+  ctx.fillRect(bx-90, by-70, 180, 70);
+  for(let z=0;z<7;z++) ctx.fillRect(bx-90+z*28, by-80, 14, 12);
+  const turm = (tx,th,tw)=>{
+    ctx.fillRect(tx-tw/2, by-th, tw, th);
+    ctx.beginPath(); ctx.moveTo(tx-tw/2-5, by-th); ctx.lineTo(tx, by-th-26); ctx.lineTo(tx+tw/2+5, by-th); ctx.closePath(); ctx.fill();
+  };
+  turm(bx-90, 108, 34); turm(bx+90, 108, 34); turm(bx, 150, 42);
+  /* Wehende Fahne auf dem Hauptturm */
+  ctx.strokeStyle = "#10151d"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(bx, by-176); ctx.lineTo(bx, by-206); ctx.stroke();
+  ctx.fillStyle = "#e0b458";
+  const wehen = Math.sin(t/300)*4;
+  ctx.beginPath();
+  ctx.moveTo(bx, by-206);
+  ctx.quadraticCurveTo(bx+16, by-204+wehen, bx+30, by-200+wehen);
+  ctx.quadraticCurveTo(bx+16, by-196+wehen*0.5, bx, by-192);
+  ctx.closePath(); ctx.fill();
+  /* Vögel */
+  ctx.strokeStyle = "rgba(200,205,220,.4)"; ctx.lineWidth = 1.5;
+  for(let i=0;i<3;i++){
+    const vx = ((t/(30+i*8) + i*300) % (W+80)) - 40;
+    const vy = 50 + i*22 + Math.sin(t/400+i)*6;
+    ctx.beginPath(); ctx.moveTo(vx-6,vy); ctx.quadraticCurveTo(vx-2,vy-4,vx,vy);
+    ctx.quadraticCurveTo(vx+2,vy-4,vx+6,vy); ctx.stroke();
+  }
+}
+
 /* ---------- Reichskarte (prozedural, deterministisch pro Reich) ---------- */
 function mulberry(seed){
   return function(){
@@ -765,11 +848,13 @@ function malMarkt(ctx, x, y){
   ctx.strokeStyle = "#8a5a2a"; ctx.lineWidth = 1;
   for(let i=-6;i<=6;i+=4){ ctx.beginPath(); ctx.moveTo(x+i,y-5-(6-Math.abs(i))*0.7); ctx.lineTo(x+i*0.8,y-12+Math.abs(i)*0.5); ctx.stroke(); }
 }
-function malMuehle(ctx, x, y){
+function malMuehle(ctx, x, y, t=0){
   ctx.fillStyle = "#c8beab";
   ctx.beginPath(); ctx.moveTo(x-5,y+4); ctx.lineTo(x-3,y-9); ctx.lineTo(x+3,y-9); ctx.lineTo(x+5,y+4); ctx.closePath(); ctx.fill();
   ctx.strokeStyle = "#e8e0cf"; ctx.lineWidth = 2;
-  for(const w of [0.6,2.2,3.8,5.4]){
+  const dreh = t/900 + x*0.1;           /* Flügel drehen sich gemächlich */
+  for(let f=0; f<4; f++){
+    const w = dreh + f*Math.PI/2;
     ctx.beginPath(); ctx.moveTo(x, y-9); ctx.lineTo(x+Math.cos(w)*10, y-9+Math.sin(w)*10); ctx.stroke();
   }
 }
@@ -806,7 +891,7 @@ function malDomKarte(ctx, x, y, teile){
     ctx.strokeRect(x-20.5, y-13.5, 43, 18);
   }
 }
-function zeichneKarte(p, canvasId){
+function zeichneKarte(p, canvasId, t=0){
   const c = document.getElementById(canvasId);
   if(!c || !p) return;
   const ctx = c.getContext("2d");
@@ -844,12 +929,32 @@ function zeichneKarte(p, canvasId){
   /* Brücke */
   ctx.strokeStyle = "#7a5c37"; ctx.lineWidth = 5;
   ctx.beginPath(); ctx.moveTo(cx-14, fy+2); ctx.lineTo(cx+14, fy-4); ctx.stroke();
+  /* Berge im Norden */
+  for(let m=0;m<3;m++){
+    const mx = cx + (rng()-0.5)*rr*1.6, my = cy - rr*0.62 + rng()*14;
+    const ms = 14 + rng()*12;
+    ctx.fillStyle = "#4d5563";
+    ctx.beginPath(); ctx.moveTo(mx-ms,my+ms*0.6); ctx.lineTo(mx,my-ms); ctx.lineTo(mx+ms,my+ms*0.6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#e7ecf2";
+    ctx.beginPath(); ctx.moveTo(mx-ms*0.32,my-ms*0.36); ctx.lineTo(mx,my-ms); ctx.lineTo(mx+ms*0.32,my-ms*0.36); ctx.closePath(); ctx.fill();
+  }
   /* Wälder am Rand */
   for(let w=0; w<7; w++){
     const a = rng()*6.2832, d = rr*(0.72+rng()*0.2);
     const wx = cx+Math.cos(a)*d*1.2, wy = cy+Math.sin(a)*d*0.75;
     for(let b=0;b<6;b++) malBaum(ctx, wx+(rng()-0.5)*34, wy+(rng()-0.5)*22, 5+rng()*3);
   }
+  /* Wege vom Dorf zu den Bauwerken */
+  ctx.strokeStyle = "rgba(209,187,138,.30)"; ctx.lineWidth = 3; ctx.lineCap = "round";
+  (p.gebaeude||[]).forEach(g=>{
+    const gx = cx + Math.cos(g.ang)*g.dist*rr*1.25;
+    const gy = cy + Math.sin(g.ang)*g.dist*rr*0.75;
+    ctx.beginPath(); ctx.moveTo(cx, cy+12);
+    ctx.quadraticCurveTo((cx+gx)/2 + (g.ang%1-0.5)*26, (cy+gy)/2, gx, gy+3);
+    ctx.stroke();
+  });
+  if(p.palast>0){ ctx.beginPath(); ctx.moveTo(cx,cy+12); ctx.quadraticCurveTo(cx-rr*0.24,cy-rr*0.1,cx-rr*0.5,cy-rr*0.30); ctx.stroke(); }
+  if(p.dom>0){    ctx.beginPath(); ctx.moveTo(cx,cy+12); ctx.quadraticCurveTo(cx+rr*0.26,cy-rr*0.12,cx+rr*0.52,cy-rr*0.32); ctx.stroke(); }
   /* Felder (Anbaufläche) */
   const felder = clamp(Math.round(Math.min(p.pop*4, anbau(p))/1800), 2, 16);
   for(let i=0;i<felder;i++){
@@ -876,19 +981,26 @@ function zeichneKarte(p, canvasId){
     for(let h=0;h<4;h++) malHaus(ctx, sx+(rng()-0.5)*18, sy+3+(rng()-0.5)*12, 7, "#c4b190", "#96543c");
     ctx.fillStyle = p.farbe;
     ctx.fillRect(sx-1, sy-33, 2, 13);
-    ctx.beginPath(); ctx.moveTo(sx+1,sy-33); ctx.lineTo(sx+11,sy-30); ctx.lineTo(sx+1,sy-26); ctx.closePath(); ctx.fill();
+    const sw = Math.sin(t/280 + s)*2;
+    ctx.beginPath(); ctx.moveTo(sx+1,sy-33);
+    ctx.quadraticCurveTo(sx+6, sy-32+sw, sx+11, sy-30+sw);
+    ctx.quadraticCurveTo(sx+6, sy-28+sw*0.5, sx+1, sy-26);
+    ctx.closePath(); ctx.fill();
   }
-  /* Märkte & Mühlen an ihren gebauten Plätzen */
+  /* Märkte & Mühlen an ihren gebauten Plätzen (mit Schatten) */
   (p.gebaeude||[]).forEach((g,i)=>{
     const gx = cx + Math.cos(g.ang)*g.dist*rr*1.25;
     const gy = cy + Math.sin(g.ang)*g.dist*rr*0.75;
+    ctx.fillStyle = "rgba(0,0,0,.22)";
+    ctx.beginPath(); ctx.ellipse(gx+2, gy+6, 11, 4, 0, 0, 7); ctx.fill();
     if(p._neu===i){
+      const puls = 1 + Math.sin(t/220)*0.15;
       ctx.strokeStyle = "rgba(224,180,88,.9)"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(gx, gy-4, 17, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(gx, gy-4, 17*puls, 0, 7); ctx.stroke();
       ctx.strokeStyle = "rgba(224,180,88,.35)";
-      ctx.beginPath(); ctx.arc(gx, gy-4, 23, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(gx, gy-4, 23*puls, 0, 7); ctx.stroke();
     }
-    if(g.t==="m") malMarkt(ctx, gx, gy); else malMuehle(ctx, gx, gy);
+    if(g.t==="m") malMarkt(ctx, gx, gy); else malMuehle(ctx, gx, gy, t);
   });
   /* Palast & Dom */
   if(p.palast>0) malPalastKarte(ctx, cx-rr*0.5, cy-rr*0.34, p.palast);
@@ -906,12 +1018,16 @@ function zeichneKarte(p, canvasId){
   malBlob(ctx, pts);
   ctx.strokeStyle = p.farbe; ctx.lineWidth = 2.5; ctx.setLineDash([9,6]);
   ctx.stroke(); ctx.setLineDash([]);
-  /* Grenzbanner */
+  /* Grenzbanner (wehen im Wind) */
   for(const bi of [2,7,12]){
     const [bx,by] = pts[bi];
     ctx.fillStyle = "#6b5433"; ctx.fillRect(bx-1, by-20, 2.5, 20);
     ctx.fillStyle = p.farbe;
-    ctx.beginPath(); ctx.moveTo(bx+1.5,by-20); ctx.lineTo(bx+13,by-16.5); ctx.lineTo(bx+1.5,by-13); ctx.closePath(); ctx.fill();
+    const wf = Math.sin(t/260 + bi)*2.5;
+    ctx.beginPath(); ctx.moveTo(bx+1.5,by-20);
+    ctx.quadraticCurveTo(bx+7, by-18.5+wf, bx+13, by-16.5+wf);
+    ctx.quadraticCurveTo(bx+7, by-14.5+wf*0.5, bx+1.5, by-13);
+    ctx.closePath(); ctx.fill();
   }
   /* Kartusche */
   ctx.fillStyle = "rgba(13,17,23,.78)";
@@ -928,14 +1044,21 @@ function zeichneKarte(p, canvasId){
   ctx.fillText("N", W-30, 14);
 }
 
-/* Schlachtfeld-Canvas: Truppen als Formationen, Explosionen an der Front */
-function zeichneFeld(){
+/* Schlachtfeld-Canvas: Truppen als Formationen, Partikel an der Front */
+function zeichneFeld(t=0){
   const c = $("#feld"), s = G._s;
   if(!c || !s) return;
   const ctx = c.getContext("2d");
   const W = c.width, H = c.height;
   ctx.clearRect(0,0,W,H);
-  /* Bodenlinien */
+  /* Gelände: Hügel und Bodenlinien */
+  const brng = mulberry(777);
+  ctx.fillStyle = "rgba(255,255,255,.03)";
+  for(let h=0;h<4;h++){
+    const hx = brng()*W, hw = 90+brng()*160;
+    ctx.beginPath(); ctx.ellipse(hx, H*0.38, hw, 16+brng()*10, 0, Math.PI, 0); ctx.fill();
+  }
+  for(let b=0;b<6;b++) malBaum(ctx, brng()*W, H*(0.3+brng()*0.08), 4+brng()*3);
   ctx.strokeStyle = "rgba(255,255,255,.05)";
   for(let y=H*0.35;y<H;y+=18){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
   const prog = Math.min(1, s.tick/4);
@@ -971,19 +1094,39 @@ function zeichneFeld(){
   const fD = G._kr ? G.spieler[G._kr.d].farbe : "#d9973f";
   malSeite(s.A, fA, fA+"88", frontA, 1);
   malSeite(s.D, fD, fD+"88", frontD, -1);
-  /* Explosionen an der Front */
-  if(s.tick>0 && !s.fertig){
-    for(let i=0;i<(s.boom||5);i++){
-      const x = (frontA+frontD)/2 + rf(-40,40), y = rf(H*0.4, H*0.9);
-      const r = rf(3,11);
+  /* Feldbanner beider Heere (wehen) */
+  const banner = (bx, farbe, ph) => {
+    ctx.strokeStyle = "#5a4a30"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(bx, H*0.40); ctx.lineTo(bx, H*0.40-34); ctx.stroke();
+    ctx.fillStyle = farbe;
+    const wf = Math.sin(t/240 + ph)*3;
+    ctx.beginPath(); ctx.moveTo(bx, H*0.40-34);
+    ctx.quadraticCurveTo(bx+10, H*0.40-32+wf, bx+20, H*0.40-29+wf);
+    ctx.quadraticCurveTo(bx+10, H*0.40-26+wf*0.5, bx, H*0.40-22);
+    ctx.closePath(); ctx.fill();
+  };
+  banner(W*0.06, fA, 0); banner(W*0.94-20, fD, 2);
+  /* Partikel: Kanonenblitze und Rauch */
+  const jetzt = performance.now();
+  for(const pk of (s.partikel||[])){
+    const alter = jetzt - pk.born;
+    if(alter < 0) continue;
+    const x = pk.rx*W, y = pk.ry*H;
+    if(pk.typ==="boom" && alter < 750){
+      const q = alter/750, r = 3 + q*11;
       const grad = ctx.createRadialGradient(x,y,0,x,y,r);
-      grad.addColorStop(0,"rgba(255,230,140,.95)");
-      grad.addColorStop(0.5,"rgba(230,120,60,.7)");
+      grad.addColorStop(0,`rgba(255,230,140,${0.95*(1-q)})`);
+      grad.addColorStop(0.5,`rgba(230,120,60,${0.7*(1-q)})`);
       grad.addColorStop(1,"rgba(230,120,60,0)");
       ctx.fillStyle = grad;
       ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
+    } else if(pk.typ==="rauch" && alter < 1900){
+      const q = alter/1900;
+      ctx.fillStyle = `rgba(150,150,155,${0.22*(1-q)})`;
+      ctx.beginPath(); ctx.arc(x + q*14, y - q*36, 6+q*16, 0, 7); ctx.fill();
     }
   }
+  if(s.partikel) s.partikel = s.partikel.filter(pk => jetzt - pk.born < 1900);
   /* Fluchtpfeile */
   if(s.fertig){
     ctx.font = "22px sans-serif"; ctx.textAlign = "center";
@@ -1274,10 +1417,11 @@ function kopf(){
   }
 }
 
+const PHASEN_ICON = { "Status":"👑", "Korn":"🌾", "Handel":"💰", "Zw.-Bilanz":"📜", "Steuern":"⚖️", "Bauen":"🏗️", "Bilanz":"📊" };
 function stepper(akt){
   const i = PHASEN.indexOf(akt);
   return `<div class="stepper">` + PHASEN.map((ph,j)=>
-    `<span class="step ${j===i?'act':j<i?'done':''}">${j<i?'✓ ':''}${ph}</span>`).join("") + `</div>`;
+    `<span class="step ${j===i?'act':j<i?'done':''}">${j<i?'✓':PHASEN_ICON[ph]||''} ${ph}</span>`).join("") + `</div>`;
 }
 
 function statKarten(p){
@@ -1389,11 +1533,11 @@ function alertMsg(t){
 const SCREENS = {
 
   title(){ return `
-    <div class="hero">
-      <span class="crown pulse">👑</span>
+    <canvas id="titelbild" width="920" height="270"></canvas>
+    <div class="hero" style="padding:22px 20px 28px">
       <h1 class="shine">KAISER</h1>
       <p class="muted" style="margin:10px 0 4px">Wirtschaftssimulation im 18. Jahrhundert</p>
-      <p class="muted small">Hommage an den C64-Klassiker von 1984 · 1–9 Spieler (Hotseat)</p>
+      <p class="muted small">Hommage an den C64-Klassiker von 1984 · 1–9 Spieler (Hotseat) · Solo gegen KI</p>
     </div>
     <div class="card" style="max-width:640px;margin:0 auto 16px">
       <p>Führt Euer Volk vom einfachen <b>Herrn</b> zum <b class="gold">Kaiser</b>:
@@ -1896,7 +2040,7 @@ const SCREENS = {
       ${stepper("Bilanz")}
       <h2>Jahresbilanz Anno ${G.jahr}</h2>
       <div class="event ${r.wetter.f>=1.1?'good':r.wetter.f<=0.8?'bad':''}">
-        ${r.wetter.ico} <b>Wetter:</b> ${r.wetter.t}
+        <span class="wetter-ico">${r.wetter.ico}</span> <b>Wetter:</b> ${r.wetter.t}
       </div>
       ${evHtml}
       <div class="grid g2">
@@ -2162,6 +2306,20 @@ document.addEventListener("keydown", e => {
   const b = $("#screen .btn-primary");
   if(b && !b.disabled){ e.preventDefault(); b.click(); }
 });
+
+/* ---------- Animations-Loop: belebt Karten, Titelbild und Schlachtfeld ---------- */
+let _animLast = 0;
+function animLoop(t){
+  requestAnimationFrame(animLoop);
+  if(t - _animLast < 40) return;   /* ~25 fps genügen */
+  _animLast = t;
+  if(document.hidden) return;
+  if(G.screen === "title")        zeichneTitel(t);
+  else if(G.screen === "bauen")   zeichneKarte(cur(), "karte", t);
+  else if(G.screen === "status")  zeichneKarte(cur(), "karteS", t);
+  else if(G.screen === "schlacht") zeichneFeld(t);
+}
+requestAnimationFrame(animLoop);
 
 /* PWA: Service Worker registrieren (nur wenn über HTTP(S) ausgeliefert) */
 try{
