@@ -146,6 +146,16 @@
   /* --- Monumente --- */
   .monu{display:flex;gap:20px;align-items:flex-end;justify-content:center;padding:6px 0 2px;}
   .monu svg{display:block;}
+  /* --- Reichskarte --- */
+  #karte, #karteS{width:100%;height:auto;display:block;border-radius:12px;
+    border:1px solid var(--border);margin:4px 0 10px;}
+  .schild{display:inline-flex;align-items:center;justify-content:center;
+    width:70px;height:80px;font-size:34px;border:3px solid var(--gold);
+    border-radius:10px 10px 46% 46%/10px 10px 55% 55%;
+    background:linear-gradient(180deg,var(--panel2),#0c1016);
+    box-shadow:0 6px 22px rgba(0,0,0,.45);}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:baseline;}
+  .kiber{border-left:3px solid var(--cyan);}
   /* --- Schlachtfeld-Canvas --- */
   #feld{width:100%;height:auto;display:block;border-radius:12px;border:1px solid var(--border);
     background:linear-gradient(180deg,#1c2637 0%,#2a3a2a 45%,#22301f 100%);margin-bottom:12px;}
@@ -203,6 +213,8 @@ const TITEL = [
   ["Fürst","Fürstin"],["Herzog","Herzogin"],["Kurfürst","Kurfürstin"],["König","Königin"],["Kaiser","Kaiserin"]
 ];
 const NAMEN = ["Friedrich","Anna","Wilhelm","Luise","Karl","Sophie","Otto","Marie","Georg"];
+const FARBEN = ["#5fb8d4","#e0b458","#4cc38a","#e5636f","#b58fd4","#d9973f","#7fd4c1","#e08ab8","#a8c46a"];
+const WAPPEN = ["🦅","🦁","🐺","🌹","⚔️","⭐","🐉","🛡️","🌙"];
 const KOSTEN = { markt:1000, muehle:2000, palastTeil:5000, domTeil:9000, inf:100, kav:250, art:500 };
 const LAND   = { palast:13000, dom:25000 };
 const PALAST_TEILE = 16, DOM_TEILE = 14;
@@ -229,9 +241,11 @@ const cur = () => G.spieler[G.aktiv];
 const titelName = p => TITEL[p.titel][p.w?1:0];
 const anrede = p => (p.w?"Ihre":"Seine") + " " + (p.titel>=7?"Majestät":p.titel>=4?"Hoheit":"Exzellenz");
 
-function neuerSpieler(name,w){
+function neuerSpieler(name,w,idx,ki){
   return {
-    name, w,
+    name, w, ki:!!ki,
+    farbe:FARBEN[idx%FARBEN.length], wappen:WAPPEN[idx%WAPPEN.length],
+    gebaeude:[], chronik:[],
     geld:15000, land:10000, korn:400, pop:2500,
     maerkte:0, muehlen:0, palast:0, dom:0,
     heer:{inf:0,kav:0,art:0},
@@ -404,8 +418,8 @@ function jahresschluss(p){
     p.korn -= verlust;
     r.ereignisse.push({t:`Ratten im Kornspeicher! ${fmt(verlust)} Fuder vernichtet.`,c:"bad"});
   } else if(ev < 0.11 && (p.maerkte>0 || p.muehlen>0)){
-    if(p.maerkte>0 && (p.muehlen===0 || Math.random()<0.5)){ p.maerkte--; r.ereignisse.push({t:"Feuersbrunst! Ein Markt brennt nieder.",c:"bad"}); }
-    else { p.muehlen--; r.ereignisse.push({t:"Feuersbrunst! Eine Mühle brennt nieder.",c:"bad"}); }
+    if(p.maerkte>0 && (p.muehlen===0 || Math.random()<0.5)){ p.maerkte--; entferneGebaeude(p,"m"); r.ereignisse.push({t:"Feuersbrunst! Ein Markt brennt nieder.",c:"bad"}); }
+    else { p.muehlen--; entferneGebaeude(p,"k"); r.ereignisse.push({t:"Feuersbrunst! Eine Mühle brennt nieder.",c:"bad"}); }
   }
 
   /* Steuern & Heer-Unterhalt */
@@ -430,6 +444,7 @@ function jahresschluss(p){
   if(r.ueberzeit > 0) p.todesJahr -= r.ueberzeit/180;
 
   p.report = r;
+  p.chronik = (p.chronik||[]).concat({ j:G.jahr, pop:p.pop, geld:Math.round(p.geld), land:p.land }).slice(-80);
   quicksave();
 }
 
@@ -462,17 +477,28 @@ function wegZwischen(a,b){
 function kriegVorbereiten(zielIdx){
   const a = G.aktiv, d = zielIdx;
   const weg = wegZwischen(a,d);
-  const fragen = lebende().map(x=>x.i).filter(i=>i!==a && i!==d);
-  G._kr = { a, d, weg, fragen, frageIdx:0, wahl:{}, abgebrochen:false,
-            taktikA: G._taktikA || "sturm", taktikD: null };
-  if(fragen.length) zeige("diplomatie");
-  else zeige("taktikDef");
+  const alle = lebende().map(x=>x.i).filter(i=>i!==a && i!==d);
+  const kr = { a, d, weg, fragen:[], frageIdx:0, wahl:{}, abgebrochen:false,
+               taktikA: G._taktikA || "sturm", taktikD: null };
+  /* KI-Regenten antworten sofort, Menschen werden am Gerät befragt */
+  for(const i of alle){
+    const s = G.spieler[i];
+    if(s.ki) kr.wahl[i] = kiDiploWahl(s, kr);
+    else kr.fragen.push(i);
+  }
+  G._kr = kr;
+  if(kr.fragen.length) zeige("diplomatie");
+  else diploFertig();
 }
 function diploWahl(wahl){
   const kr = G._kr;
   kr.wahl[kr.fragen[kr.frageIdx]] = wahl;
   kr.frageIdx++;
   if(kr.frageIdx < kr.fragen.length){ zeige("diplomatie"); return; }
+  diploFertig();
+}
+function diploFertig(){
+  const kr = G._kr;
   /* Durchmarsch prüfen: jeder Wegspieler muss Angreifer unterstützen oder Durchmarsch gewähren */
   const blockiert = kr.weg.some(i => !["atk","frei"].includes(kr.wahl[i]));
   if(blockiert){
@@ -481,7 +507,8 @@ function diploWahl(wahl){
     zeige("kriegAbbruch");
     return;
   }
-  zeige("taktikDef");
+  if(G.spieler[kr.d].ki){ kr.taktikD = TAKTIK_D[ri(0,2)].k; schlachtStarten(); }
+  else zeige("taktikDef");
 }
 function taktikDefWahl(k){
   G._kr.taktikD = k;
@@ -600,6 +627,217 @@ function schlachtUeberspringen(){
   schlachtAbschliessen();
   render();
 }
+/* ---------- Reichskarte (prozedural, deterministisch pro Reich) ---------- */
+function mulberry(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed>>>15, 1|seed);
+    t = t + Math.imul(t ^ t>>>7, 61|t) ^ t;
+    return ((t ^ t>>>14) >>> 0) / 4294967296;
+  };
+}
+function territoriumsRadius(land){
+  return 105 + 165 * Math.sqrt(Math.min(land,50000)/50000);
+}
+function blobPunkte(rng, cx, cy, rr){
+  const pts = [];
+  for(let i=0;i<16;i++){
+    const a = i/16*6.2832;
+    const r = rr * (0.8 + rng()*0.36);
+    pts.push([cx + Math.cos(a)*r*1.35, cy + Math.sin(a)*r*0.82]);
+  }
+  return pts;
+}
+function malBlob(ctx, pts){
+  ctx.beginPath();
+  ctx.moveTo((pts[0][0]+pts[15][0])/2, (pts[0][1]+pts[15][1])/2);
+  for(let i=0;i<16;i++){
+    const n = pts[(i+1)%16];
+    ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0]+n[0])/2, (pts[i][1]+n[1])/2);
+  }
+  ctx.closePath();
+}
+function malHaus(ctx, x, y, s, wand, dach){
+  ctx.fillStyle = wand; ctx.fillRect(x-s/2, y-s/2, s, s*0.8);
+  ctx.fillStyle = dach;
+  ctx.beginPath(); ctx.moveTo(x-s*0.65,y-s/2); ctx.lineTo(x,y-s*1.15); ctx.lineTo(x+s*0.65,y-s/2); ctx.closePath(); ctx.fill();
+}
+function malBaum(ctx, x, y, s){
+  ctx.fillStyle = "#1e3a1c";
+  ctx.beginPath(); ctx.moveTo(x-s,y); ctx.lineTo(x,y-s*1.9); ctx.lineTo(x+s,y); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#25491f";
+  ctx.beginPath(); ctx.moveTo(x-s*0.8,y-s*0.7); ctx.lineTo(x,y-s*2.3); ctx.lineTo(x+s*0.8,y-s*0.7); ctx.closePath(); ctx.fill();
+}
+function malMarkt(ctx, x, y){
+  ctx.fillStyle = "#8a5a2a"; ctx.fillRect(x-8, y-5, 16, 9);
+  ctx.fillStyle = "#d9973f";
+  ctx.beginPath(); ctx.moveTo(x-10,y-5); ctx.lineTo(x,y-13); ctx.lineTo(x+10,y-5); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#8a5a2a"; ctx.lineWidth = 1;
+  for(let i=-6;i<=6;i+=4){ ctx.beginPath(); ctx.moveTo(x+i,y-5-(6-Math.abs(i))*0.7); ctx.lineTo(x+i*0.8,y-12+Math.abs(i)*0.5); ctx.stroke(); }
+}
+function malMuehle(ctx, x, y){
+  ctx.fillStyle = "#c8beab";
+  ctx.beginPath(); ctx.moveTo(x-5,y+4); ctx.lineTo(x-3,y-9); ctx.lineTo(x+3,y-9); ctx.lineTo(x+5,y+4); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#e8e0cf"; ctx.lineWidth = 2;
+  for(const w of [0.6,2.2,3.8,5.4]){
+    ctx.beginPath(); ctx.moveTo(x, y-9); ctx.lineTo(x+Math.cos(w)*10, y-9+Math.sin(w)*10); ctx.stroke();
+  }
+}
+function malPalastKarte(ctx, x, y, teile){
+  const reihen = Math.min(2, Math.ceil(teile/8));
+  ctx.fillStyle = "#4a5568"; ctx.fillRect(x-26, y+2, 52, 5);
+  for(let i=0;i<teile;i++){
+    const sp = i%8, re = Math.floor(i/8);
+    ctx.fillStyle = "#e8e6df";
+    ctx.fillRect(x-24+sp*6, y-4-re*8, 5, 7);
+  }
+  if(teile>=PALAST_TEILE){
+    ctx.fillStyle = "#e0b458";
+    ctx.beginPath(); ctx.moveTo(x-26,y-12); ctx.lineTo(x,y-24); ctx.lineTo(x+26,y-12); ctx.closePath(); ctx.fill();
+  } else if(teile>0){
+    ctx.strokeStyle = "rgba(232,230,223,.4)"; ctx.lineWidth = 1;
+    ctx.strokeRect(x-24.5, y-12.5, 47, 16);
+  }
+}
+function malDomKarte(ctx, x, y, teile){
+  ctx.fillStyle = "#4a5568"; ctx.fillRect(x-22, y+2, 44, 5);
+  for(let i=0;i<teile;i++){
+    const sp = i%7, re = Math.floor(i/7);
+    ctx.fillStyle = "#e0b458";
+    ctx.fillRect(x-20+sp*6, y-4-re*9, 5, 8);
+  }
+  if(teile>=DOM_TEILE){
+    ctx.fillStyle = "#c79a3d";
+    ctx.beginPath(); ctx.moveTo(x-8,y-14); ctx.lineTo(x,y-34); ctx.lineTo(x+8,y-14); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#e0b458"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x,y-34); ctx.lineTo(x,y-41); ctx.moveTo(x-3,y-38); ctx.lineTo(x+3,y-38); ctx.stroke();
+  } else if(teile>0){
+    ctx.strokeStyle = "rgba(224,180,88,.4)"; ctx.lineWidth = 1;
+    ctx.strokeRect(x-20.5, y-13.5, 43, 18);
+  }
+}
+function zeichneKarte(p, canvasId){
+  const c = document.getElementById(canvasId);
+  if(!c || !p) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  const idx = G.spieler.indexOf(p);
+  const rng = mulberry(idx*7919 + 4242);
+  const cx = W/2, cy = H/2 + 8;
+  const rr = territoriumsRadius(p.land) * (H/430);
+  ctx.clearRect(0,0,W,H);
+  /* Umland (fremdes Gebiet) */
+  ctx.fillStyle = "#131a24"; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = "rgba(46,70,56,.25)";
+  for(let i=0;i<26;i++){ const x=rng()*W, y=rng()*H; ctx.beginPath(); ctx.arc(x,y,rng()*26+6,0,7); ctx.fill(); }
+  /* Territorium */
+  const pts = blobPunkte(rng, cx, cy, rr);
+  ctx.save();
+  malBlob(ctx, pts); ctx.clip();
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,"#3d5c35"); grad.addColorStop(1,"#2c4527");
+  ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+  /* Wiesenflecken */
+  for(let i=0;i<30;i++){
+    ctx.fillStyle = rng()<0.5 ? "rgba(255,255,255,.03)" : "rgba(0,0,0,.06)";
+    ctx.beginPath(); ctx.arc(cx+(rng()-0.5)*rr*2.6, cy+(rng()-0.5)*rr*1.6, rng()*22+8, 0, 7); ctx.fill();
+  }
+  /* Fluss */
+  const fy = cy + rr*0.28;
+  ctx.strokeStyle = "#3a6f8f"; ctx.lineWidth = 11; ctx.lineCap="round";
+  ctx.beginPath();
+  ctx.moveTo(cx-rr*1.5, fy-rr*0.4);
+  ctx.bezierCurveTo(cx-rr*0.5, fy+rr*0.35, cx+rr*0.4, fy-rr*0.45, cx+rr*1.5, fy+rr*0.1);
+  ctx.stroke();
+  ctx.strokeStyle = "#4f89aa"; ctx.lineWidth = 4;
+  ctx.stroke();
+  /* Brücke */
+  ctx.strokeStyle = "#7a5c37"; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(cx-14, fy+2); ctx.lineTo(cx+14, fy-4); ctx.stroke();
+  /* Wälder am Rand */
+  for(let w=0; w<7; w++){
+    const a = rng()*6.2832, d = rr*(0.72+rng()*0.2);
+    const wx = cx+Math.cos(a)*d*1.2, wy = cy+Math.sin(a)*d*0.75;
+    for(let b=0;b<6;b++) malBaum(ctx, wx+(rng()-0.5)*34, wy+(rng()-0.5)*22, 5+rng()*3);
+  }
+  /* Felder (Anbaufläche) */
+  const felder = clamp(Math.round(Math.min(p.pop*4, anbau(p))/1800), 2, 16);
+  for(let i=0;i<felder;i++){
+    const a = rng()*6.2832, d = rr*(0.3+rng()*0.34);
+    const fx = cx+Math.cos(a)*d*1.15, fyy = cy+Math.sin(a)*d*0.7;
+    ctx.save(); ctx.translate(fx,fyy); ctx.rotate((rng()-0.5)*0.5);
+    for(let s=0;s<4;s++){ ctx.fillStyle = s%2 ? "#7d8f36":"#95a344"; ctx.fillRect(-17, -10+s*5, 34, 5); }
+    ctx.restore();
+  }
+  /* Dorf/Häuser (Bevölkerung) */
+  const haeuser = clamp(Math.round(p.pop/1100), 3, 26);
+  for(let i=0;i<haeuser;i++){
+    const a = rng()*6.2832, d = rng()*rr*0.24;
+    malHaus(ctx, cx+Math.cos(a)*d*1.3, cy+10+Math.sin(a)*d*0.7, 9, "#b09877", "#8a4a35");
+  }
+  /* Städte: Mauerringe */
+  for(let s=0;s<staedte(p);s++){
+    const a = 1.1 + s*1.35, d = rr*0.52;
+    const sx = cx+Math.cos(a)*d*1.15, sy = cy+Math.sin(a)*d*0.7;
+    ctx.strokeStyle = "#9aa3ad"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(sx, sy, 21, 0, 7); ctx.stroke();
+    ctx.fillStyle = "#9aa3ad";
+    for(let z=0;z<8;z++){ const za=z/8*6.2832; ctx.fillRect(sx+Math.cos(za)*21-1.5, sy+Math.sin(za)*21-1.5, 3.5, 3.5); }
+    for(let h=0;h<4;h++) malHaus(ctx, sx+(rng()-0.5)*18, sy+3+(rng()-0.5)*12, 7, "#c4b190", "#96543c");
+    ctx.fillStyle = p.farbe;
+    ctx.fillRect(sx-1, sy-33, 2, 13);
+    ctx.beginPath(); ctx.moveTo(sx+1,sy-33); ctx.lineTo(sx+11,sy-30); ctx.lineTo(sx+1,sy-26); ctx.closePath(); ctx.fill();
+  }
+  /* Märkte & Mühlen an ihren gebauten Plätzen */
+  (p.gebaeude||[]).forEach((g,i)=>{
+    const gx = cx + Math.cos(g.ang)*g.dist*rr*1.25;
+    const gy = cy + Math.sin(g.ang)*g.dist*rr*0.75;
+    if(p._neu===i){
+      ctx.strokeStyle = "rgba(224,180,88,.9)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(gx, gy-4, 17, 0, 7); ctx.stroke();
+      ctx.strokeStyle = "rgba(224,180,88,.35)";
+      ctx.beginPath(); ctx.arc(gx, gy-4, 23, 0, 7); ctx.stroke();
+    }
+    if(g.t==="m") malMarkt(ctx, gx, gy); else malMuehle(ctx, gx, gy);
+  });
+  /* Palast & Dom */
+  if(p.palast>0) malPalastKarte(ctx, cx-rr*0.5, cy-rr*0.34, p.palast);
+  if(p.dom>0)    malDomKarte(ctx, cx+rr*0.52, cy-rr*0.36, p.dom);
+  if(p._neu==="palast" && p.palast>0){
+    ctx.strokeStyle="rgba(224,180,88,.9)"; ctx.lineWidth=2;
+    ctx.strokeRect(cx-rr*0.5-32, cy-rr*0.34-30, 64, 42);
+  }
+  if(p._neu==="dom" && p.dom>0){
+    ctx.strokeStyle="rgba(224,180,88,.9)"; ctx.lineWidth=2;
+    ctx.strokeRect(cx+rr*0.52-28, cy-rr*0.36-46, 56, 58);
+  }
+  ctx.restore();
+  /* Grenze */
+  malBlob(ctx, pts);
+  ctx.strokeStyle = p.farbe; ctx.lineWidth = 2.5; ctx.setLineDash([9,6]);
+  ctx.stroke(); ctx.setLineDash([]);
+  /* Grenzbanner */
+  for(const bi of [2,7,12]){
+    const [bx,by] = pts[bi];
+    ctx.fillStyle = "#6b5433"; ctx.fillRect(bx-1, by-20, 2.5, 20);
+    ctx.fillStyle = p.farbe;
+    ctx.beginPath(); ctx.moveTo(bx+1.5,by-20); ctx.lineTo(bx+13,by-16.5); ctx.lineTo(bx+1.5,by-13); ctx.closePath(); ctx.fill();
+  }
+  /* Kartusche */
+  ctx.fillStyle = "rgba(13,17,23,.78)";
+  ctx.fillRect(10, H-34, 240, 26);
+  ctx.strokeStyle = "#2a3446"; ctx.strokeRect(10, H-34, 240, 26);
+  ctx.fillStyle = "#dbe2ee"; ctx.font = "600 13px sans-serif"; ctx.textAlign = "left";
+  ctx.fillText(`${p.wappen} ${titelName(p)} ${p.name}s Reich · ${fmt(p.land)} ha`, 18, H-16);
+  /* Kompass */
+  ctx.strokeStyle = "#8b96a8"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(W-30, 30, 13, 0, 7); ctx.stroke();
+  ctx.fillStyle = "#e0b458";
+  ctx.beginPath(); ctx.moveTo(W-30,18); ctx.lineTo(W-26,32); ctx.lineTo(W-30,29); ctx.lineTo(W-34,32); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#8b96a8"; ctx.font = "10px sans-serif"; ctx.textAlign="center";
+  ctx.fillText("N", W-30, 14);
+}
+
 /* Schlachtfeld-Canvas: Truppen als Formationen, Explosionen an der Front */
 function zeichneFeld(){
   const c = $("#feld"), s = G._s;
@@ -639,8 +877,10 @@ function zeichneFeld(){
       ctx.fillRect(x-4, y-4, 8, 8);
     }
   };
-  malSeite(s.A, "#5fb8d4", "#3d7d92", frontA, 1);
-  malSeite(s.D, "#d9973f", "#96682c", frontD, -1);
+  const fA = G._kr ? G.spieler[G._kr.a].farbe : "#5fb8d4";
+  const fD = G._kr ? G.spieler[G._kr.d].farbe : "#d9973f";
+  malSeite(s.A, fA, fA+"88", frontA, 1);
+  malSeite(s.D, fD, fD+"88", frontD, -1);
   /* Explosionen an der Front */
   if(s.tick>0 && !s.fertig){
     for(let i=0;i<(s.boom||5);i++){
@@ -677,15 +917,123 @@ function schlachtAbschliessen(){
     ver.stimmung = clamp(ver.stimmung-10,5,100);
     ang.stimmung = clamp(ang.stimmung-5,5,100);
     s.ergebnis = `Sieg! Eure Truppen erobern ${fmt(beute)} ha von ${ver.name}. ${fmt(gefallene)} Feinde fallen.`;
-    setTimeout(sFanfare, 300);
+    if(!s.still) setTimeout(sFanfare, 300);
   } else {
     const tribut = Math.round(Math.max(0,ang.geld)*0.2);
     ang.geld -= tribut; ver.geld += tribut;
     ang.stimmung = clamp(ang.stimmung-15,5,100);
     s.ergebnis = `Niederlage! Euer Heer wird geschlagen. Ihr zahlt ${fmt(tribut)} Taler Tribut an ${ver.name}.`;
-    setTimeout(sNieder, 300);
+    if(!s.still) setTimeout(sNieder, 300);
   }
   quicksave();
+}
+
+/* ---------- KI-Regenten ---------- */
+function kiDiploWahl(p, kr){
+  const aufWeg = kr.weg.includes(G.spieler.indexOf(p));
+  const r = Math.random();
+  if(r < 0.06 && heerGroesse(p.heer) > 50) return "atk";
+  if(r < 0.22 && heerGroesse(p.heer) > 50) return "def";
+  if(aufWeg) return Math.random() < 0.7 ? "frei" : "sperr";
+  return "frei";
+}
+function kiSchlacht(a, d){
+  const kr = { a, d, weg: wegZwischen(a,d), fragen: [], wahl: {},
+    taktikA: TAKTIK_A[ri(0,2)].k, taktikD: TAKTIK_D[ri(0,2)].k };
+  /* übrige KI-Regenten entscheiden, Menschen bleiben bei KI-Kriegen neutral */
+  kr.fragen = lebende().map(x=>x.i).filter(i=>i!==a && i!==d);
+  for(const i of kr.fragen){
+    const s = G.spieler[i];
+    kr.wahl[i] = s.ki ? kiDiploWahl(s, kr) : "frei";
+  }
+  if(kr.weg.some(i => !["atk","frei"].includes(kr.wahl[i]))) return null;
+  const helferA = kr.fragen.filter(i=>kr.wahl[i]==="atk");
+  const helferD = kr.fragen.filter(i=>kr.wahl[i]==="def");
+  const A = seiteBauen(a, helferA, false);
+  const D = seiteBauen(d, helferD, true);
+  const kopie = S => ({inf:S.inf,kav:S.kav,art:S.art,miliz:S.miliz,aufgebot:S.aufgebot});
+  const mod = TAKTIK_MOD[kr.taktikA][kr.taktikD] ?? 0;
+  const s = { A, D, helferA, helferD, start:{A:kopie(A),D:kopie(D)}, modA:1+mod,
+    strA0:Math.max(1,seiteStaerke(A)), strD0:Math.max(1,seiteStaerke(D)*1.25),
+    moralA:100, moralD:100, routA:false, routD:false,
+    tick:0, maxTicks:8, log:[], fertig:false, sieger:null, still:true };
+  G._kr = kr; G._s = s;
+  while(!s.fertig) einTick(s, true);
+  schlachtAbschliessen();
+  return s;
+}
+function kiZug(p){
+  const idx = G.spieler.indexOf(p);
+  const bericht = [];
+  /* Preise wie im normalen Zug */
+  let kp = p.kornPreis + (110 - p.kornPreis)*0.2 + rf(-45,45);
+  if(Math.random() < 0.06) kp *= rf(1.6,2.6);
+  p.kornPreis = clamp(Math.round(kp), 20, 430);
+  p.landPreis = ri(16,70);
+  p.kornHist = (p.kornHist||[]).concat(p.kornPreis).slice(-32);
+  p.kriegGefuehrt = false;
+  p.turnStart = Date.now();
+  /* Korn ausgeben (großzügig) */
+  const n = noetigKorn(p);
+  p.ausgabe = Math.min(Math.ceil(n*1.4), p.korn);
+  p.korn -= p.ausgabe;
+  /* Handel */
+  const bedarf = Math.ceil(n*1.8) - p.korn;
+  if(bedarf > 0 && p.kornPreis < 170){
+    const m = Math.min(bedarf, Math.floor(Math.max(0,p.geld-3000)*0.5/p.kornPreis));
+    if(m>0){ p.geld -= m*p.kornPreis; p.korn += m; }
+  }
+  if(p.kornPreis > 200 && p.korn > n*2.5){
+    const m = p.korn - Math.ceil(n*2);
+    p.korn -= m; p.geld += Math.round(m*p.kornPreis*0.9);
+  }
+  if(p.landPreis <= 34 && p.geld > 12000){
+    const zielLand = p.palast>=PALAST_TEILE ? 27000 : p.titel>=4 ? 15000 : 12000;
+    const m = Math.min(Math.max(0,zielLand-p.land), Math.floor((p.geld-8000)*0.7/p.landPreis));
+    if(m>0){ p.geld -= m*p.landPreis; p.land += m; bericht.push(`kauft ${fmt(m)} ha Land`); }
+  }
+  zwischenbilanz(p);
+  /* Bauen */
+  let gebaut = 0;
+  for(let i=0;i<8;i++){
+    if(p.geld < 6000 || (p.maerkte+p.muehlen) >= bauplaetze(p)) break;
+    if(p.maerkte >= 25 && p.muehlen >= 15) break;
+    if(p.maerkte*3 <= p.muehlen*5){ if(p.geld>=KOSTEN.markt){ p.geld-=KOSTEN.markt; p.maerkte++; platziereGebaeude(p,"m"); gebaut++; } }
+    else if(p.geld>=KOSTEN.muehle){ p.geld-=KOSTEN.muehle; p.muehlen++; platziereGebaeude(p,"k"); gebaut++; }
+  }
+  if(gebaut) bericht.push(`errichtet ${gebaut} Bauwerk${gebaut>1?"e":""}`);
+  if(p.land >= LAND.palast){ let t=0; while(p.geld > 25000 && p.palast < PALAST_TEILE){ p.geld-=KOSTEN.palastTeil; p.palast++; t++; } if(t) bericht.push(`baut am Palast (${p.palast}/${PALAST_TEILE})`); }
+  if(p.palast >= PALAST_TEILE && p.land >= LAND.dom){ let t=0; while(p.geld > 112000 && p.dom < DOM_TEILE){ p.geld-=KOSTEN.domTeil; p.dom++; t++; } if(t) bericht.push(`baut an der Kathedrale (${p.dom}/${DOM_TEILE})`); }
+  /* Heer */
+  if(p.titel>=1 && p.geld > 20000 && heerGroesse(p.heer) < 150 + p.titel*80){
+    const rekruten = Math.min(30, Math.floor((p.geld-15000)/KOSTEN.inf));
+    if(rekruten>0){ p.geld -= rekruten*KOSTEN.inf; p.heer.inf += rekruten; }
+  }
+  /* Krieg? nur gegen deutlich schwächere Nachbarn, selten */
+  if(p.titel>=1 && Math.random() < 0.10){
+    const nb = nachbarn(idx).filter(i=>!G.spieler[i].tot);
+    const eigen = heerStaerke(p.heer) + miliz(p)*0.8;
+    const ziel = nb.map(i=>G.spieler[i])
+      .filter(z => eigen > (heerStaerke(z.heer) + miliz(z)*0.8 + z.pop*0.025)*1.6)
+      .sort((x,y)=>heerStaerke(x.heer)-heerStaerke(y.heer))[0];
+    if(ziel && eigen > 150){
+      const di = G.spieler.indexOf(ziel);
+      const s = kiSchlacht(idx, di);
+      if(s) bericht.push(s.sieger==="A"
+        ? `führt siegreich Krieg gegen ${ziel.name}`
+        : `verliert einen Feldzug gegen ${ziel.name}`);
+    }
+  }
+  jahresschluss(p);
+  const r = p.report;
+  for(const e of r.ereignisse) bericht.push(e.t.toLowerCase().replace(/!.*$/,""));
+  if(pruefeBefoerderung(p)){
+    bericht.push(`wird zu${p.w?"r":"m"} ${titelName(p)} erhoben!`);
+    if(p.titel===8){ G.sieger = p; }
+  }
+  G._kiBerichte = (G._kiBerichte||[]).concat(
+    `${p.wappen} ${titelName(p)} ${p.name} ` + (bericht.length? bericht.join(", ") : "regiert still sein Reich") + ".");
+  G._kiBerichte = G._kiBerichte.slice(-12);
 }
 
 /* ---------- Speichern & Laden ---------- */
@@ -693,18 +1041,29 @@ function storageOK(){
   try{ const t="__kaiser_t"; window.localStorage.setItem(t,"1"); window.localStorage.removeItem(t); return true; }
   catch(e){ return false; }
 }
-function spielstand(){ return JSON.stringify({v:4, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler}); }
+function spielstand(){ return JSON.stringify({v:5, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler, opt:G.opt||{vergleich:true}}); }
 function ladeSpielstand(json){
   const d = JSON.parse(json);
   if(!d || !Array.isArray(d.spieler) || !d.spieler.length) throw new Error("ungültig");
   G.jahr = d.jahr; G.tempo = d.tempo; G.aktiv = clamp(d.aktiv||0,0,d.spieler.length-1);
   G.spieler = d.spieler;
-  for(const p of G.spieler){
+  G.opt = d.opt || { vergleich:true };
+  G._kiBerichte = [];
+  G.spieler.forEach((p,i)=>{
     if(!p.heer) p.heer = {inf:0,kav:0,art:0};
     if(!p.kornHist) p.kornHist = [];
     if(p.snap===undefined) p.snap = null;
     if(p.delta===undefined) p.delta = null;
-  }
+    if(!p.farbe) p.farbe = FARBEN[i%FARBEN.length];
+    if(!p.wappen) p.wappen = WAPPEN[i%WAPPEN.length];
+    if(!p.chronik) p.chronik = [];
+    if(p.ki===undefined) p.ki = false;
+    if(!p.gebaeude){
+      p.gebaeude = [];
+      for(let m=0;m<p.maerkte;m++) p.gebaeude.push({t:"m",ang:Math.random()*6.2832,dist:0.34+Math.random()*0.58});
+      for(let k=0;k<p.muehlen;k++) p.gebaeude.push({t:"k",ang:Math.random()*6.2832,dist:0.34+Math.random()*0.58});
+    }
+  });
   G.sieger = null;
   zeige("handoff");
 }
@@ -736,12 +1095,14 @@ function hatQuicksave(){
 }
 
 /* ---------- Ablauf ---------- */
-function starteSpiel(anzahl, namen, geschlechter, tempo){
+function starteSpiel(anzahl, namen, geschlechter, tempo, kis, vergleich){
   G.tempo = tempo; G.spieler = [];
+  G.opt = { vergleich: vergleich!==false };
   for(let i=0;i<anzahl;i++)
-    G.spieler.push(neuerSpieler(namen[i]||("Spieler "+(i+1)), geschlechter[i]));
-  G.jahr = 1700; G.aktiv = 0; G.sieger = null;
-  zeige("handoff");
+    G.spieler.push(neuerSpieler(namen[i]||("Spieler "+(i+1)), geschlechter[i], i, kis && kis[i]));
+  G.jahr = 1700; G.aktiv = 0; G.sieger = null; G._kiBerichte = [];
+  if(cur().ki){ G.aktiv = -1; naechsterSpieler(); }
+  else zeige("handoff");
 }
 function beginneZug(){
   const p = cur();
@@ -758,18 +1119,30 @@ function beginneZug(){
   p.kriegGefuehrt = false;
   p.ausgabe = 0;
   p.turnStart = Date.now();
+  G._kiBerichte = [];
   zeige("status");
 }
 function naechsterSpieler(){
   quicksave();
-  do {
+  for(let schutz=0; schutz<200; schutz++){
     G.aktiv++;
     if(G.aktiv >= G.spieler.length){ G.aktiv = 0; G.jahr++; }
     const p = cur();
-    if(G.jahr >= p.todesJahr && !p.tot){ p.tot = true; sGlocke(); zeige("tod"); return; }
-  } while(cur().tot && !alleTot());
-  if(alleTot()){ zeige("ende"); return; }
-  zeige("handoff");
+    if(alleTot()){ zeige("ende"); return; }
+    if(p.tot) continue;
+    if(G.jahr >= p.todesJahr){
+      p.tot = true;
+      if(p.ki){ G._kiBerichte = (G._kiBerichte||[]).concat(`🕯️ ${titelName(p)} ${p.name} ist Anno ${G.jahr} verstorben.`); continue; }
+      sGlocke(); zeige("tod"); return;
+    }
+    if(p.ki){
+      kiZug(p);
+      if(G.sieger && G.sieger.ki){ zeige("sieg"); return; }
+      continue;
+    }
+    zeige("handoff"); return;
+  }
+  zeige("ende");
 }
 const alleTot = () => G.spieler.every(p=>p.tot);
 
@@ -785,7 +1158,7 @@ function kopf(){
   const turnScreens = ["status","korn","handel","zwbilanz","steuern","bauen","kriegPlan","diplomatie","schlacht","kriegErgebnis","kriegAbbruch"];
   const p = inSpiel ? cur() : null;
   $("#hSpieler").style.display = (inSpiel && p && !p.tot && turnScreens.concat(["bilanz"]).includes(G.screen)) ? "" : "none";
-  if(p) $("#hSpieler").innerHTML = `${p.w?"♛":"♚"} <b>${titelName(p)} ${p.name}</b>`;
+  if(p) $("#hSpieler").innerHTML = `<span class="dot" style="background:${p.farbe}"></span>${p.wappen} <b>${titelName(p)} ${p.name}</b>`;
   $("#hTimer").style.display = "none";
   clearInterval(timerIv);
   if(inSpiel && turnScreens.includes(G.screen) && G.screen!=="schlacht"){
@@ -834,6 +1207,8 @@ function render(){
   el.innerHTML = R ? R() : "<p>Unbekannter Bildschirm.</p>";
   if(G.screen === "schlacht") zeichneFeld();
   else window.scrollTo(0,0);
+  if(G.screen === "bauen") zeichneKarte(cur(), "karte");
+  if(G.screen === "status") zeichneKarte(cur(), "karteS");
   zaehlerAnimieren();
 }
 /* Zahlen zählen weich hoch (Statuskarten) */
@@ -863,6 +1238,30 @@ function sparkline(hist){
     <text x="2" y="10" font-size="9" fill="#8b96a8">${fmt(max)}</text>
     <text x="2" y="${h-2}" font-size="9" fill="#8b96a8">${fmt(min)}</text>
   </svg>`;
+}
+/* Chronik: normalisierte Verlaufskurven für Volk, Land, Vermögen */
+function chronikChart(p){
+  const c = p.chronik || [];
+  if(c.length < 2) return "";
+  const w = 640, h = 120;
+  const serie = (key, farbe) => {
+    const werte = c.map(e=>e[key]);
+    const min = Math.min(...werte), max = Math.max(...werte);
+    const sp = Math.max(1, max-min);
+    const pts = werte.map((v,i)=>`${(i/(werte.length-1)*w).toFixed(1)},${(h-8-(v-min)/sp*(h-20)).toFixed(1)}`);
+    return `<polyline points="${pts.join(" ")}" fill="none" stroke="${farbe}" stroke-width="2" stroke-linejoin="round" opacity=".9"/>`;
+  };
+  const letzt = c[c.length-1];
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
+      <line x1="0" y1="${h-8}" x2="${w}" y2="${h-8}" stroke="#2a3446"/>
+      ${serie("pop","#4cc38a")}${serie("land","#5fb8d4")}${serie("geld","#e0b458")}
+    </svg>
+    <p class="muted small" style="margin-top:6px">
+      <span class="dot" style="background:#4cc38a"></span>Untertanen (${fmt(letzt.pop)})
+      <span class="dot" style="background:#5fb8d4;margin-left:12px"></span>Land (${fmt(letzt.land)} ha)
+      <span class="dot" style="background:#e0b458;margin-left:12px"></span>Vermögen (${fmt(letzt.geld)} T)
+      <span style="margin-left:12px">· ${c[0].j}–${letzt.j}, je auf eigenen Bereich skaliert</span>
+    </p>`;
 }
 function deltaBadge(v, einheit=""){
   if(v===undefined || v===null || v===0 || !isFinite(v)) return "";
@@ -904,10 +1303,13 @@ const SCREENS = {
     let rows = "";
     for(let i=0;i<9;i++){
       rows += `<tr id="prow${i}" style="${i>1?'opacity:.3':''}">
-        <td class="muted">${i+1}</td>
+        <td class="muted">${WAPPEN[i]}</td>
         <td><input type="text" id="pname${i}" maxlength="14" value="${NAMEN[i]}" ${i>1?'disabled':''}></td>
         <td><select id="pw${i}" ${i>1?'disabled':''}>
           <option value="0" ${i%2?'':'selected'}>Herr</option><option value="1" ${i%2?'selected':''}>Dame</option>
+        </select></td>
+        <td><select id="pki${i}" ${i>1?'disabled':''}>
+          <option value="0">Mensch</option><option value="1" ${i>0?'selected':''}>Computer</option>
         </select></td></tr>`;
     }
     return `
@@ -935,6 +1337,12 @@ const SCREENS = {
           </div>
           <p class="muted small" style="margin-top:10px">Jeder beginnt im Jahr 1700 mit
           15.000 Talern, 10.000 Hektar Land, 400 Fuder Korn und 2.500 Untertanen.</p>
+          <div class="rowflex" style="margin-top:12px">
+            <label class="small"><input type="checkbox" id="optVergleich" checked>
+            Reichsvergleich bei der Zugübergabe anzeigen</label>
+          </div>
+          <p class="muted small">Computer-Regenten regieren ihre Reiche selbstständig —
+          ideal für Solo-Partien gegen die Krone.</p>
         </div>
       </div>
       <button class="btn-primary btn-lg" onclick="setupStart()">Los geht's</button>
@@ -946,21 +1354,27 @@ const SCREENS = {
     const rang = [...G.spieler].sort((a,b)=>score(b)-score(a));
     const zeilen = rang.map(s=>`
       <tr style="${s===p?'color:var(--gold);font-weight:600':''}">
-        <td>${titelName(s)} ${s.name}${s.tot?" †":""}</td>
+        <td><span class="dot" style="background:${s.farbe}"></span>${s.wappen} ${titelName(s)} ${s.name}${s.tot?" †":""}${s.ki?' <span class="muted small">(KI)</span>':""}</td>
         <td class="r">${fmt(s.land)} ha</td>
         <td class="r">${fmt(s.pop)}</td>
         <td class="r">${staedte(s)}</td>
       </tr>`).join("");
+    const berichte = (G._kiBerichte||[]);
     return `
-      <div class="hero" style="padding-bottom:20px">
-        <span class="crown pulse">${p.w?"♛":"♚"}</span>
-        <h1 style="font-size:32px;letter-spacing:2px">Anno ${G.jahr}</h1>
-        <p style="font-size:19px;margin:16px 0 6px"><b class="gold">${titelName(p)} ${p.name}</b> ist am Zug.</p>
+      <div class="hero" style="padding-bottom:16px">
+        <span class="schild" style="box-shadow:inset 0 0 26px ${p.farbe}66, 0 6px 22px rgba(0,0,0,.45)">${p.wappen}</span>
+        <h1 style="font-size:32px;letter-spacing:2px;margin-top:12px">Anno ${G.jahr}</h1>
+        <p style="font-size:19px;margin:14px 0 6px"><b class="gold">${titelName(p)} ${p.name}</b> ist am Zug.</p>
         <p class="muted">Bitte an das Gerät treten. Der 90-Sekunden-Zähler startet mit dem Zug.</p>
-        <div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="beginneZug()">Zug beginnen</button></div>
+        <div style="margin-top:20px"><button class="btn-primary btn-lg" onclick="beginneZug()">Zug beginnen</button></div>
       </div>
-      ${G.spieler.length>1?`
-      <div class="card" style="max-width:560px;margin:0 auto">
+      ${berichte.length?`
+      <div class="card kiber" style="max-width:640px;margin:0 auto 14px">
+        <h3>Derweil in den anderen Reichen …</h3>
+        ${berichte.map(b=>`<p class="small" style="padding:2px 0">${b}</p>`).join("")}
+      </div>`:""}
+      ${G.spieler.length>1 && (!G.opt || G.opt.vergleich)?`
+      <div class="card" style="max-width:640px;margin:0 auto">
         <h3>Die Reiche im Vergleich</h3>
         <table>
           <tr><th>Regent</th><th class="r">Land</th><th class="r">Untertanen</th><th class="r">Städte</th></tr>
@@ -999,6 +1413,11 @@ const SCREENS = {
       ${ziel?`<div class="card goal"><h3>Nächste Beförderung: ${TITEL[p.titel+1][p.w?1:0]}</h3>
         <p>${ziel.txt}</p>
         <p class="muted small" style="margin-top:6px">Beförderung nur bei positivem Kontostand.</p></div>`:""}
+      <div class="card">
+        <h3>Reichskarte</h3>
+        <canvas id="karteS" width="920" height="330"></canvas>
+      </div>
+      ${(p.chronik||[]).length>=3?`<div class="card"><h3>Chronik des Reiches</h3>${chronikChart(p)}</div>`:""}
       <button class="btn-primary btn-lg" onclick="zeige('korn')">Weiter: Kornausgabe</button>`;
   },
 
@@ -1121,17 +1540,6 @@ const SCREENS = {
 
   bauen(){
     const p = cur();
-    const kachel = [];
-    for(let i=0;i<Math.ceil(p.dom/4);i++)    kachel.push(["t-dom","⛪","Kathedrale"]);
-    for(let i=0;i<Math.ceil(p.palast/4);i++) kachel.push(["t-palast","🏛","Palast"]);
-    for(let i=0;i<p.muehlen;i++)             kachel.push(["t-muehle","M","Kornmühle"]);
-    for(let i=0;i<p.maerkte;i++)             kachel.push(["t-markt","€","Markt"]);
-    const acker = Math.floor(Math.min(p.pop*4, anbau(p))/1000);
-    for(let i=0;i<acker && kachel.length<118;i++) kachel.push(["t-acker","","Ackerland"]);
-    const rest = clamp(Math.floor(p.land/1000) - kachel.length, 0, 120-kachel.length);
-    for(let i=0;i<rest;i++)                  kachel.push(["t-frei","","Brachland"]);
-    const map = kachel.slice(0,120).map(k=>`<div class="tile ${k[0]}" title="${k[2]}">${k[1]}</div>`).join("");
-
     const platz = (p.maerkte+p.muehlen) < bauplaetze(p);
     const bBtn = (label,fn,ok) => `<button onclick="${fn}" ${ok?'':'disabled'}>${label}</button>`;
     const gegner = lebende().filter(x=>x.i!==G.aktiv);
@@ -1139,21 +1547,15 @@ const SCREENS = {
       && (heerGroesse(p.heer)>0 || miliz(p)>0);
     return `
       ${stepper("Bauen")}
-      <h2>Landkarte — ${fmt(p.land)} ha</h2>
+      <h2>Reichskarte — ${fmt(p.land)} ha</h2>
       <div class="card">
-        <div class="legend">
-          <span><span class="tile t-markt"></span> Markt</span>
-          <span><span class="tile t-muehle"></span> Kornmühle</span>
-          <span><span class="tile t-palast"></span> Palast</span>
-          <span><span class="tile t-dom"></span> Kathedrale</span>
-          <span><span class="tile t-acker"></span> Ackerland</span>
-          <span><span class="tile t-frei"></span> Brachland</span>
-        </div>
-        <div id="map">${map}</div>
-        <p class="muted small">Je 1.000 ha Land ein Bauplatz (${p.maerkte+p.muehlen}/${bauplaetze(p)} belegt) ·
-        Bebauung verringert die Anbaufläche (noch ${fmt(anbau(p))} ha Acker) ·
-        eine Stadt = 5 Märkte + 3 Mühlen · Märkte bringen Zölle und Miliz (je 50 Mann),
-        Mühlen steigern die Ernte (+5 %) · Palast: Gut von 13.000 ha nötig · Kathedrale: Gut von 25.000 ha.</p>
+        <canvas id="karte" width="920" height="430"></canvas>
+        <p class="muted small">Neue Bauwerke erscheinen sofort auf der Karte (goldener Ring). Die Grenze
+        wächst mit Eurem Landbesitz, Felder zeigen die Anbaufläche, Häuser das Volk, Mauerringe Eure Städte.
+        Je 1.000 ha ein Bauplatz (${p.maerkte+p.muehlen}/${bauplaetze(p)} belegt) · Bebauung verringert die
+        Anbaufläche (noch ${fmt(anbau(p))} ha Acker) · eine Stadt = 5 Märkte + 3 Mühlen · Märkte bringen
+        Zölle und Miliz (je 50 Mann), Mühlen steigern die Ernte (+5 %) · Palast: Gut von 13.000 ha ·
+        Kathedrale: Gut von 25.000 ha.</p>
       </div>
       <div class="grid g2">
         <div class="card">
@@ -1492,16 +1894,19 @@ function setupAnzahl(){
     $("#prow"+i).style.opacity = on?1:.3;
     $("#pname"+i).disabled = !on;
     $("#pw"+i).disabled = !on;
+    $("#pki"+i).disabled = !on;
   }
 }
 function setupStart(){
   const n = +$("#anz").value;
-  const namen=[], w=[];
+  const namen=[], w=[], kis=[];
   for(let i=0;i<n;i++){
     namen.push(($("#pname"+i).value.trim()||("Spieler "+(i+1))));
     w.push($("#pw"+i).value==="1");
+    kis.push($("#pki"+i).value==="1");
   }
-  starteSpiel(n, namen, w, +$("#tempo").value);
+  if(kis.every(k=>k)){ alertMsg("Mindestens ein Reich braucht einen menschlichen Regenten."); return; }
+  starteSpiel(n, namen, w, +$("#tempo").value, kis, $("#optVergleich").checked);
 }
 function kornAusgeben(){
   const p = cur();
@@ -1549,13 +1954,23 @@ function steuernSetzen(){
   p.mwSt = +$("#mwSt").value; p.justiz = +$("#justiz").value;
   zeige("bauen");
 }
+function platziereGebaeude(p, typ){
+  p.gebaeude = p.gebaeude || [];
+  p.gebaeude.push({ t:typ, ang:Math.random()*6.2832, dist:0.34 + Math.random()*0.58 });
+  p._neu = p.gebaeude.length - 1;
+}
+function entferneGebaeude(p, typ){
+  const idx = (p.gebaeude||[]).map((g,i)=>g.t===typ?i:-1).filter(i=>i>=0);
+  if(idx.length) p.gebaeude.splice(idx[ri(0,idx.length-1)],1);
+  p._neu = undefined;
+}
 function baue(was){
   const p = cur();
   const platz = (p.maerkte+p.muehlen) < bauplaetze(p);
-  if(was==="markt"  && p.geld>=KOSTEN.markt  && platz){ p.geld-=KOSTEN.markt; p.maerkte++; }
-  if(was==="muehle" && p.geld>=KOSTEN.muehle && platz){ p.geld-=KOSTEN.muehle; p.muehlen++; }
-  if(was==="palast" && p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast){ p.geld-=KOSTEN.palastTeil; p.palast++; }
-  if(was==="dom"    && p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom){ p.geld-=KOSTEN.domTeil; p.dom++; }
+  if(was==="markt"  && p.geld>=KOSTEN.markt  && platz){ p.geld-=KOSTEN.markt; p.maerkte++; platziereGebaeude(p,"m"); }
+  if(was==="muehle" && p.geld>=KOSTEN.muehle && platz){ p.geld-=KOSTEN.muehle; p.muehlen++; platziereGebaeude(p,"k"); }
+  if(was==="palast" && p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast){ p.geld-=KOSTEN.palastTeil; p.palast++; p._neu="palast"; }
+  if(was==="dom"    && p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom){ p.geld-=KOSTEN.domTeil; p.dom++; p._neu="dom"; }
   sMuenze();
   render();
 }

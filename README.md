@@ -38,3 +38,17 @@ Eine vollständige GAP-Analyse gegenüber dem C64-Original liegt in `GAP-ANALYSE
 ## Lizenz
 
 MIT
+
+## Neu in Ausbaustufe 5
+
+- **Reichskarte**: prozedural gezeichnete Landkarte je Reich — die Grenze wächst mit dem
+  Landbesitz, Fluss, Wälder, Felder und Dorf entstehen dynamisch, und jedes neue Bauwerk
+  (Markt, Mühle, Palast- und Dom-Teile, Stadtmauern) erscheint dauerhaft an seinem Platz
+  auf der Karte (Neubauten mit goldenem Ring markiert)
+- **Wappen & Farben**: jedes Reich hat Wappen und Hausfarbe — auf Karte, Grenzbannern,
+  im Schlachtfeld, bei der Übergabe und in allen Übersichten
+- **Chronik**: Verlaufsgraph von Untertanen, Land und Vermögen über die Regierungsjahre
+- **KI-Regenten**: Reiche können vom Computer geführt werden (Solo-Partien!) — inklusive
+  eigener Wirtschafts-, Bau- und Kriegsentscheidungen und automatischer Diplomatie
+- **Übergabe-Berichte**: „Derweil in den anderen Reichen …" fasst die KI-Züge zusammen
+- Option: Reichsvergleich bei der Zugübergabe ein-/ausblenden
