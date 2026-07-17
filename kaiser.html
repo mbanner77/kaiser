@@ -6,6 +6,11 @@
 <title>Kaiser — Wirtschaftssimulation</title>
 <meta name="description" content="Kaiser — Wirtschaftssimulation im 18. Jahrhundert. Steige vom einfachen Herrn zum Kaiser auf: Korn, Land, Steuern, Städte, Diplomatie und Schlachten. 1-9 Spieler, Solo gegen KI-Regenten.">
 <meta name="theme-color" content="#0e1117">
+<meta property="og:title" content="KAISER — Wirtschaftssimulation im 18. Jahrhundert">
+<meta property="og:description" content="Vom einfachen Herrn zum Kaiser: Korn, Land, Steuern, Städte, Diplomatie und Schlachten. 1-9 Spieler, Solo gegen KI-Regenten. Kostenlos im Browser.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="icon-512.png">
+<meta name="twitter:card" content="summary">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230e1117'/%3E%3Cpath d='M12 44 L16 22 L26 34 L32 16 L38 34 L48 22 L52 44 Z' fill='%23e0b458'/%3E%3Crect x='12' y='46' width='40' height='6' rx='2' fill='%23c79a3d'/%3E%3C/svg%3E">
 <style>
@@ -207,6 +212,24 @@
     border-radius:12px;background:var(--panel);}
   .erfolg-k.zu{opacity:.35;filter:grayscale(.7);}
   .erfolg-k .ei{font-size:26px;}
+  /* --- Zeremonien & Jahres-Vignette --- */
+  .zer{opacity:0;animation:zerAuf .7s ease forwards;}
+  .z1{animation-delay:.1s;} .z2{animation-delay:.5s;} .z3{animation-delay:1.2s;}
+  .z4{animation-delay:1.7s;} .z5{animation-delay:2.2s;}
+  @keyframes zerAuf{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+  .krone-fall{
+    position:absolute;left:50%;top:-12px;transform:translateX(-50%);
+    font-size:52px;z-index:2;pointer-events:none;
+    animation:kroneFall 1.4s cubic-bezier(.3,1.6,.5,1) .8s both;
+    filter:drop-shadow(0 6px 14px rgba(224,180,88,.45));
+  }
+  @keyframes kroneFall{
+    from{opacity:0;transform:translateX(-50%) translateY(-110px) rotate(-16deg) scale(1.5);}
+    60%{opacity:1;transform:translateX(-50%) translateY(6px) rotate(4deg);}
+    to{opacity:1;transform:translateX(-50%) translateY(0) rotate(0);}
+  }
+  .anno-pop{animation:annoPop .9s cubic-bezier(.2,1.4,.4,1) both;}
+  @keyframes annoPop{from{opacity:0;transform:scale(1.7);letter-spacing:14px;}to{opacity:1;transform:scale(1);}}
   @media (max-width:640px){ .hero h1{font-size:32px;} .sliderrow{grid-template-columns:120px 1fr 52px;} .battlefield{grid-template-columns:1fr;} .vs{padding:4px;} }
 </style>
 </head>
@@ -272,7 +295,7 @@ function neuerSpieler(name,w,idx,ki){
   return {
     name, w, ki:!!ki,
     farbe:FARBEN[idx%FARBEN.length], wappen:WAPPEN[idx%WAPPEN.length],
-    gebaeude:[], chronik:[],
+    gebaeude:[], chronik:[], startAlter:ri(22,30),
     geld:15000, land:10000, korn:400, pop:2500,
     maerkte:0, muehlen:0, palast:0, dom:0,
     heer:{inf:0,kav:0,art:0},
@@ -298,6 +321,17 @@ const bebautFarm = p => (p.maerkte+p.muehlen)*250
   + Math.ceil(p.palast*1000/PALAST_TEILE) + Math.ceil(p.dom*1500/DOM_TEILE);
 const anbau = p => Math.max(0, p.land - bebautFarm(p));
 const heerStaerke = h => h.inf + h.kav*2.5 + h.art*4;
+const alterJahre = p => (p.startAlter||26) + (G.jahr - 1700);
+const GEWAND = ["#6e5f45","#5d7a4f","#4f6d7a","#7a4f5d","#6a4f7a","#3f5d8a","#7a3f8a","#8a2f3f","#a8842f"];
+/* Prüft die Kriegsvoraussetzungen und benennt, was fehlt */
+function kannKrieg(p){
+  const fehlt = [];
+  if(p.titel < 1) fehlt.push("den Rang Baron");
+  if(heerGroesse(p.heer) <= 0 && miliz(p) <= 0) fehlt.push("Truppen oder Miliz (Markt bauen oder Soldaten werben)");
+  if(p.kriegGefuehrt) fehlt.push("ein neues Jahr (nur ein Feldzug pro Jahr)");
+  if(!G.spieler.some(s=>s!==p && !s.tot)) fehlt.push("einen lebenden Gegner");
+  return { ok: fehlt.length===0, fehlt };
+}
 const heerGroesse = h => h.inf + h.kav + h.art;
 const unterhalt = p => Math.round((p.heer.inf*10 + p.heer.kav*25 + p.heer.art*50) * (1 + p.titel*0.1));
 
@@ -735,6 +769,179 @@ function schlachtUeberspringen(){
   schlachtAbschliessen();
   render();
 }
+/* ---------- Regenten-Porträt (prozedural: Rang, Geschlecht, Alter) ---------- */
+function zeichnePortraet(cid, p){
+  const c = document.getElementById(cid);
+  if(!c || !p) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  const idx = Math.max(0, G.spieler.indexOf(p));
+  const rng = mulberry(idx*131 + 11);
+  const aj = alterJahre(p);
+  const grau = clamp((aj-45)/22, 0, 1);            /* Ergrauen ab ~45 */
+  ctx.clearRect(0,0,W,H);
+
+  /* Hintergrund: Vorhang in Hausfarbe */
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,"#1c2434"); bg.addColorStop(1,"#0d1119");
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = p.farbe + "26";
+  ctx.beginPath(); ctx.arc(W/2, H*0.44, W*0.5, 0, 7); ctx.fill();
+  ctx.strokeStyle = p.titel>=4 ? "#e0b458" : "#2a3446";
+  ctx.lineWidth = p.titel>=7 ? 4 : 2.5;
+  ctx.strokeRect(5,5,W-10,H-10);
+
+  const cx = W/2, kopfY = H*0.40, kr = W*0.185;
+  const haut = `rgb(${226+Math.floor(rng()*14)},${186+Math.floor(rng()*14)},${146+Math.floor(rng()*16)})`;
+  const haarBasis = [[62,42,28],[96,64,32],[30,26,24],[128,70,36],[168,132,60]][Math.floor(rng()*5)];
+  const haar = `rgb(${haarBasis.map(v=>Math.round(v+(200-v)*grau)).join(",")})`;
+
+  /* Gewand / Schultern */
+  ctx.fillStyle = GEWAND[p.titel];
+  ctx.beginPath();
+  ctx.moveTo(cx-W*0.40, H+2);
+  ctx.quadraticCurveTo(cx-W*0.36, H*0.66, cx-W*0.17, H*0.615);
+  ctx.lineTo(cx+W*0.17, H*0.615);
+  ctx.quadraticCurveTo(cx+W*0.36, H*0.66, cx+W*0.40, H+2);
+  ctx.closePath(); ctx.fill();
+  /* Stickerei-Borte */
+  ctx.strokeStyle = "rgba(224,180,88,.5)"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, H*0.62); ctx.lineTo(cx, H); ctx.stroke();
+  /* Pelz-/Hermelinkragen */
+  if(p.titel>=7){
+    ctx.fillStyle = "#efece2";
+    ctx.beginPath();
+    ctx.moveTo(cx-W*0.19, H*0.63);
+    ctx.quadraticCurveTo(cx, H*0.585, cx+W*0.19, H*0.63);
+    ctx.lineTo(cx+W*0.15, H*0.78); ctx.quadraticCurveTo(cx, H*0.73, cx-W*0.15, H*0.78);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#20242c";
+    for(let i=0;i<7;i++) ctx.fillRect(cx-W*0.14+i*W*0.047, H*0.66+ (i%2)*8, 3, 6);
+  } else if(p.titel>=3){
+    ctx.strokeStyle = "#d8d0bd"; ctx.lineWidth = 9; ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(cx-W*0.16, H*0.66); ctx.quadraticCurveTo(cx, H*0.60, cx+W*0.16, H*0.66); ctx.stroke();
+  }
+  /* Amtskette + Medaillon */
+  if(p.titel>=4){
+    ctx.strokeStyle = "#e0b458"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx-W*0.13, H*0.65); ctx.quadraticCurveTo(cx, H*0.78, cx+W*0.13, H*0.65); ctx.stroke();
+    ctx.fillStyle = "#e0b458";
+    ctx.beginPath(); ctx.arc(cx, H*0.775, 7, 0, 7); ctx.fill();
+    ctx.fillStyle = p.farbe;
+    ctx.beginPath(); ctx.arc(cx, H*0.775, 3.4, 0, 7); ctx.fill();
+  }
+  /* Hals & Kopf */
+  ctx.fillStyle = haut;
+  ctx.fillRect(cx-kr*0.36, kopfY+kr*0.62, kr*0.72, kr*0.75);
+  ctx.beginPath(); ctx.ellipse(cx, kopfY, kr*0.82, kr, 0, 0, 7); ctx.fill();
+  /* Ohren */
+  ctx.beginPath(); ctx.ellipse(cx-kr*0.82, kopfY+kr*0.08, kr*0.13, kr*0.2, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx+kr*0.82, kopfY+kr*0.08, kr*0.13, kr*0.2, 0, 0, 7); ctx.fill();
+  if(p.w){ /* Ohrringe */
+    ctx.fillStyle = "#e0b458";
+    ctx.beginPath(); ctx.arc(cx-kr*0.82, kopfY+kr*0.32, 2.6, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+kr*0.82, kopfY+kr*0.32, 2.6, 0, 7); ctx.fill();
+  }
+  /* Haare */
+  ctx.fillStyle = haar;
+  if(p.w){
+    ctx.beginPath();
+    ctx.moveTo(cx-kr*0.95, kopfY+kr*1.5);
+    ctx.quadraticCurveTo(cx-kr*1.15, kopfY-kr*0.2, cx-kr*0.5, kopfY-kr*0.95);
+    ctx.quadraticCurveTo(cx, kopfY-kr*1.22, cx+kr*0.5, kopfY-kr*0.95);
+    ctx.quadraticCurveTo(cx+kr*1.15, kopfY-kr*0.2, cx+kr*0.95, kopfY+kr*1.5);
+    ctx.lineTo(cx+kr*0.62, kopfY+kr*1.5);
+    ctx.quadraticCurveTo(cx+kr*0.78, kopfY+kr*0.2, cx+kr*0.55, kopfY-kr*0.42);
+    ctx.quadraticCurveTo(cx, kopfY-kr*0.72, cx-kr*0.55, kopfY-kr*0.42);
+    ctx.quadraticCurveTo(cx-kr*0.78, kopfY+kr*0.2, cx-kr*0.62, kopfY+kr*1.5);
+    ctx.closePath(); ctx.fill();
+  } else {
+    const ansatz = aj>58 ? 0.28 : 0.05;    /* Geheimratsecken im Alter */
+    ctx.beginPath();
+    ctx.moveTo(cx-kr*0.85, kopfY-kr*0.05);
+    ctx.quadraticCurveTo(cx-kr*0.8, kopfY-kr*(1.05-ansatz), cx, kopfY-kr*(1.12-ansatz));
+    ctx.quadraticCurveTo(cx+kr*0.8, kopfY-kr*(1.05-ansatz), cx+kr*0.85, kopfY-kr*0.05);
+    ctx.quadraticCurveTo(cx+kr*0.6, kopfY-kr*0.42, cx, kopfY-kr*0.5);
+    ctx.quadraticCurveTo(cx-kr*0.6, kopfY-kr*0.42, cx-kr*0.85, kopfY-kr*0.05);
+    ctx.closePath(); ctx.fill();
+    /* Bart ab 40 oder ab Herzog */
+    if(aj>=40 || p.titel>=5){
+      ctx.beginPath();
+      ctx.moveTo(cx-kr*0.55, kopfY+kr*0.35);
+      ctx.quadraticCurveTo(cx, kopfY+kr*(aj>=52?1.55:1.3), cx+kr*0.55, kopfY+kr*0.35);
+      ctx.quadraticCurveTo(cx, kopfY+kr*0.62, cx-kr*0.55, kopfY+kr*0.35);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = haar; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(cx-kr*0.3, kopfY+kr*0.48); ctx.quadraticCurveTo(cx, kopfY+kr*0.6, cx+kr*0.3, kopfY+kr*0.48); ctx.stroke();
+    }
+  }
+  /* Augen, Brauen, Nase, Mund */
+  const augY = kopfY - kr*0.08;
+  for(const s of [-1,1]){
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.ellipse(cx+s*kr*0.35, augY, kr*0.16, kr*0.10, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = ["#4a3a28","#3a5a6a","#3f5a3a"][Math.floor(rng()*3)];
+    ctx.beginPath(); ctx.arc(cx+s*kr*0.35, augY, kr*0.065, 0, 7); ctx.fill();
+    ctx.strokeStyle = haar; ctx.lineWidth = 3; ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(cx+s*kr*0.18, augY-kr*0.22); ctx.lineTo(cx+s*kr*0.52, augY-kr*(0.24+rng()*0.05)); ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(120,80,50,.55)"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, augY+kr*0.1); ctx.quadraticCurveTo(cx+kr*0.09, kopfY+kr*0.28, cx-kr*0.04, kopfY+kr*0.32); ctx.stroke();
+  ctx.strokeStyle = p.w ? "#b0524f" : "rgba(120,70,50,.8)"; ctx.lineWidth = p.w ? 4 : 3;
+  ctx.beginPath(); ctx.moveTo(cx-kr*0.22, kopfY+kr*0.55); ctx.quadraticCurveTo(cx, kopfY+kr*(0.62+0.04*Math.min(1,p.stimmung/60)), cx+kr*0.22, kopfY+kr*0.55); ctx.stroke();
+  /* Falten im Alter */
+  if(aj>=48){
+    ctx.strokeStyle = "rgba(110,80,60,.4)"; ctx.lineWidth = 1.5;
+    for(const s of [-1,1]){
+      ctx.beginPath(); ctx.moveTo(cx+s*kr*0.5, augY+kr*0.16); ctx.quadraticCurveTo(cx+s*kr*0.56, augY+kr*0.24, cx+s*kr*0.48, augY+kr*0.3); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(cx-kr*0.4, kopfY-kr*0.52); ctx.quadraticCurveTo(cx, kopfY-kr*0.58, cx+kr*0.4, kopfY-kr*0.52); ctx.stroke();
+    if(aj>=58){ ctx.beginPath(); ctx.moveTo(cx-kr*0.38, kopfY-kr*0.4); ctx.quadraticCurveTo(cx, kopfY-kr*0.46, cx+kr*0.38, kopfY-kr*0.4); ctx.stroke(); }
+  }
+  /* Kopfschmuck nach Rang */
+  const kroneY = kopfY - kr*(p.w?1.05:0.98);
+  if(p.titel>=1 && p.titel<=2){         /* Silberreif */
+    ctx.strokeStyle = "#c9ccd4"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(cx-kr*0.6, kroneY+kr*0.18); ctx.quadraticCurveTo(cx, kroneY, cx+kr*0.6, kroneY+kr*0.18); ctx.stroke();
+  } else if(p.titel>=3 && p.titel<=4){  /* Silberreif mit Zacken */
+    ctx.strokeStyle = "#c9ccd4"; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(cx-kr*0.6, kroneY+kr*0.18); ctx.quadraticCurveTo(cx, kroneY, cx+kr*0.6, kroneY+kr*0.18); ctx.stroke();
+    ctx.fillStyle = "#c9ccd4";
+    for(const s of [-0.4,0,0.4]){
+      ctx.beginPath(); ctx.moveTo(cx+s*kr-5, kroneY+kr*0.08); ctx.lineTo(cx+s*kr, kroneY-kr*0.18); ctx.lineTo(cx+s*kr+5, kroneY+kr*0.08); ctx.closePath(); ctx.fill();
+    }
+  } else if(p.titel>=5 && p.titel<=6){  /* Goldene Adelskrone */
+    ctx.fillStyle = "#e0b458";
+    ctx.fillRect(cx-kr*0.62, kroneY, kr*1.24, kr*0.2);
+    for(const s of [-0.5,-0.17,0.17,0.5]){
+      ctx.beginPath(); ctx.moveTo(cx+s*kr*1.1-6, kroneY+2); ctx.lineTo(cx+s*kr*1.1, kroneY-kr*0.3); ctx.lineTo(cx+s*kr*1.1+6, kroneY+2); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx+s*kr*1.1, kroneY-kr*0.3, 2.6, 0, 7); ctx.fill();
+    }
+  } else if(p.titel===7){               /* Königskrone */
+    ctx.fillStyle = "#8a2f3f";
+    ctx.beginPath(); ctx.ellipse(cx, kroneY-kr*0.1, kr*0.5, kr*0.28, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "#e0b458";
+    ctx.fillRect(cx-kr*0.62, kroneY, kr*1.24, kr*0.22);
+    for(const s of [-0.45,0,0.45]){
+      ctx.beginPath(); ctx.moveTo(cx+s*kr-7, kroneY+2); ctx.lineTo(cx+s*kr, kroneY-kr*0.42); ctx.lineTo(cx+s*kr+7, kroneY+2); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = "#e5636f";
+    for(const s of [-0.4,0,0.4]) { ctx.beginPath(); ctx.arc(cx+s*kr, kroneY+kr*0.11, 3, 0, 7); ctx.fill(); }
+  } else if(p.titel===8){               /* Kaiserkrone mit Bügel und Kreuz */
+    ctx.fillStyle = "#8a2f3f";
+    ctx.beginPath(); ctx.ellipse(cx, kroneY-kr*0.12, kr*0.52, kr*0.3, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "#e0b458";
+    ctx.fillRect(cx-kr*0.66, kroneY, kr*1.32, kr*0.24);
+    ctx.strokeStyle = "#e0b458"; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(cx-kr*0.6, kroneY); ctx.quadraticCurveTo(cx, kroneY-kr*0.72, cx+kr*0.6, kroneY); ctx.stroke();
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(cx, kroneY-kr*0.55); ctx.lineTo(cx, kroneY-kr*0.85);
+    ctx.moveTo(cx-kr*0.1, kroneY-kr*0.72); ctx.lineTo(cx+kr*0.1, kroneY-kr*0.72); ctx.stroke();
+    ctx.fillStyle = "#fff";
+    for(let i=0;i<7;i++){ ctx.beginPath(); ctx.arc(cx-kr*0.55+i*kr*0.183, kroneY+kr*0.12, 2.4, 0, 7); ctx.fill(); }
+  }
+}
+
 /* ---------- Titelpanorama (prozedural gemalt) ---------- */
 function zeichneTitel(t){
   const c = document.getElementById("titelbild");
@@ -835,12 +1042,23 @@ function malHaus(ctx, x, y, s, wand, dach){
   ctx.fillStyle = dach;
   ctx.beginPath(); ctx.moveTo(x-s*0.65,y-s/2); ctx.lineTo(x,y-s*1.15); ctx.lineTo(x+s*0.65,y-s/2); ctx.closePath(); ctx.fill();
 }
-function malBaum(ctx, x, y, s){
-  ctx.fillStyle = "#1e3a1c";
+function malBaum(ctx, x, y, s, c1="#1e3a1c", c2="#25491f", schnee=false){
+  ctx.fillStyle = c1;
   ctx.beginPath(); ctx.moveTo(x-s,y); ctx.lineTo(x,y-s*1.9); ctx.lineTo(x+s,y); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = "#25491f";
+  ctx.fillStyle = c2;
   ctx.beginPath(); ctx.moveTo(x-s*0.8,y-s*0.7); ctx.lineTo(x,y-s*2.3); ctx.lineTo(x+s*0.8,y-s*0.7); ctx.closePath(); ctx.fill();
+  if(schnee){
+    ctx.fillStyle = "rgba(240,245,250,.85)";
+    ctx.beginPath(); ctx.moveTo(x-s*0.6,y-s*1.1); ctx.lineTo(x,y-s*2.3); ctx.lineTo(x+s*0.6,y-s*1.1); ctx.closePath(); ctx.fill();
+  }
 }
+const SAISON = [
+  { n:"Frühling", g1:"#3f6338", g2:"#2f5030", f1:"#7d9a46", f2:"#95b054", b1:"#2a5426", b2:"#356b2b", fluss:"#3a6f8f", schnee:false },
+  { n:"Sommer",   g1:"#3d5c35", g2:"#2c4527", f1:"#7d8f36", f2:"#95a344", b1:"#1e3a1c", b2:"#25491f", fluss:"#3a6f8f", schnee:false },
+  { n:"Herbst",   g1:"#5a5230", g2:"#484226", f1:"#a3813a", f2:"#b9974a", b1:"#7a4a20", b2:"#96622a", fluss:"#41718a", schnee:false },
+  { n:"Winter",   g1:"#87919c", g2:"#707a86", f1:"#a8b2ba", f2:"#c0cad2", b1:"#22402a", b2:"#2c5236", fluss:"#7fa8c4", schnee:true }
+];
+const saison = () => SAISON[(G.jahr - 1700) % 4];
 function malMarkt(ctx, x, y){
   ctx.fillStyle = "#8a5a2a"; ctx.fillRect(x-8, y-5, 16, 9);
   ctx.fillStyle = "#d9973f";
@@ -906,11 +1124,12 @@ function zeichneKarte(p, canvasId, t=0){
   ctx.fillStyle = "rgba(46,70,56,.25)";
   for(let i=0;i<26;i++){ const x=rng()*W, y=rng()*H; ctx.beginPath(); ctx.arc(x,y,rng()*26+6,0,7); ctx.fill(); }
   /* Territorium */
+  const sn = saison();
   const pts = blobPunkte(rng, cx, cy, rr);
   ctx.save();
   malBlob(ctx, pts); ctx.clip();
   const grad = ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0,"#3d5c35"); grad.addColorStop(1,"#2c4527");
+  grad.addColorStop(0,sn.g1); grad.addColorStop(1,sn.g2);
   ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
   /* Wiesenflecken */
   for(let i=0;i<30;i++){
@@ -919,7 +1138,7 @@ function zeichneKarte(p, canvasId, t=0){
   }
   /* Fluss */
   const fy = cy + rr*0.28;
-  ctx.strokeStyle = "#3a6f8f"; ctx.lineWidth = 11; ctx.lineCap="round";
+  ctx.strokeStyle = sn.fluss; ctx.lineWidth = 11; ctx.lineCap="round";
   ctx.beginPath();
   ctx.moveTo(cx-rr*1.5, fy-rr*0.4);
   ctx.bezierCurveTo(cx-rr*0.5, fy+rr*0.35, cx+rr*0.4, fy-rr*0.45, cx+rr*1.5, fy+rr*0.1);
@@ -942,7 +1161,14 @@ function zeichneKarte(p, canvasId, t=0){
   for(let w=0; w<7; w++){
     const a = rng()*6.2832, d = rr*(0.72+rng()*0.2);
     const wx = cx+Math.cos(a)*d*1.2, wy = cy+Math.sin(a)*d*0.75;
-    for(let b=0;b<6;b++) malBaum(ctx, wx+(rng()-0.5)*34, wy+(rng()-0.5)*22, 5+rng()*3);
+    for(let b=0;b<6;b++) malBaum(ctx, wx+(rng()-0.5)*34, wy+(rng()-0.5)*22, 5+rng()*3, sn.b1, sn.b2, sn.schnee);
+  }
+  /* Winter: Schneegestöber-Tupfen */
+  if(sn.schnee){
+    ctx.fillStyle = "rgba(245,248,252,.5)";
+    for(let i=0;i<60;i++){
+      ctx.beginPath(); ctx.arc(cx+(rng()-0.5)*rr*2.6, cy+(rng()-0.5)*rr*1.6, rng()*1.8+0.6, 0, 7); ctx.fill();
+    }
   }
   /* Wege vom Dorf zu den Bauwerken */
   ctx.strokeStyle = "rgba(209,187,138,.30)"; ctx.lineWidth = 3; ctx.lineCap = "round";
@@ -961,7 +1187,7 @@ function zeichneKarte(p, canvasId, t=0){
     const a = rng()*6.2832, d = rr*(0.3+rng()*0.34);
     const fx = cx+Math.cos(a)*d*1.15, fyy = cy+Math.sin(a)*d*0.7;
     ctx.save(); ctx.translate(fx,fyy); ctx.rotate((rng()-0.5)*0.5);
-    for(let s=0;s<4;s++){ ctx.fillStyle = s%2 ? "#7d8f36":"#95a344"; ctx.fillRect(-17, -10+s*5, 34, 5); }
+    for(let s=0;s<4;s++){ ctx.fillStyle = s%2 ? sn.f1 : sn.f2; ctx.fillRect(-17, -10+s*5, 34, 5); }
     ctx.restore();
   }
   /* Dorf/Häuser (Bevölkerung) */
@@ -1034,7 +1260,7 @@ function zeichneKarte(p, canvasId, t=0){
   ctx.fillRect(10, H-34, 240, 26);
   ctx.strokeStyle = "#2a3446"; ctx.strokeRect(10, H-34, 240, 26);
   ctx.fillStyle = "#dbe2ee"; ctx.font = "600 13px sans-serif"; ctx.textAlign = "left";
-  ctx.fillText(`${p.wappen} ${titelName(p)} ${p.name}s Reich · ${fmt(p.land)} ha`, 18, H-16);
+  ctx.fillText(`${p.wappen} ${titelName(p)} ${p.name}s Reich · ${fmt(p.land)} ha · ${sn.n}`, 18, H-16);
   /* Kompass */
   ctx.strokeStyle = "#8b96a8"; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.arc(W-30, 30, 13, 0, 7); ctx.stroke();
@@ -1043,6 +1269,78 @@ function zeichneKarte(p, canvasId, t=0){
   ctx.fillStyle = "#8b96a8"; ctx.font = "10px sans-serif"; ctx.textAlign="center";
   ctx.fillText("N", W-30, 14);
 }
+
+/* ---------- Gesamtkarte: alle Reiche im Nachbarschaftskreis ---------- */
+function zeichneWelt(t=0){
+  const c = document.getElementById("welt");
+  if(!c) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = "#111b26"; ctx.fillRect(0,0,W,H);
+  const wr = mulberry(999);
+  ctx.fillStyle = "rgba(46,70,56,.16)";
+  for(let i=0;i<30;i++){ ctx.beginPath(); ctx.arc(wr()*W, wr()*H, wr()*30+8, 0, 7); ctx.fill(); }
+  const n = G.spieler.length;
+  const cx = W/2, cy = H/2 + 4, ex = W*0.36, ey = H*0.32;
+  const pos = G.spieler.map((_,i)=>{
+    const a = -Math.PI/2 + i/n*6.2832;
+    return [cx + Math.cos(a)*ex*(n>1?1:0), cy + Math.sin(a)*ey*(n>1?1:0)];
+  });
+  /* Handelswege zwischen lebenden Nachbarn */
+  const leb = lebende().map(x=>x.i);
+  if(leb.length > 1){
+    ctx.strokeStyle = "rgba(209,187,138,.25)"; ctx.lineWidth = 2; ctx.setLineDash([5,7]);
+    const paare = leb.length===2 ? [[leb[0],leb[1]]] : leb.map((a,k)=>[a, leb[(k+1)%leb.length]]);
+    for(const [a,b] of paare){
+      ctx.beginPath(); ctx.moveTo(pos[a][0], pos[a][1]);
+      ctx.quadraticCurveTo(cx, cy, pos[b][0], pos[b][1]); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+  /* Reiche */
+  G.spieler.forEach((p,i)=>{
+    const [px,py] = pos[i];
+    const rrW = 24 + 34*Math.sqrt(Math.min(p.land,50000)/50000);
+    const rngB = mulberry(i*97+5);
+    ctx.save();
+    if(p.tot) ctx.globalAlpha = 0.45;
+    const bl = [];
+    for(let k=0;k<10;k++){
+      const a = k/10*6.2832;
+      bl.push([px+Math.cos(a)*rrW*(0.8+rngB()*0.35)*1.25, py+Math.sin(a)*rrW*(0.8+rngB()*0.35)*0.8]);
+    }
+    ctx.beginPath();
+    ctx.moveTo((bl[0][0]+bl[9][0])/2,(bl[0][1]+bl[9][1])/2);
+    for(let k=0;k<10;k++){
+      const nx = bl[(k+1)%10];
+      ctx.quadraticCurveTo(bl[k][0], bl[k][1], (bl[k][0]+nx[0])/2, (bl[k][1]+nx[1])/2);
+    }
+    ctx.closePath();
+    ctx.fillStyle = p.tot ? "#39404a" : saison().g2;
+    ctx.fill();
+    ctx.strokeStyle = p.farbe; ctx.lineWidth = 2; ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]);
+    if(i===G.aktiv && !p.tot){
+      ctx.strokeStyle = "rgba(224,180,88,"+(0.55+Math.sin(t/300)*0.3)+")"; ctx.lineWidth = 3; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(px, py, rrW*1.35, 0, 7); ctx.stroke();
+    }
+    ctx.font = `${Math.round(rrW*0.62)}px sans-serif`; ctx.textAlign = "center";
+    ctx.fillText(p.wappen, px, py + rrW*0.2);
+    ctx.font = "600 13px sans-serif"; ctx.fillStyle = "#dbe2ee";
+    ctx.fillText(`${titelName(p)} ${p.name}${p.tot?" †":""}`, px, py + rrW*0.85 + 16);
+    ctx.font = "11px sans-serif"; ctx.fillStyle = "#8b96a8";
+    ctx.fillText(`${fmt(p.land)} ha · ${fmt(p.pop)} Einw.`, px, py + rrW*0.85 + 30);
+    ctx.restore();
+  });
+  ctx.fillStyle = "rgba(13,17,23,.78)";
+  ctx.fillRect(10, H-32, 250, 24);
+  ctx.strokeStyle = "#2a3446"; ctx.strokeRect(10, H-32, 250, 24);
+  ctx.fillStyle = "#dbe2ee"; ctx.font = "600 12px sans-serif"; ctx.textAlign = "left";
+  ctx.fillText(`Die bekannte Welt · Anno ${G.jahr} · ${saison().n}`, 18, H-15);
+}
+function weltAuf(){ G._vorWelt = G.screen; zeige("welt"); }
+function weltZu(){ zeige(G._vorWelt || "status"); }
+function angreifenAus(i){ G._zielVorwahl = i; zeige("kriegPlan"); }
 
 /* Schlachtfeld-Canvas: Truppen als Formationen, Partikel an der Front */
 function zeichneFeld(t=0){
@@ -1297,6 +1595,7 @@ function ladeSpielstand(json){
     if(!p.wappen) p.wappen = WAPPEN[i%WAPPEN.length];
     if(!p.chronik) p.chronik = [];
     if(p.ki===undefined) p.ki = false;
+    if(!p.startAlter) p.startAlter = ri(22,30);
     if(!p.gebaeude){
       p.gebaeude = [];
       for(let m=0;m<p.maerkte;m++) p.gebaeude.push({t:"m",ang:Math.random()*6.2832,dist:0.34+Math.random()*0.58});
@@ -1462,7 +1761,11 @@ function render(){
   if(G.screen === "schlacht") zeichneFeld();
   else window.scrollTo(0,0);
   if(G.screen === "bauen") zeichneKarte(cur(), "karte");
-  if(G.screen === "status") zeichneKarte(cur(), "karteS");
+  if(G.screen === "status"){ zeichneKarte(cur(), "karteS"); zeichnePortraet("portraitS", cur()); }
+  if(G.screen === "welt") zeichneWelt();
+  if(G.screen === "befoerderung") zeichnePortraet("portraitB", cur());
+  if(G.screen === "sieg" && G.sieger) zeichnePortraet("portraitK", G.sieger);
+  if(G.screen === "tod") zeichnePortraet("portraitT", cur());
   zaehlerAnimieren();
 }
 /* Zahlen zählen weich hoch (Statuskarten) */
@@ -1645,7 +1948,7 @@ const SCREENS = {
     return `
       <div class="hero" style="padding-bottom:16px">
         <span class="schild" style="box-shadow:inset 0 0 26px ${p.farbe}66, 0 6px 22px rgba(0,0,0,.45)">${p.wappen}</span>
-        <h1 style="font-size:32px;letter-spacing:2px;margin-top:12px">Anno ${G.jahr}</h1>
+        <h1 class="anno-pop" style="font-size:32px;letter-spacing:2px;margin-top:12px">Anno ${G.jahr} <span class="muted" style="font-size:16px">· ${saison().n}</span></h1>
         <p style="font-size:19px;margin:14px 0 6px"><b class="gold">${titelName(p)} ${p.name}</b> ist am Zug.</p>
         <p class="muted">Bitte an das Gerät treten. Der 90-Sekunden-Zähler startet mit dem Zug.</p>
         <div style="margin-top:20px"><button class="btn-primary btn-lg" onclick="beginneZug()">Zug beginnen</button></div>
@@ -1671,7 +1974,14 @@ const SCREENS = {
     const nb = nachbarn(G.aktiv).map(i=>G.spieler[i].name).join(", ") || "—";
     return `
       ${stepper("Status")}
-      <h2>${anrede(p)}, ${titelName(p)} ${p.name}</h2>
+      <div style="display:flex;gap:18px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <canvas id="portraitS" width="120" height="150" style="border-radius:12px;border:1px solid var(--border);flex:0 0 auto"></canvas>
+        <div>
+          <h2 style="margin-bottom:4px">${anrede(p)}, ${titelName(p)} ${p.name}</h2>
+          <p class="muted">${alterJahre(p)} Jahre alt · Anno ${G.jahr} · ${saison().n}</p>
+          <button class="btn-sm" onclick="weltAuf()" style="margin-top:8px">🗺️ Gesamtkarte</button>
+        </div>
+      </div>
       ${statKarten(p)}
       <div class="grid g2">
         <div class="card">
@@ -1873,18 +2183,21 @@ const SCREENS = {
       </div>
       <div class="card"><b>Vermögen: <span class="${p.geld<0?'red':'gold'}">${fmt(p.geld)} Taler</span></b></div>
       <button class="btn-danger" onclick="zeige('kriegPlan')" ${kriegOk?'':'disabled'}>⚔️ Krieg führen</button>
+      <button onclick="weltAuf()">🗺️ Gesamtkarte</button>
       <button class="btn-primary btn-lg" onclick="jahrAbschliessen()">Jahr abschließen</button>
-      ${p.titel<1?'<p class="muted small">Krieg ist erst ab dem Rang Baron möglich. Ein Feldzug pro Jahr.</p>':''}`;
+      ${!kriegOk?`<p class="muted small">⚔️ Für einen Feldzug fehlt Euch noch: ${kannKrieg(p).fehlt.join(" · ")}.</p>`:''}`;
   },
 
   kriegPlan(){
     const p = cur();
     const nb = nachbarn(G.aktiv);
     const ziele = lebende().filter(x=>x.i!==G.aktiv);
+    const vorwahl = G._zielVorwahl;
+    G._zielVorwahl = undefined;
     const opts = ziele.map(z=>{
       const adj = nb.includes(z.i);
       const weg = adj ? [] : wegZwischen(G.aktiv, z.i);
-      return `<option value="${z.i}">${titelName(z.p)} ${z.p.name} — ${fmt(z.p.land)} ha, ${fmt(z.p.pop)} Einw.${adj?" · Nachbar":" · Durchmarsch über "+weg.map(i=>G.spieler[i].name).join(", ")}</option>`;
+      return `<option value="${z.i}" ${z.i===vorwahl?'selected':''}>${titelName(z.p)} ${z.p.name} — ${fmt(z.p.land)} ha, ${fmt(z.p.pop)} Einw.${adj?" · Nachbar":" · Durchmarsch über "+weg.map(i=>G.spieler[i].name).join(", ")}</option>`;
     }).join("");
     return `
       ${stepper("Bauen")}
@@ -2073,41 +2386,91 @@ const SCREENS = {
     if(p.titel===8){ G.sieger = p; }
     setTimeout(()=>{ konfetti(p.titel===8?140:70); (p.titel===8?sKroenung:sFanfare)(); }, 150);
     return `
-      <div class="hero">
-        <span class="crown">🎺</span>
-        <p class="gold" style="font-size:17px;letter-spacing:2px">Trompeten erschallen!</p>
-        <h1 style="font-size:30px;margin:18px 0">${p.name} wird zu${p.w?"r":"m"} <span class="gold">${titelName(p)}</span> erhoben!</h1>
+      <div class="hero" style="padding-top:34px">
+        <p class="gold" style="font-size:17px;letter-spacing:2px">🎺 Trompeten erschallen!</p>
+        <div style="margin:18px auto 6px;width:220px">
+          <canvas id="portraitB" width="220" height="272" style="border-radius:14px;box-shadow:0 12px 44px rgba(0,0,0,.5)"></canvas>
+        </div>
+        <p class="muted small">${titelName(p)} ${p.name}, ${alterJahre(p)} Jahre — im neuen Ornat</p>
+        <h1 style="font-size:30px;margin:14px 0">${p.name} wird zu${p.w?"r":"m"} <span class="gold">${titelName(p)}</span> erhoben!</h1>
         ${p.titel===8
           ? `<p class="green" style="font-size:16px">Die Kathedrale ist vollendet — das Reich hat einen neuen ${titelName(p)}!</p>
-             <div style="margin-top:24px"><button class="btn-primary btn-lg" onclick="zeige('sieg')">Zur Krönung</button></div>`
-          : `<div style="margin-top:24px"><button class="btn-primary btn-lg" onclick="naechsterSpieler()">Weiter</button></div>`}
+             <div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="zeige('sieg')">Zur Krönung</button></div>`
+          : `<div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="naechsterSpieler()">Weiter</button></div>`}
       </div>`;
   },
 
   tod(){
     const p = cur();
     return `
-      <div class="hero">
+      <div class="hero" style="padding-top:36px">
         <span class="crown">🕯️</span>
         <h1 class="red" style="font-size:28px">Die Glocken läuten …</h1>
-        <p style="font-size:17px;margin:14px 0">${titelName(p)} ${p.name} ist Anno ${G.jahr} verstorben.</p>
+        <div style="width:170px;margin:16px auto 6px;filter:grayscale(.8) brightness(.8)">
+          <canvas id="portraitT" width="170" height="210" style="border-radius:12px"></canvas>
+        </div>
+        <p style="font-size:17px;margin:12px 0">${titelName(p)} ${p.name} ist Anno ${G.jahr}
+          im Alter von ${alterJahre(p)} Jahren verstorben.</p>
         <p class="muted">Höchster Rang: ${titelName(p)} · ${fmt(p.land)} ha · ${fmt(p.pop)} Untertanen</p>
-        <div style="margin-top:24px"><button class="btn-primary btn-lg" onclick="naechsterSpieler()">Weiter</button></div>
+        <div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="naechsterSpieler()">Weiter</button></div>
       </div>`;
   },
 
   sieg(){
     const p = G.sieger;
-    setTimeout(()=>{ konfetti(160); sKroenung(); }, 200);
+    setTimeout(()=>{ konfetti(160); sKroenung(); }, 600);
     return `
-      <div class="hero">
-        <span class="crown">👑</span>
-        <h1 style="font-size:36px">Heil ${p.w?"der Kaiserin":"dem Kaiser"} ${p.name}!</h1>
-        <div class="monu" style="margin:16px 0">${svgPalast(p.palast)}${svgDom(p.dom)}</div>
-        <p style="margin:14px 0">Anno ${G.jahr} · ${fmt(p.pop)} Untertanen · ${fmt(p.land)} ha · ${fmt(p.geld)} Taler</p>
-        <p class="muted">Vom einfachen ${p.w?"Fräulein":"Herrn"} zur Herrschaft über das Reich — das Spiel ist gewonnen.</p>
-        <div style="margin-top:24px"><button class="btn-primary btn-lg" onclick="zeige('ende')">Schlusswertung</button></div>
+      <div class="hero" style="padding-top:30px">
+        <p class="gold zer z1" style="font-size:17px;letter-spacing:3px">DIE KRÖNUNG</p>
+        <div class="zer z2" style="position:relative;width:240px;margin:14px auto 6px">
+          <span class="krone-fall">👑</span>
+          <canvas id="portraitK" width="240" height="296" style="border-radius:14px;box-shadow:0 14px 50px rgba(0,0,0,.55)"></canvas>
+        </div>
+        <h1 class="zer z3" style="font-size:34px;margin:14px 0">Heil ${p.w?"der Kaiserin":"dem Kaiser"} ${p.name}!</h1>
+        <p class="zer z4" style="margin:10px 0">Anno ${G.jahr} · ${alterJahre(p)} Jahre · ${fmt(p.pop)} Untertanen · ${fmt(p.land)} ha · ${fmt(p.geld)} Taler</p>
+        <div class="monu zer z4" style="margin:10px 0">${svgPalast(p.palast)}${svgDom(p.dom)}</div>
+        <p class="muted zer z5">Vom einfachen ${p.w?"Fräulein":"Herrn"} zur Herrschaft über das Reich — das Spiel ist gewonnen.</p>
+        <div class="zer z5" style="margin-top:22px"><button class="btn-primary btn-lg" onclick="zeige('ende')">Schlusswertung</button></div>
       </div>`;
+  },
+
+  welt(){
+    const p = cur();
+    const kk = kannKrieg(p);
+    const ausBauen = G._vorWelt === "bauen";
+    const nb = nachbarn(G.aktiv);
+    const zeilen = G.spieler.map((s,i)=>{
+      if(s===p) return "";
+      const adj = nb.includes(i);
+      const angriff = ausBauen && kk.ok && !s.tot
+        ? `<button class="btn-danger btn-sm" onclick="angreifenAus(${i})">⚔️ Angreifen</button>`
+        : "";
+      return `<tr>
+        <td><span class="dot" style="background:${s.farbe}"></span>${s.wappen} ${titelName(s)} ${s.name}${s.tot?" †":""}${s.ki?' <span class="muted small">(KI)</span>':""}</td>
+        <td class="r">${fmt(s.land)} ha</td>
+        <td class="r">${fmt(s.pop)}</td>
+        <td class="r">${staedte(s)}</td>
+        <td>${s.tot?"—":adj?'<span class="green">Nachbar</span>':'<span class="muted">Durchmarsch nötig</span>'}</td>
+        <td class="r">${angriff}</td>
+      </tr>`;
+    }).join("");
+    return `
+      <h2>🗺️ Die bekannte Welt — Anno ${G.jahr}</h2>
+      <div class="card">
+        <canvas id="welt" width="920" height="430"></canvas>
+        <p class="muted small">Die Sitzreihenfolge bildet den Nachbarschaftskreis — Handelswege verbinden
+        benachbarte Reiche. Euer Reich trägt den goldenen Ring.</p>
+      </div>
+      <div class="card">
+        <h3>Die Konkurrenz</h3>
+        <table>
+          <tr><th>Regent</th><th class="r">Land</th><th class="r">Untertanen</th><th class="r">Städte</th><th>Lage</th><th></th></tr>
+          ${zeilen}
+        </table>
+        ${!ausBauen?'<p class="muted small">Feldzüge lassen sich in der Bauphase beginnen (Landkarte &amp; Bauen → Gesamtkarte).</p>':
+          !kk.ok?`<p class="muted small">Für einen Feldzug fehlt Euch noch: ${kk.fehlt.join(" · ")}.</p>`:""}
+      </div>
+      <button class="btn-primary btn-lg" onclick="weltZu()">Zurück</button>`;
   },
 
   hilfe(){
@@ -2318,6 +2681,7 @@ function animLoop(t){
   else if(G.screen === "bauen")   zeichneKarte(cur(), "karte", t);
   else if(G.screen === "status")  zeichneKarte(cur(), "karteS", t);
   else if(G.screen === "schlacht") zeichneFeld(t);
+  else if(G.screen === "welt")    zeichneWelt(t);
 }
 requestAnimationFrame(animLoop);
 
