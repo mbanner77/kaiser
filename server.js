@@ -10,7 +10,15 @@ const server = http.createServer((req, res) => {
 });
 const wss = new WebSocketServer({ server });
 
-const raeume = new Map();   /* code -> { clients: Map(id -> {ws,name}), hostId } */
+const raeume = new Map();   /* code -> { clients: Map(id -> {ws,name}), hostId, pass } */
+/* Weltrangliste (im Speicher; auf Gratis-Servern nach Neustart leer) */
+const fs = require("fs");
+const RANG_DATEI = "/tmp/kaiser-rangliste.json";
+let rangliste = [];
+try { rangliste = JSON.parse(fs.readFileSync(RANG_DATEI, "utf8")); } catch (e) {}
+function ranglisteSpeichern(){
+  try { fs.writeFileSync(RANG_DATEI, JSON.stringify(rangliste)); } catch (e) {}
+}
 let naechsteId = 1;
 const ZEICHEN = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const neuerCode = () => Array.from({ length: 6 }, () => ZEICHEN[Math.floor(Math.random() * ZEICHEN.length)]).join("");
@@ -29,10 +37,26 @@ wss.on("connection", ws => {
   ws.on("message", data => {
     let m; try { m = JSON.parse(data); } catch (e) { return; }
 
+    if (m.t === "rangliste") {
+      sende(ws, { t: "rangliste", liste: rangliste.slice(0, 20) });
+      return;
+    }
+    if (m.t === "ergebnis") {
+      const e = {
+        name: String(m.name || "?").substring(0, 16),
+        wappen: String(m.wappen || "").substring(0, 4),
+        titel: Math.max(0, Math.min(8, +m.titel || 0)),
+        jahr: Math.max(1700, Math.min(1800, +m.jahr || 1700)),
+        punkte: Math.max(0, Math.min(99999999, Math.round(+m.punkte || 0)))
+      };
+      rangliste = rangliste.concat(e).sort((a, b) => b.punkte - a.punkte).slice(0, 50);
+      ranglisteSpeichern();
+      return;
+    }
     if (m.t === "neu") {
       let code; do { code = neuerCode(); } while (raeume.has(code));
       meinId = naechsteId++;
-      raeume.set(code, { clients: new Map([[meinId, { ws, name: (m.name || "Gastgeber").substring(0, 14) }]]), hostId: meinId });
+      raeume.set(code, { clients: new Map([[meinId, { ws, name: (m.name || "Gastgeber").substring(0, 14) }]]), hostId: meinId, pass: (m.pass || "").substring(0, 24) });
       raumCode = code;
       sende(ws, { t: "raum", code, id: meinId, roster: roster(raeume.get(code)) });
 
@@ -40,6 +64,7 @@ wss.on("connection", ws => {
       const code = (m.code || "").toUpperCase().trim();
       const raum = raeume.get(code);
       if (!raum) { sende(ws, { t: "fehler", text: "Raum nicht gefunden — Code prüfen." }); return; }
+      if (raum.pass && raum.pass !== (m.pass || "")) { sende(ws, { t: "fehler", text: "Falsches Passwort." }); return; }
       if (raum.clients.size >= 9) { sende(ws, { t: "fehler", text: "Der Raum ist voll (max. 9)." }); return; }
       meinId = naechsteId++;
       raumCode = code;

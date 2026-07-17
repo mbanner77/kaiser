@@ -108,3 +108,21 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Szenarien**: Das verschuldete Erbe, Die Kriegstreiber, Die Kornkrise —
   lokal und online wählbar; Bilanz der Regentschaften in der Schlusswertung;
   fünf neue Erfolge (15 gesamt)
+
+## Version 2.2 — Dynastien, Intrigen und die weite Welt
+
+- **Dynastie**: beim Tod übernimmt der Erbe (Erbstreit kostet Vermögen, Land und
+  eine Titelstufe) — Partien werden zur Generationen-Saga (abschaltbar)
+- **Spionage**: Spione beschaffen Geheimberichte über Heer, Speicher und Kasse
+  fremder Reiche — mit Entdeckungsrisiko
+- **Stadteroberung**: bei tiefem Durchbruch fällt eine ganze Stadt (5 Märkte,
+  3 Mühlen) an den Sieger statt zerstört zu werden
+- **Häfen**: neues Gebäude am Fluss — halbierte Verkaufsprovision, Zolleinnahmen,
+  Piraten-Ereignisse; die Händler-KI baut mit
+- **Der Hofstaat**: Schatzmeister, Marschall und Kanzler mit Boni, Gehältern
+  und eigenen Agenden (Veruntreuung, Rücktritt bei leerer Kasse)
+- **Bauen per Kartenklick**: Markt und Mühle selbst auf der Reichskarte platzieren
+- **Chronik der Partie**: alle großen Momente als Zeitleiste in der Schlusswertung,
+  exportierbar als Bild
+- **Online**: Räume mit Passwort, Weltrangliste auf dem Server (Top 20),
+  Ergebnismeldung am Partie-Ende; zwei neue Erfolge (17 gesamt)

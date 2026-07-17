@@ -308,7 +308,7 @@
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser v2.1 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v2.2 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -326,7 +326,7 @@ const TITEL = [
 const NAMEN = ["Friedrich","Anna","Wilhelm","Luise","Karl","Sophie","Otto","Marie","Georg"];
 const FARBEN = ["#5fb8d4","#e0b458","#4cc38a","#e5636f","#b58fd4","#d9973f","#7fd4c1","#e08ab8","#a8c46a"];
 const WAPPEN = ["🦅","🦁","🐺","🌹","⚔️","⭐","🐉","🛡️","🌙"];
-const KOSTEN = { markt:1000, muehle:2000, palastTeil:5000, domTeil:9000, inf:100, kav:250, art:500 };
+const KOSTEN = { markt:1000, muehle:2000, hafen:3000, palastTeil:5000, domTeil:9000, inf:100, kav:250, art:500 };
 const LAND   = { palast:13000, dom:25000 };
 const PALAST_TEILE = 16, DOM_TEILE = 14;
 const JUSTIZ = ["","sehr fair","fair","streng","gierig"];
@@ -357,7 +357,8 @@ function neuerSpieler(name,w,idx,ki){
     name, w, ki:!!ki,
     farbe:FARBEN[idx%FARBEN.length], wappen:WAPPEN[idx%WAPPEN.length],
     gebaeude:[], chronik:[], startAlter:ri(22,30),
-    bez:{}, pakte:{}, kiTyp:null,
+    bez:{}, pakte:{}, kiTyp:null, gen:1, haefen:0,
+    berater:{}, spionage:{},
     stat:{ steuern:0, kornErloes:0, siege:0, niederlagen:0, bauten:0 },
     geld:15000, land:10000, korn:400, pop:2500,
     maerkte:0, muehlen:0, palast:0, dom:0,
@@ -410,7 +411,8 @@ function kannKrieg(p){
   return { ok: fehlt.length===0, fehlt };
 }
 const heerGroesse = h => h.inf + h.kav + h.art;
-const unterhalt = p => Math.round((p.heer.inf*10 + p.heer.kav*25 + p.heer.art*50) * (1 + p.titel*0.1));
+const unterhalt = p => Math.round((p.heer.inf*10 + p.heer.kav*25 + p.heer.art*50)
+  * (1 + p.titel*0.1) * (p.berater && p.berater.marschall ? 0.85 : 1));
 
 /* Beförderungs-Bedingungen: Index = Ziel-Titel */
 const BEDINGUNGEN = [
@@ -631,7 +633,9 @@ const ERFOLGE = [
   { id:"handel",    n:"Handelsmeister",      d:"Ein Handelsangebot wurde angenommen.",      i:"🤝" },
   { id:"brandschatzer", n:"Brandschatzer",   d:"Mit voller Eindringtiefe geplündert.",      i:"🔥" },
   { id:"chronist",  n:"Chronist",            d:"Anno 1750 als Regent erlebt.",              i:"📜" },
-  { id:"szenarist", n:"Prüfungen bestanden", d:"Ein Szenario zu Ende gespielt.",            i:"🧭" }
+  { id:"szenarist", n:"Prüfungen bestanden", d:"Ein Szenario zu Ende gespielt.",            i:"🧭" },
+  { id:"spion",     n:"Meister der Schatten", d:"Ein Geheimbericht wurde beschafft.",        i:"🕵️" },
+  { id:"eroberer",  n:"Städtebezwinger",      d:"Eine ganze Stadt erobert.",                 i:"🏰" }
 ];
 let _erfolge = null;
 function erfolge(){
@@ -719,6 +723,7 @@ function zwischenbilanz(p){
   if(ev < 0.05 && p.pop > 1200){
     const opfer = Math.round(p.pop * rf(0.12,0.28));
     p.pop -= opfer;
+    geschichte("💀", `Die Pest sucht ${p.name}s Reich heim — ${fmt(opfer)} Tote.`);
     r.ereignisse.push({t:`Die Pest wütet im Land! ${fmt(opfer)} Untertanen sterben.`,c:"bad"});
   } else if(ev < 0.10){
     const zuzug = Math.round(p.pop * rf(0.02,0.05));
@@ -767,11 +772,24 @@ function jahresschluss(p){
 
   /* Steuern & Heer-Unterhalt */
   r.steuern = Math.round(p.pop*(p.einkSt*0.08 + p.mwSt*0.05)/10)*10
-            + p.zoll*p.maerkte*6 + p.maerkte*150 + staedte(p)*2000;
+            + p.zoll*p.maerkte*6 + p.maerkte*150 + staedte(p)*2000 + (p.haefen||0)*700;
+  if(p.berater && p.berater.schatz) r.steuern = Math.round(r.steuern * 1.08);
   p.geld += r.steuern;
   p.stat.steuern += r.steuern;
   r.unterhalt = unterhalt(p);
   p.geld -= r.unterhalt;
+  r.gehaelter = beraterGehalt(p);
+  p.geld -= r.gehaelter;
+  /* Berater-Agenden: gelegentliche Zwischenfälle */
+  if(p.berater && p.berater.schatz && Math.random() < 0.05){
+    p.geld -= 1000;
+    delete p.berater.schatz;
+    r.ereignisse.push({t:"Der Schatzmeister hat 1.000 Taler veruntreut und ist geflohen!",c:"bad"});
+  } else if(beraterGehalt(p) > 0 && p.geld < 0 && Math.random() < 0.5){
+    const aktiv = BERATER.filter(b=>p.berater[b.k]);
+    if(aktiv.length){ const b = aktiv[ri(0,aktiv.length-1)]; delete p.berater[b.k];
+      r.ereignisse.push({t:`${b.person} quittiert den Dienst — die Kasse ist leer.`,c:"bad"}); }
+  }
   if(r.unterhalt > 0 && p.geld < 0){
     const rest = Math.max(0, Math.round(heerGroesse(p.heer)*0.7));
     const verlust = heerGroesse(p.heer) - rest;
@@ -798,6 +816,7 @@ function pruefeBefoerderung(p){
   const b = BEDINGUNGEN[p.titel+1];
   if(p.geld > 0 && b.ok(p)){
     p.titel++;
+    geschichte(p.titel===8?"👑":"🎖️", `${p.name} wird zu${p.w?"r":"m"} ${titelName(p)} erhoben.`);
     if(!p.ki){ erfolg("baron"); if(p.titel===8) erfolg("kaiser"); }
     return true;
   }
@@ -1143,7 +1162,7 @@ function zeichnePortraet(cid, p){
   const ctx = c.getContext("2d");
   const W = c.width, H = c.height;
   const idx = Math.max(0, G.spieler.indexOf(p));
-  const rng = mulberry(idx*131 + 11);
+  const rng = mulberry(idx*131 + 11 + (p.gen||1)*57);
   const aj = alterJahre(p);
   const grau = clamp((aj-45)/22, 0, 1);            /* Ergrauen ab ~45 */
   ctx.clearRect(0,0,W,H);
@@ -1611,6 +1630,23 @@ function zeichneKarte(p, canvasId, t=0){
     }
     if(g.t==="m") malMarkt(ctx, gx, gy); else malMuehle(ctx, gx, gy, t);
   });
+  /* Häfen am Fluss */
+  for(let h=0; h<(p.haefen||0); h++){
+    const hx = cx + (h===0 ? -rr*0.55 : rr*0.62), hy = fy + (h===0 ? -rr*0.10 : rr*0.02);
+    ctx.fillStyle = "#7a5c37";
+    ctx.fillRect(hx-9, hy-3, 18, 5);              /* Kai */
+    ctx.fillRect(hx-2, hy-10, 4, 8);              /* Lagerhaus */
+    ctx.fillStyle = "#c8beab";
+    ctx.beginPath(); ctx.moveTo(hx+6, hy-2); ctx.lineTo(hx+13, hy-2); ctx.lineTo(hx+10, hy+3); ctx.closePath(); ctx.fill(); /* Boot */
+    ctx.strokeStyle = "#e8e0cf"; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(hx+9, hy-2); ctx.lineTo(hx+9, hy-9); ctx.stroke();
+    ctx.fillStyle = p.farbe;
+    ctx.beginPath(); ctx.moveTo(hx+9, hy-9); ctx.lineTo(hx+14, hy-7.5); ctx.lineTo(hx+9, hy-6); ctx.closePath(); ctx.fill();
+    if(p._neu === "hafen" && h === (p.haefen||0)-1){
+      ctx.strokeStyle = "rgba(224,180,88,.9)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(hx, hy-3, 16 + Math.sin(t/220)*2, 0, 7); ctx.stroke();
+    }
+  }
   /* Palast & Dom */
   if(p.palast>0) malPalastKarte(ctx, cx-rr*0.5, cy-rr*0.34, p.palast);
   if(p.dom>0)    malDomKarte(ctx, cx+rr*0.52, cy-rr*0.36, p.dom);
@@ -2552,6 +2588,18 @@ function schlachtAbschliessen(){
         schaeden.push(`${d} Dom-Teil${d>1?"e":""}`);
       }
     }
+    /* Belagerung: bei tiefem Durchbruch fällt eine ganze Stadt in Eure Hand */
+    if(tiefe >= 4 && staedte(ver) >= 1 && Math.random() < 0.65){
+      ver.maerkte -= 5; ver.muehlen -= 3;
+      for(let k=0;k<5;k++) entferneGebaeude(ver,"m");
+      for(let k=0;k<3;k++) entferneGebaeude(ver,"k");
+      ang.maerkte += 5; ang.muehlen += 3;
+      for(let k=0;k<5;k++) platziereGebaeude(ang,"m");
+      for(let k=0;k<3;k++) platziereGebaeude(ang,"k");
+      schaeden.push("eine ganze Stadt (erobert!)");
+      geschichte("🏰", `${ang.name} erobert eine Stadt von ${ver.name}.`);
+      erfolg("eroberer");
+    }
     const kornBeute = tiefe>0 ? Math.min(ver.korn, Math.round(ver.korn * 0.04 * tiefe)) : 0;
     ver.korn -= kornBeute; ang.korn += kornBeute;
     s.tiefe = tiefe;
@@ -2562,6 +2610,7 @@ function schlachtAbschliessen(){
       ? `Eindringtiefe ${tiefe}/5 — geplündert: ${[...schaeden, kornBeute?fmt(kornBeute)+" Fuder Korn":null].filter(Boolean).join(", ")}.`
       : (tiefe>0 ? `Eindringtiefe ${tiefe}/5 — die Plünderer fanden wenig.` : "");
     s.ergebnis = `Sieg! Eure Truppen erobern ${fmt(beute)} ha von ${ver.name}. ${fmt(gefallene)} Feinde fallen.`;
+    geschichte("⚔️", `${ang.name} besiegt ${ver.name} und erobert ${fmt(beute)} ha.`);
     if(!s.still){
       setTimeout(sSchlachtSieg, 300);
       if(kr.a === G.aktiv && !ang.ki){ erfolg("krieg"); if(s.helferA.length) erfolg("buendnis"); }
@@ -2573,10 +2622,37 @@ function schlachtAbschliessen(){
     ang.stat.niederlagen++; ver.stat.siege++;
     bezAendern(ang, ver, -25);
     s.ergebnis = `Niederlage! Euer Heer wird geschlagen. Ihr zahlt ${fmt(tribut)} Taler Tribut an ${ver.name}.`;
+    geschichte("🛡️", `${ver.name} schlägt ${ang.name}s Angriff zurück.`);
     if(!s.still) setTimeout(sNieder, 300);
   }
   quicksave();
   mpSync();
+}
+
+/* ---------- Geschichtsschreibung (Chronik der Partie) ---------- */
+function geschichte(ico, text){
+  G.geschichte = (G.geschichte || []).concat({ j:G.jahr, ico, t:text }).slice(-120);
+}
+
+/* ---------- Dynastie: die Erbfolge ---------- */
+function erben(p){
+  const alterName = `${titelName(p)} ${p.name}`;
+  p.gen = (p.gen||1) + 1;
+  p.startAlter = ri(18,26) - (G.jahr - 1700);      /* Alter = startAlter + Regierungsjahre */
+  p.todesJahr = G.jahr + (G.tempo>=2.5 ? ri(17,23) : G.tempo>1 ? ri(28,38) : ri(42,55)) + Math.random();
+  p.tot = false;
+  /* Erbstreit: die Übergabe kostet */
+  const verlustGeld = Math.round(Math.max(0,p.geld)*0.2);
+  const verlustLand = Math.min(Math.round(p.land*0.08), freiLand(p));
+  p.geld -= verlustGeld;
+  p.land -= verlustLand;
+  if(p.titel > 0) p.titel--;
+  p.stimmung = clamp(p.stimmung-8, 5, 100);
+  const roem = ["","II.","III.","IV.","V.","VI.","VII."][Math.min(p.gen-1,6)] || (p.gen+".");
+  if(!/ (II\.|III\.|IV\.|V\.|VI\.|VII\.|\d+\.)$/.test(p.name)) p.name = p.name + " " + roem;
+  else p.name = p.name.replace(/ (II\.|III\.|IV\.|V\.|VI\.|VII\.|\d+\.)$/, " " + roem);
+  geschichte("👶", `${alterName} stirbt — ${p.name} tritt das Erbe an (Erbstreit: −${fmt(verlustGeld)} T, −${fmt(verlustLand)} ha).`);
+  quicksave(); mpSync();
 }
 
 /* ---------- Entscheidungs-Ereignisse am Hofe (eigene Texte) ---------- */
@@ -2625,8 +2701,15 @@ const EREIGNISSE = [
       { t:"Hart bleiben", fx:p=>{ const nb=nachbarn(G.spieler.indexOf(p)).map(i=>G.spieler[i]).filter(z=>!z.tot)[0]; if(nb) bezAendern(p,nb,-12); return "Die Grenzsteine werden zurückversetzt. Man wird sich das merken."; } }
     ]}
 ];
+const EREIGNIS_PIRATEN = { id:"piraten", ico:"🏴‍☠️",
+  txt:p=>`Flusspiraten kapern Lastkähne vor Eurem Hafen und fordern Wegzoll.`,
+  wahl:[
+    { t:"Wegzoll zahlen (600 T)", fx:p=>{ p.geld-=600; return "Die Piraten ziehen ab — vorerst."; } },
+    { t:"Die Miliz auf Kähne setzen", fx:p=>{ if(Math.random()<0.6){ p.stimmung=clamp(p.stimmung+5,5,100); return "Die Piraten werden versenkt! Der Fluss ist frei."; } const k=Math.round(p.korn*0.1); p.korn-=k; return `Das Gefecht misslingt — ${fmt(k)} Fuder Fracht gehen verloren.`; } }
+  ]};
 function ereignisWuerfeln(p){
   if(Math.random() >= 0.20) return null;
+  if((p.haefen||0) > 0 && Math.random() < 0.2) return EREIGNIS_PIRATEN;
   return EREIGNISSE[ri(0, EREIGNISSE.length-1)];
 }
 function ereignisWahl(k){
@@ -2640,16 +2723,18 @@ function ereignisWahl(k){
 }
 
 /* ---------- Friedens-Diplomatie: Geschenke, Handel, Pakte ---------- */
+const diploLimit = p => (p.berater && p.berater.kanzler) ? 2 : 1;
 function diploAktion(art){
   const p = cur();
   const ziel = G.spieler[+$("#dipZiel").value];
-  if(!ziel || ziel.tot || p.diploGenutzt) return;
+  p.diploZaehler = p.diploZaehler || 0;
+  if(!ziel || ziel.tot || p.diploZaehler >= diploLimit(p)) return;
   if(art === "geschenk"){
     const betrag = clamp(Math.floor(+$("#dipGeschenk").value||0), 0, p.geld);
     if(betrag < 100){ alertMsg("Ein Geschenk unter 100 Talern beleidigt den Empfänger."); return; }
     p.geld -= betrag; ziel.geld += betrag;
     bezAendern(p, ziel, clamp(Math.round(betrag/150), 2, 25));
-    p.diploGenutzt = true;
+    p.diploZaehler++;
     toast(`🎁 ${ziel.name} nimmt Euer Geschenk wohlwollend an.`);
   } else if(art === "handel"){
     const richtung = $("#dipRichtung").value;             /* kauf | verkauf */
@@ -2666,7 +2751,7 @@ function diploAktion(art){
       toast(`📜 Angebot an ${ziel.name} übermittelt — Antwort zu Beginn ${ziel.w?"ihres":"seines"} Zuges.`);
       mpSync();
     }
-    p.diploGenutzt = true;
+    p.diploZaehler++;
   } else if(art === "pakt"){
     if(paktAktiv(p, ziel)){ alertMsg("Es besteht bereits ein Pakt."); return; }
     const angebot = { von:G.spieler.indexOf(p), an:G.spieler.indexOf(ziel), richtung:"pakt", menge:0, preis:0, jahr:G.jahr };
@@ -2680,9 +2765,67 @@ function diploAktion(art){
       toast(`📜 Paktangebot an ${ziel.name} übermittelt.`);
       mpSync();
     }
-    p.diploGenutzt = true;
+    p.diploZaehler++;
   }
   render();
+}
+/* ---------- Der Hofstaat: benannte Berater mit Boni ---------- */
+const BERATER = [
+  { k:"schatz",    n:"Schatzmeister", person:"Magister Alwin",     ico:"🪙", kosten:2000, gehalt:500,
+    d:"+8 % auf alle Steuereinnahmen." },
+  { k:"marschall", n:"Marschall",     person:"Ritter Gerwig",      ico:"⚔️", kosten:2000, gehalt:500,
+    d:"−15 % Sold für das stehende Heer." },
+  { k:"kanzler",   n:"Kanzler",       person:"Domherr Notker",     ico:"📜", kosten:2000, gehalt:500,
+    d:"Eine zweite Diplomatie-Aktion pro Jahr." }
+];
+function beraterAnheuern(k){
+  const p = cur();
+  const b = BERATER.find(x=>x.k===k);
+  if(!b || p.berater[k] || p.geld < b.kosten) return;
+  p.geld -= b.kosten;
+  p.berater[k] = true;
+  toast(`${b.ico} ${b.person} tritt als ${b.n} in Eure Dienste.`);
+  render();
+}
+function beraterEntlassen(k){
+  const p = cur();
+  const b = BERATER.find(x=>x.k===k);
+  if(!b || !p.berater[k]) return;
+  delete p.berater[k];
+  toast(`${b.ico} ${b.person} verlässt den Hof.`);
+  render();
+}
+const beraterGehalt = p => BERATER.reduce((s,b)=> s + (p.berater && p.berater[b.k] ? b.gehalt : 0), 0);
+
+/* ---------- Spionage: Geheimberichte über fremde Reiche ---------- */
+function spionEntsenden(){
+  const p = cur();
+  const ziel = G.spieler[+$("#dipZiel").value];
+  if(!ziel || ziel.tot || p.spionGenutzt) return;
+  if(p.geld < 600){ alertMsg("Ein guter Spion kostet 600 Taler."); return; }
+  p.geld -= 600;
+  p.spionGenutzt = true;
+  if(Math.random() < 0.72){
+    p.spionage[G.spieler.indexOf(ziel)] = {
+      jahr: G.jahr,
+      heer: { ...ziel.heer }, miliz: miliz(ziel),
+      korn: ziel.korn, geld: Math.round(ziel.geld)
+    };
+    toast(`🕵️ Euer Spion kehrt mit einem Geheimbericht über ${ziel.name} zurück.`);
+    erfolg("spion");
+  } else {
+    bezAendern(p, ziel, -15);
+    toast(`🚨 Euer Spion wurde in ${ziel.name}s Reich gefasst! Das Verhältnis leidet.`);
+  }
+  render();
+}
+function spionBericht(p, zielIdx){
+  const b = p.spionage && p.spionage[zielIdx];
+  if(!b) return "";
+  const alt = G.jahr - b.jahr;
+  return `<p class="small" style="margin-top:6px">🕵️ Geheimbericht (${alt===0?"aktuell":"Anno "+b.jahr}):
+    Heer ${fmt(b.heer.inf)}/${fmt(b.heer.kav)}/${fmt(b.heer.art)} (Inf/Kav/Art) + ${fmt(b.miliz)} Miliz ·
+    ${fmt(b.korn)} Fuder · ${fmt(b.geld)} Taler</p>`;
 }
 function angebotAusfuehren(a){
   const von = G.spieler[a.von], an = G.spieler[a.an];
@@ -2690,6 +2833,7 @@ function angebotAusfuehren(a){
     von.pakte[a.an] = G.jahr + 5;
     an.pakte[a.von] = G.jahr + 5;
     bezAendern(von, an, 15);
+    geschichte("🕊️", `${von.name} und ${an.name} besiegeln einen Nichtangriffspakt.`);
     return;
   }
   const kaeufer = a.richtung === "kauf" ? von : an;
@@ -2858,6 +3002,7 @@ function kiZug(p){
       bericht.push(`sendet ${partner.name} ein Geschenk`);
     }
   }
+  if(p.kiTyp==="haendler" && (p.haefen||0)<2 && p.land>=12000 && p.geld>18000){ p.geld-=KOSTEN.hafen; p.haefen=(p.haefen||0)+1; bericht.push("baut einen Hafen"); }
   if(p.kiTyp==="haendler" && p.korn > noetigKorn(p)*2.5 && p.kornPreis > 130){
     const m = p.korn - Math.ceil(noetigKorn(p)*2);
     p.korn -= m; p.geld += Math.round(m*p.kornPreis*0.9);
@@ -2899,7 +3044,7 @@ function storageOK(){
   try{ const t="__kaiser_t"; window.localStorage.setItem(t,"1"); window.localStorage.removeItem(t); return true; }
   catch(e){ return false; }
 }
-function spielstand(){ return JSON.stringify({v:7, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler, opt:G.opt||{vergleich:true}, diff:G.diff||2, tipps:G.tipps||{}, kornMarkt:G.kornMarkt||100, marktDruck:G.marktDruck||0, angebote:G.angebote||[], szenario:G.szenario||"frei"}); }
+function spielstand(){ return JSON.stringify({v:7, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler, opt:G.opt||{vergleich:true}, diff:G.diff||2, tipps:G.tipps||{}, kornMarkt:G.kornMarkt||100, marktDruck:G.marktDruck||0, angebote:G.angebote||[], szenario:G.szenario||"frei", geschichte:G.geschichte||[]}); }
 function ladeSpielstand(json){
   const d = JSON.parse(json);
   if(!d || !Array.isArray(d.spieler) || !d.spieler.length) throw new Error("ungültig");
@@ -2912,6 +3057,7 @@ function ladeSpielstand(json){
   G.marktDruck = d.marktDruck || 0;
   G.angebote = d.angebote || [];
   G.szenario = d.szenario || "frei";
+  G.geschichte = d.geschichte || [];
   G._kiBerichte = [];
   G.spieler.forEach((p,i)=>{
     if(!p.heer) p.heer = {inf:0,kav:0,art:0};
@@ -2926,6 +3072,10 @@ function ladeSpielstand(json){
     if(!p.bez) p.bez = {};
     if(!p.pakte) p.pakte = {};
     if(!p.stat) p.stat = { steuern:0, kornErloes:0, siege:0, niederlagen:0, bauten:0 };
+    if(!p.gen) p.gen = 1;
+    if(p.haefen===undefined) p.haefen = 0;
+    if(!p.berater) p.berater = {};
+    if(!p.spionage) p.spionage = {};
     if(!p.gebaeude){
       p.gebaeude = [];
       for(let m=0;m<p.maerkte;m++) p.gebaeude.push({t:"m",ang:Math.random()*6.2832,dist:0.34+Math.random()*0.58});
@@ -2966,7 +3116,8 @@ function hatQuicksave(){
 function starteSpiel(anzahl, namen, geschlechter, tempo, kis, opts){
   opts = opts || {};
   G.tempo = tempo; G.spieler = [];
-  G.opt = { vergleich: opts.vergleich!==false, tutorial: opts.tutorial!==false };
+  G.opt = { vergleich: opts.vergleich!==false, tutorial: opts.tutorial!==false, dynastie: opts.dynastie!==false };
+  G.geschichte = [];
   G.diff = opts.diff || 2;
   G.tipps = {};
   for(let i=0;i<anzahl;i++)
@@ -3007,7 +3158,8 @@ function beginneZug(){
   }
   p.snap = { geld:p.geld, land:p.land, korn:p.korn, pop:p.pop };
   p.kriegGefuehrt = false;
-  p.diploGenutzt = false;
+  p.diploZaehler = 0;
+  p.spionGenutzt = false;
   p.ausgabe = 0;
   p.turnStart = Date.now();
   G._kiBerichte = [];
@@ -3032,8 +3184,14 @@ function naechsterSpieler(){
     if(p.tot) continue;
     if(G.jahr >= p.todesJahr){
       p.tot = true;
+      geschichte("🕯️", `${titelName(p)} ${p.name} stirbt im Alter von ${alterJahre(p)} Jahren.`);
       mpSync();
-      if(p.ki){ G._kiBerichte = (G._kiBerichte||[]).concat(`🕯️ ${titelName(p)} ${p.name} ist Anno ${G.jahr} verstorben.`); continue; }
+      if(p.ki){
+        if(G.opt && G.opt.dynastie){ erben(p); G._kiBerichte = (G._kiBerichte||[]).concat(`👶 In ${p.name}s Reich tritt die nächste Generation an.`); }
+        else G._kiBerichte = (G._kiBerichte||[]).concat(`🕯️ ${titelName(p)} ${p.name} ist Anno ${G.jahr} verstorben.`);
+        if(p.tot) continue;
+        G.aktiv--; continue;   /* der Erbe ist sofort am Zug */
+      }
       if(mpMein(G.aktiv)){ sGlocke(); zeige("tod"); } else zeige("warten");
       return;
     }
@@ -3338,6 +3496,10 @@ const SCREENS = {
             <label class="small"><input type="checkbox" id="optTutorial" checked>
             Berater-Tipps anzeigen (Tutorial)</label>
           </div>
+          <div class="rowflex">
+            <label class="small"><input type="checkbox" id="optDynastie" checked>
+            Dynastie — beim Tod übernimmt der Erbe (mit Erbstreit-Malus)</label>
+          </div>
           <p class="muted small">Computer-Regenten regieren ihre Reiche selbstständig —
           ideal für Solo-Partien gegen die Krone.</p>
         </div>
@@ -3384,8 +3546,10 @@ const SCREENS = {
           <div class="rowflex"><button class="btn-primary" onclick="mpHost()">Raum eröffnen</button></div>
           <div class="rowflex" style="margin-top:10px">
             <input type="text" id="mpCode" maxlength="6" placeholder="CODE" style="width:110px;text-transform:uppercase">
+            <input type="text" id="mpPass" maxlength="24" placeholder="Passwort (optional)" style="width:170px">
             <button onclick="mpBeitritt()">Beitreten</button>
           </div>
+          <p class="muted small">Beim Eröffnen schützt das Passwort Euren Raum; beim Beitreten wird es abgefragt.</p>
           <details style="margin-top:10px"><summary class="muted small">Eigener Server</summary>
             <input type="text" id="mpUrl" placeholder="${MP_STANDARD}" style="width:100%;margin-top:6px">
           </details>
@@ -3394,7 +3558,32 @@ const SCREENS = {
           kurz warten, die Lobby öffnet sich von selbst.</p>
         </div>
       </div>
+      <button class="btn-lg" onclick="weltrangAuf()">🌍 Weltrangliste</button>
       <button class="btn-lg" onclick="zeige('title')">Zurück</button>`;
+  },
+
+  weltrang(){
+    const liste = G._weltrang;
+    const inhalt = liste === null
+      ? '<p class="muted blink">Rangliste wird geladen …</p>'
+      : liste === "fehler"
+        ? '<p class="red">Der Spielserver ist gerade nicht erreichbar.</p>'
+        : !liste.length
+          ? '<p class="muted">Noch keine Einträge — spielt die erste Online-Partie zu Ende!</p>'
+          : `<table>
+              <tr><th></th><th>Regent</th><th class="r">Titel</th><th class="r">Endjahr</th><th class="r">Punkte</th></tr>
+              ${liste.map((e,i)=>`<tr style="${i===0?'color:var(--gold);font-weight:700':''}">
+                <td>${i+1}.</td><td>${e.wappen||""} ${e.name}</td>
+                <td class="r">${TITEL[e.titel]?TITEL[e.titel][0]:"?"}</td>
+                <td class="r">${e.jahr}</td><td class="r">${fmt(e.punkte)}</td></tr>`).join("")}
+            </table>`;
+    return `
+      <h2>🌍 Weltrangliste</h2>
+      <div class="card">${inhalt}
+        <p class="muted small" style="margin-top:8px">Die besten Regentschaften aller Online-Partien
+        auf diesem Server. Der Gastgeber meldet die Ergebnisse am Partie-Ende.</p>
+      </div>
+      <button class="btn-primary btn-lg" onclick="zeige(G._vorRang || 'online')">Zurück</button>`;
   },
 
   lobby(){
@@ -3695,7 +3884,10 @@ const SCREENS = {
       ${stepper("Bauen")}
       <h2>Reichskarte — ${fmt(p.land)} ha</h2>
       <div class="card">
-        <canvas id="karte" width="920" height="${G._karteGross?640:430}" onclick="G._karteGross=!G._karteGross;render()" style="cursor:zoom-in" title="Klicken zum Vergrößern/Verkleinern"></canvas>
+        <canvas id="karte" width="920" height="${G._karteGross?640:430}" onclick="karteKlick(event)"
+          style="cursor:${G._bauModus?'crosshair':'zoom-in'}"
+          title="${G._bauModus?'Bauplatz wählen':'Klicken zum Vergrößern/Verkleinern'}"></canvas>
+        ${G._bauModus?`<p class="small" style="color:var(--gold)">🏗️ Bauplatz für ${G._bauModus==="markt"?"den Markt":"die Mühle"} wählen — Klick auf die Karte (nochmals auf den Knopf: abbrechen).</p>`:""}
         <p class="muted small">Neue Bauwerke erscheinen sofort auf der Karte (goldener Ring). Die Grenze
         wächst mit Eurem Landbesitz, Felder zeigen die Anbaufläche, Häuser das Volk, Mauerringe Eure Städte.
         Je 1.000 ha ein Bauplatz (${p.maerkte+p.muehlen}/${bauplaetze(p)} belegt) · Bebauung verringert die
@@ -3706,8 +3898,10 @@ const SCREENS = {
       <div class="grid g2">
         <div class="card">
           <h3>Bauen</h3>
-          ${bBtn(`Markt — ${fmt(KOSTEN.markt)} T`,"baue('markt')", p.geld>=KOSTEN.markt && platz)}
-          ${bBtn(`Mühle — ${fmt(KOSTEN.muehle)} T`,"baue('muehle')", p.geld>=KOSTEN.muehle && platz)}
+          ${bBtn(`${G._bauModus==="markt"?"✳️ ":""}Markt — ${fmt(KOSTEN.markt)} T`,"baue('markt')", p.geld>=KOSTEN.markt && platz)}
+          ${bBtn(`${G._bauModus==="muehle"?"✳️ ":""}Mühle — ${fmt(KOSTEN.muehle)} T`,"baue('muehle')", p.geld>=KOSTEN.muehle && platz)}
+          ${bBtn(`Hafen ${p.haefen||0}/2 — ${fmt(KOSTEN.hafen)} T`,"baue('hafen')",
+              (p.haefen||0)<2 && p.geld>=KOSTEN.hafen && p.land>=12000)}
           ${bBtn(`Palast-Teil ${p.palast}/${PALAST_TEILE} — ${fmt(KOSTEN.palastTeil)} T`,"baue('palast')",
               p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast)}
           ${bBtn(`Dom-Teil ${p.dom}/${DOM_TEILE} — ${fmt(KOSTEN.domTeil)} T`,"baue('dom')",
@@ -3769,11 +3963,11 @@ const SCREENS = {
           Verhältnis, Kriege zerstören es. Verbündete Regenten unterstützen Euch eher im Krieg.</p>
         </div>
         <div class="card">
-          <h3>Eine Aktion pro Jahr ${p.diploGenutzt?'<span class="red small">— bereits genutzt</span>':''}</h3>
+          <h3>${diploLimit(p)} Aktion${diploLimit(p)>1?"en":""} pro Jahr ${(p.diploZaehler||0)>=diploLimit(p)?'<span class="red small">— aufgebraucht</span>':''}</h3>
           <div class="rowflex">Partner: <select id="dipZiel">${opts}</select></div>
           <div class="rowflex" style="margin-top:8px">
             <input type="number" id="dipGeschenk" min="100" step="100" value="500" style="width:100px">
-            <button onclick="diploAktion('geschenk')" ${p.diploGenutzt?'disabled':''}>🎁 Geschenk senden</button>
+            <button onclick="diploAktion('geschenk')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>🎁 Geschenk senden</button>
           </div>
           <div class="rowflex">
             <select id="dipRichtung" style="width:130px">
@@ -3782,11 +3976,28 @@ const SCREENS = {
             <input type="number" id="dipMenge" min="1" value="100" style="width:80px" title="Fuder">
             <span class="muted small">Fuder à</span>
             <input type="number" id="dipPreis" min="1" value="${G.kornMarkt||100}" style="width:80px" title="Taler je Fuder">
-            <button onclick="diploAktion('handel')" ${p.diploGenutzt?'disabled':''}>Anbieten</button>
+            <button onclick="diploAktion('handel')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>Anbieten</button>
           </div>
           <div class="rowflex">
-            <button onclick="diploAktion('pakt')" ${p.diploGenutzt?'disabled':''}>🕊️ Nichtangriffspakt anbieten (5 Jahre)</button>
+            <button onclick="diploAktion('pakt')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>🕊️ Nichtangriffspakt anbieten (5 Jahre)</button>
           </div>
+          <div class="rowflex">
+            <button onclick="spionEntsenden()" ${p.spionGenutzt?'disabled':''}>🕵️ Spion entsenden (600 T)</button>
+            ${p.spionGenutzt?'<span class="muted small">Spion dieses Jahr bereits unterwegs</span>':''}
+          </div>
+          ${lebende().filter(x=>x.i!==G.aktiv).map(z=>spionBericht(p, z.i)).join("")}
+        </div>
+        <div class="card">
+          <h3>👥 Der Hofstaat</h3>
+          ${BERATER.map(b=>`
+            <div class="rowflex" style="justify-content:space-between">
+              <span>${b.ico} <b>${b.person}</b> — ${b.n}<br>
+                <span class="muted small">${b.d} · ${fmt(b.gehalt)} T Gehalt/Jahr</span></span>
+              ${p.berater[b.k]
+                ? `<button class="btn-sm" onclick="beraterEntlassen('${b.k}')">Entlassen</button>`
+                : `<button class="btn-sm" onclick="beraterAnheuern('${b.k}')" ${p.geld<b.kosten?'disabled':''}>Anheuern (${fmt(b.kosten)} T)</button>`}
+            </div>`).join("")}
+          <p class="muted small">Berater kosten Antrittsgeld und Jahresgehalt — und haben mitunter eigene Pläne.</p>
           <p class="muted small">Angebote an menschliche Regenten werden zu Beginn von deren
           nächstem Zug beantwortet. Marktpreis derzeit ${fmt(G.kornMarkt||100)} T/Fuder.</p>
         </div>
@@ -3834,6 +4045,7 @@ const SCREENS = {
       <div class="card">
         <div class="rowflex">Gegner: <select id="ziel" style="max-width:100%">${opts}</select></div>
         ${pakte.length?`<p class="muted small">🕊️ Durch Pakte geschützt: ${pakte.map(x=>x.p.name+" (bis "+p.pakte[x.i]+")").join(", ")}</p>`:""}
+        ${ziele.map(z=>spionBericht(p, z.i)).join("")}
         <table>
           <tr><th>Eure Streitmacht</th><th class="r">Stärke</th></tr>
           <tr><td>Infanterie</td><td class="r">${fmt(p.heer.inf)}</td></tr>
@@ -4026,6 +4238,7 @@ const SCREENS = {
             ${row("Kornspeicher jetzt", fmt(p.korn)+" Fuder")}
             ${row("Steuern & Wirtschaft", "+"+fmt(r.steuern)+" Taler", "delta-pos")}
             ${r.unterhalt?row("Heer-Unterhalt", "−"+fmt(r.unterhalt)+" Taler", "delta-neg"):""}
+            ${r.gehaelter?row("Berater-Gehälter", "−"+fmt(r.gehaelter)+" Taler", "delta-neg"):""}
             ${row("Vermögen jetzt", fmt(p.geld)+" Taler", p.geld<0?"red":"")}
           </table>
         </div>
@@ -4074,7 +4287,13 @@ const SCREENS = {
         <p style="font-size:17px;margin:12px 0">${titelName(p)} ${p.name} ist Anno ${G.jahr}
           im Alter von ${alterJahre(p)} Jahren verstorben.</p>
         <p class="muted">Höchster Rang: ${titelName(p)} · ${fmt(p.land)} ha · ${fmt(p.pop)} Untertanen</p>
-        <div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="naechsterSpieler()">Weiter</button></div>
+        <div style="margin-top:22px">
+          ${G.opt && G.opt.dynastie
+            ? `<button class="btn-primary btn-lg" onclick="erben(cur()); zeige('handoff')">👶 Erbfolge antreten</button>
+               <p class="muted small" style="margin-top:8px">Der Erbstreit kostet 20 % des Vermögens, 8 % des Landes und eine Titelstufe.</p>`
+            : ""}
+          <button class="btn-lg" onclick="naechsterSpieler()">${G.opt && G.opt.dynastie ? "Die Linie endet hier" : "Weiter"}</button>
+        </div>
       </div>`;
   },
 
@@ -4204,7 +4423,7 @@ const SCREENS = {
 
   ende(){
     if(!G._ruhmFertig){
-      G._ruhmFertig = true; ruhmEintragen();
+      G._ruhmFertig = true; ruhmEintragen(); ergebnisMelden();
       if(G.szenario && G.szenario !== "frei") erfolg("szenarist");
     }
     const sortiert = [...G.spieler].sort((a,b)=>score(b)-score(a));
@@ -4238,6 +4457,14 @@ const SCREENS = {
         </table>
       </div>
       ${vergleichsChart()}
+      ${(G.geschichte||[]).length?`
+      <div class="card">
+        <h3>📜 Chronik der Partie</h3>
+        <div class="battlelog" style="max-height:260px">
+          ${G.geschichte.map(e=>`<p><span class="gold" style="font-variant-numeric:tabular-nums">${e.j}</span> &nbsp;${e.ico} ${e.t}</p>`).join("")}
+        </div>
+        <button class="btn-sm" style="margin-top:8px" onclick="chronikExport()">🖼️ Chronik als Bild speichern</button>
+      </div>`:""}
       ${charts?`<h3 style="margin:14px 0 8px">Die Regierungsjahre im Rückblick</h3><div class="grid g2">${charts}</div>`:""}
       <button class="btn-primary btn-lg" onclick="G.spieler=[];zeige('title')">Neues Spiel</button>
       <button class="btn-lg" onclick="erfolgeAuf()">🏅 Erfolge</button>
@@ -4269,7 +4496,8 @@ function setupStart(){
     vergleich: $("#optVergleich").checked,
     tutorial:  $("#optTutorial").checked,
     diff: +$("#diff").value,
-    szenario: $("#szenario").value
+    szenario: $("#szenario").value,
+    dynastie: $("#optDynastie").checked
   });
 }
 function kornAusgeben(){
@@ -4299,9 +4527,10 @@ function handelKorn(dir){
   } else {
     const m = clamp(Math.floor(+$("#kverk").value||0),0,p.korn);
     if(m<=0) return;
-    p.korn -= m; p.geld += Math.round(m*p.kornPreis*0.9); sMuenze();
+    const provision = p.haefen > 0 ? 0.95 : 0.9;   /* Häfen halbieren die Provision */
+    p.korn -= m; p.geld += Math.round(m*p.kornPreis*provision); sMuenze();
     G.marktDruck = (G.marktDruck||0) + m;
-    p.stat.kornErloes += Math.round(m*p.kornPreis*0.9);
+    p.stat.kornErloes += Math.round(m*p.kornPreis*provision);
     if(p.kornPreis >= 300) erfolg("spekulant");
   }
   render();
@@ -4328,6 +4557,34 @@ function steuernSetzen(){
   p.mwSt = +$("#mwSt").value; p.justiz = +$("#justiz").value;
   zeige("bauen");
 }
+function karteKlick(ev){
+  const p = cur();
+  const c = document.getElementById("karte");
+  if(!c) return;
+  if(!G._bauModus){ G._karteGross = !G._karteGross; render(); return; }
+  /* Klick-Position in Territoriumskoordinaten umrechnen (wie in zeichneKarte) */
+  const rect = c.getBoundingClientRect();
+  const x = (ev.clientX - rect.left) * (c.width / rect.width);
+  const y = (ev.clientY - rect.top) * (c.height / rect.height);
+  const W = c.width, H = c.height;
+  const cx = W/2, cy = H/2 + 8;
+  const rr = territoriumsRadius(p.land) * (H/430);
+  const dx = (x - cx) / (rr * 1.25), dy = (y - cy) / (rr * 0.75);
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if(dist > 0.92){ toast("⚠️ Dieser Platz liegt außerhalb Eures Territoriums.", 3000); return; }
+  const typ = G._bauModus === "markt" ? "m" : "k";
+  const kosten = G._bauModus === "markt" ? KOSTEN.markt : KOSTEN.muehle;
+  if(p.geld < kosten) { G._bauModus = null; render(); return; }
+  p.geld -= kosten;
+  if(typ==="m") p.maerkte++; else p.muehlen++;
+  p.gebaeude.push({ t:typ, ang:Math.atan2(dy, dx), dist:clamp(dist, 0.08, 0.9) });
+  p._neu = p.gebaeude.length - 1;
+  p.stat.bauten++;
+  if(staedte(p)>=1) erfolg("stadt");
+  G._bauModus = null;
+  sMuenze();
+  render();
+}
 function platziereGebaeude(p, typ){
   p.gebaeude = p.gebaeude || [];
   p.gebaeude.push({ t:typ, ang:Math.random()*6.2832, dist:0.34 + Math.random()*0.58 });
@@ -4341,10 +4598,20 @@ function entferneGebaeude(p, typ){
 function baue(was){
   const p = cur();
   const platz = (p.maerkte+p.muehlen) < bauplaetze(p);
+  /* Markt & Mühle: erst wählen, dann auf die Karte klicken */
+  if((was==="markt" || was==="muehle") && G.screen==="bauen" && !p.ki){
+    const kosten = was==="markt" ? KOSTEN.markt : KOSTEN.muehle;
+    if(p.geld < kosten || !platz) return;
+    G._bauModus = (G._bauModus === was) ? null : was;
+    if(G._bauModus) toast(`🏗️ Klickt auf die Karte, um den Bauplatz für ${was==="markt"?"den Markt":"die Mühle"} zu wählen.`, 3500);
+    render();
+    return;
+  }
   if(was==="markt"  && p.geld>=KOSTEN.markt  && platz){ p.geld-=KOSTEN.markt; p.maerkte++; platziereGebaeude(p,"m"); }
   if(was==="muehle" && p.geld>=KOSTEN.muehle && platz){ p.geld-=KOSTEN.muehle; p.muehlen++; platziereGebaeude(p,"k"); }
   if(was==="palast" && p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast){ p.geld-=KOSTEN.palastTeil; p.palast++; p._neu="palast"; }
   if(was==="dom"    && p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom){ p.geld-=KOSTEN.domTeil; p.dom++; p._neu="dom"; }
+  if(was==="hafen"  && (p.haefen||0)<2 && p.geld>=KOSTEN.hafen && p.land>=12000){ p.geld-=KOSTEN.hafen; p.haefen=(p.haefen||0)+1; p._neu="hafen"; }
   p.stat.bauten++;
   if(staedte(p)>=1) erfolg("stadt");
   if(p.palast>=PALAST_TEILE) erfolg("palast");
@@ -4365,6 +4632,7 @@ function entlassen(){
   render();
 }
 function jahrAbschliessen(){
+  G._bauModus = null;
   jahresschluss(cur());
   zeige("bilanz");
 }
@@ -4395,6 +4663,33 @@ function erfolgeAuf(){
   if(G.screen === "erfolge" || G.screen === "schlacht") return;
   G._vorErf = G.screen;
   zeige("erfolge");
+}
+/* Chronik als teilbares PNG rendern */
+function chronikExport(){
+  const eintraege = (G.geschichte||[]).slice(-40);
+  const W = 840, H = 150 + eintraege.length*26;
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const ctx = c.getContext("2d");
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,"#1a2233"); bg.addColorStop(1,"#0e1117");
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = "#e0b458"; ctx.lineWidth = 3; ctx.strokeRect(8,8,W-16,H-16);
+  ctx.fillStyle = "#e0b458"; ctx.font = "bold 30px Georgia, serif"; ctx.textAlign = "center";
+  ctx.fillText("👑 KAISER — Chronik der Partie", W/2, 52);
+  ctx.fillStyle = "#8b96a8"; ctx.font = "14px Georgia, serif";
+  ctx.fillText(`1700–${G.jahr} · ${G.spieler.map(p=>p.name).join(" · ")}`, W/2, 78);
+  ctx.strokeStyle = "#2a3446"; ctx.beginPath(); ctx.moveTo(40,94); ctx.lineTo(W-40,94); ctx.stroke();
+  ctx.textAlign = "left"; ctx.font = "14px sans-serif";
+  eintraege.forEach((e,i)=>{
+    const y = 120 + i*26;
+    ctx.fillStyle = "#e0b458"; ctx.fillText(String(e.j), 40, y);
+    ctx.fillStyle = "#dbe2ee"; ctx.fillText(`${e.ico} ${e.t}`.substring(0,90), 92, y);
+  });
+  const a = document.createElement("a");
+  a.href = c.toDataURL("image/png");
+  a.download = `kaiser-chronik-${G.jahr}.png`;
+  a.click();
 }
 function hilfeAuf(){
   if(G.screen === "hilfe" || G.screen === "schlacht") return;
@@ -4449,18 +4744,20 @@ function mpVerbinden(url, beiOffen){
 function mpHost(){
   const url = $("#mpUrl") ? $("#mpUrl").value : "";
   const name = ($("#mpName").value.trim() || "Gastgeber");
+  const pass = $("#mpPass") ? $("#mpPass").value.trim() : "";
   MP = { name, host:true, roster:[], code:null, id:null, aktiv:false };
   toast("🌐 Verbinde mit dem Spielserver …");
-  mpVerbinden(url, ws => ws.send(JSON.stringify({t:"neu", name})));
+  mpVerbinden(url, ws => ws.send(JSON.stringify({t:"neu", name, pass})));
 }
 function mpBeitritt(){
   const url = $("#mpUrl") ? $("#mpUrl").value : "";
   const code = $("#mpCode").value.trim().toUpperCase();
   const name = ($("#mpName").value.trim() || "Gast");
   if(!code){ alertMsg("Bitte den Raum-Code eingeben."); return; }
+  const pass = $("#mpPass") ? $("#mpPass").value.trim() : "";
   MP = { name, host:false, roster:[], code, id:null, aktiv:false };
   toast("🌐 Verbinde mit dem Spielserver …");
-  mpVerbinden(url, ws => ws.send(JSON.stringify({t:"beitritt", code, name})));
+  mpVerbinden(url, ws => ws.send(JSON.stringify({t:"beitritt", code, name, pass})));
 }
 function mpVerlassen(){
   if(MP){ MP.abbruch = true; MP.aktiv = false; if(MP.ws){ try{ MP.ws.close(); }catch(e){} } }
@@ -4484,10 +4781,45 @@ function mpNachricht(m){
     toast("⚠️ Ein Mitspieler hat die Verbindung verloren." + (MP.host?" Ihr könnt sein Reich der KI übergeben.":""));
     if(G.screen === "warten" || G.screen === "lobby") render();
   }
+  else if(m.t === "rangliste"){
+    G._weltrang = m.liste || [];
+    if(G.screen === "weltrang") render();
+  }
   else if(m.t === "chat"){
     MP.chat = (MP.chat || []).concat({ name: m.name, text: m.text }).slice(-30);
     if(G.screen === "lobby" || G.screen === "warten") render();
     else toast(`💬 <b>${m.name}:</b> ${m.text}`, 5000);
+  }
+}
+/* Weltrangliste vom Server holen (eigene Kurzverbindung) */
+function weltrangAuf(){
+  G._vorRang = G.screen;
+  G._weltrang = null;
+  zeige("weltrang");
+  if(MP && MP.ws && MP.ws.readyState === 1){
+    try{ MP.ws.send(JSON.stringify({t:"rangliste"})); }catch(e){}
+    return;
+  }
+  try{
+    const url = ($("#mpUrl") && $("#mpUrl").value.trim()) || MP_STANDARD;
+    if(url.indexOf("wss://") === 0) fetch(url.replace("wss://","https://"), {mode:"no-cors"}).catch(()=>{});
+    const ws = new WebSocket(url);
+    ws.onopen = () => ws.send(JSON.stringify({t:"rangliste"}));
+    ws.onmessage = ev => {
+      try{
+        const m = JSON.parse(ev.data);
+        if(m.t === "rangliste"){ G._weltrang = m.liste || []; if(G.screen==="weltrang") render(); ws.close(); }
+      }catch(e){}
+    };
+    ws.onerror = () => { G._weltrang = "fehler"; if(G.screen==="weltrang") render(); };
+  }catch(e){ G._weltrang = "fehler"; render(); }
+}
+function ergebnisMelden(){
+  /* beste menschliche Leistung an die Weltrangliste melden (nur online) */
+  if(!MP || !MP.ws || MP.ws.readyState !== 1 || !MP.host) return;
+  for(const p of G.spieler){
+    if(p.ki) continue;
+    try{ MP.ws.send(JSON.stringify({t:"ergebnis", name:p.name, wappen:p.wappen, titel:p.titel, jahr:G.jahr, punkte:Math.round(score(p))})); }catch(e){}
   }
 }
 function chatSenden(){
