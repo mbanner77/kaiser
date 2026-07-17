@@ -139,3 +139,10 @@ Autosave nach Zug, Schlacht und Jahresabschluss.
 Maus/Touch statt Joystick · moderne Oberfläche statt Textmodus (Nutzerentscheidung) ·
 alle nicht dokumentierten Original-Formeln sind eigenständig kalibriert (eine exakte
 Angleichung wäre nur durch Vergleichsspiele auf dem Emulator möglich).
+
+**Ausbaustufe 4 (v2.3, über das Original hinaus):**
+Baustoff-Wirtschaft (Holz/Stein, Forsthöfe, Steinbrüche) · Festungen mit
+Belagerungsphase (Sturm/Beschuss/Aushungern) · Heiratspolitik mit Erbansprüchen ·
+Handelsrouten mit Karawanen-Darstellung · Kampagnenmodus in vier Kapiteln ·
+Statistik-Dashboard · asynchroner Online-Mehrspieler (Server speichert Partien,
+Wiedereinstieg per Code + Name).

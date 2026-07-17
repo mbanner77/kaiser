@@ -126,3 +126,28 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
   exportierbar als Bild
 - **Online**: Räume mit Passwort, Weltrangliste auf dem Server (Top 20),
   Ergebnismeldung am Partie-Ende; zwei neue Erfolge (17 gesamt)
+
+## Version 2.3 — Belagerungen, Kampagne und die asynchrone Welt
+
+- **Baustoffe Holz & Stein**: Bauwerke kosten neben Talern nun Material — zukaufbar
+  im Handel oder aus eigenen Forsthöfen (+30 Holz/Jahr) und Steinbrüchen
+  (+20 Stein/Jahr); beide erscheinen auf der Reichskarte, die KI wirtschaftet mit
+- **Festungen & Belagerungen**: Stadtmauer (3 Stufen) und Burg (2 Stufen) stärken
+  die Verteidiger deutlich und decken das Hinterland vor Plünderern; Angreifer
+  müssen befestigte Reiche erst belagern — Sturmangriff, Beschuss (Artillerie
+  schießt Breschen) oder Aushungern, jeweils mit eigenen Kosten und Folgen
+- **Heiratspolitik**: Vermählungen zwischen Häusern (Mitgift verhandelbar) stiften
+  12 Jahre Frieden — und beim Tod des Partners erbt das vermählte Haus Land;
+  auch KI-Häuser heiraten untereinander
+- **Handelsrouten**: bis zu drei Routen je Reich (sichtbar als goldene Wege mit
+  wandernden Karawanen auf der Gesamtkarte) bringen beiden Seiten jährlichen
+  Zoll — eine Kriegserklärung kappt die Route
+- **Kampagne**: vier verkettete Kapitel „Vom Bauernsohn zum Kaiser" mit eigenen
+  Zielen, Fristen, Erzähltexten und Vermögens-Übernahme ins nächste Kapitel
+- **Statistik-Dashboard**: Kurven aller Reiche über die Jahre (Untertanen,
+  Vermögen, Land, Heer), Kornkurs-Historie des Weltmarkts und eine
+  Kriegs- und Handelsbilanz — im Spiel und in der Schlusswertung
+- **Asynchroner Online-Modus**: der Server merkt sich laufende Partien; mit
+  Raum-Code und demselben Namen steigen Spieler jederzeit wieder ein, auch
+  Tage später — niemand muss gleichzeitig online sein (Sitzbindung über Namen,
+  Rückkehrer werden automatisch erkannt); vier neue Erfolge (21 gesamt)

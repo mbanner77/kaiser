@@ -308,7 +308,7 @@
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser v2.2 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v2.3 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -326,7 +326,32 @@ const TITEL = [
 const NAMEN = ["Friedrich","Anna","Wilhelm","Luise","Karl","Sophie","Otto","Marie","Georg"];
 const FARBEN = ["#5fb8d4","#e0b458","#4cc38a","#e5636f","#b58fd4","#d9973f","#7fd4c1","#e08ab8","#a8c46a"];
 const WAPPEN = ["🦅","🦁","🐺","🌹","⚔️","⭐","🐉","🛡️","🌙"];
-const KOSTEN = { markt:1000, muehle:2000, hafen:3000, palastTeil:5000, domTeil:9000, inf:100, kav:250, art:500 };
+const KOSTEN = { markt:1000, muehle:2000, hafen:3000, palastTeil:5000, domTeil:9000, inf:100, kav:250, art:500,
+  forst:800, bruch:1200, mauer:4000, burg:9000 };
+/* Baustoff-Bedarf der Bauwerke (Holz / Stein) */
+const MATERIAL = {
+  markt:{holz:20,stein:0}, muehle:{holz:30,stein:10}, hafen:{holz:40,stein:20},
+  palastTeil:{holz:15,stein:30}, domTeil:{holz:10,stein:45},
+  forst:{holz:0,stein:0}, bruch:{holz:10,stein:0},
+  mauer:{holz:20,stein:80}, burg:{holz:40,stein:140}
+};
+const FORST_MAX = 4, BRUCH_MAX = 3, MAUER_MAX = 3, BURG_MAX = 2;
+function hatMaterial(p, was){
+  const m = MATERIAL[was] || {holz:0,stein:0};
+  return (p.holz||0) >= m.holz && (p.stein||0) >= m.stein;
+}
+function zahleMaterial(p, was){
+  const m = MATERIAL[was] || {holz:0,stein:0};
+  p.holz = (p.holz||0) - m.holz;
+  p.stein = (p.stein||0) - m.stein;
+}
+function matText(was){
+  const m = MATERIAL[was] || {holz:0,stein:0};
+  const teile = [];
+  if(m.holz) teile.push(m.holz + " 🪵");
+  if(m.stein) teile.push(m.stein + " 🪨");
+  return teile.length ? ", " + teile.join(" + ") : "";
+}
 const LAND   = { palast:13000, dom:25000 };
 const PALAST_TEILE = 16, DOM_TEILE = 14;
 const JUSTIZ = ["","sehr fair","fair","streng","gierig"];
@@ -358,7 +383,9 @@ function neuerSpieler(name,w,idx,ki){
     farbe:FARBEN[idx%FARBEN.length], wappen:WAPPEN[idx%WAPPEN.length],
     gebaeude:[], chronik:[], startAlter:ri(22,30),
     bez:{}, pakte:{}, kiTyp:null, gen:1, haefen:0,
-    berater:{}, spionage:{},
+    berater:{}, spionage:{}, ehen:{},
+    holz:120, stein:60, forst:0, bruch:0, mauer:0, burg:0,
+    holzPreis:ri(8,16), steinPreis:ri(14,26),
     stat:{ steuern:0, kornErloes:0, siege:0, niederlagen:0, bauten:0 },
     geld:15000, land:10000, korn:400, pop:2500,
     maerkte:0, muehlen:0, palast:0, dom:0,
@@ -398,6 +425,48 @@ function bezAendern(a, b, delta){
 function paktAktiv(a, b){
   const ib = G.spieler.indexOf(b);
   return a.pakte && a.pakte[ib] && a.pakte[ib] >= G.jahr;
+}
+/* Handelsrouten: beide Seiten kassieren jährlich Zoll — Krieg kappt die Route */
+function routeAktiv(i, j){
+  return (G.routen||[]).some(r => (r.a===i && r.b===j) || (r.a===j && r.b===i));
+}
+function routenVon(i){
+  return (G.routen||[]).filter(r => r.a===i || r.b===i);
+}
+function routeEroeffnen(i, j){
+  G.routen = G.routen || [];
+  if(routeAktiv(i,j)) return;
+  G.routen.push({ a:i, b:j, seit:G.jahr });
+  bezAendern(G.spieler[i], G.spieler[j], 10);
+  geschichte("🚚", `${G.spieler[i].name} und ${G.spieler[j].name} eröffnen eine Handelsroute.`);
+  erfolg("kaufmann");
+}
+function routeTrennen(i, j, grund){
+  const vorher = (G.routen||[]).length;
+  G.routen = (G.routen||[]).filter(r => !((r.a===i && r.b===j) || (r.a===j && r.b===i)));
+  if(G.routen.length < vorher)
+    geschichte("🪓", `Die Handelsroute zwischen ${G.spieler[i].name} und ${G.spieler[j].name} ist ${grund||"unterbrochen"}.`);
+}
+const routenZoll = p => {
+  const i = G.spieler.indexOf(p);
+  return routenVon(i).length * (350 + staedte(p)*80 + ((p.haefen||0)>0 ? 150 : 0));
+};
+/* Ehen zwischen Häusern: wirken wie ein langer Pakt und stiften Erbansprüche */
+function eheAktiv(a, b){
+  const ib = G.spieler.indexOf(b);
+  return a.ehen && a.ehen[ib] && a.ehen[ib] >= G.jahr;
+}
+function eheSchliessen(von, an, mitgift){
+  const iv = G.spieler.indexOf(von), ia = G.spieler.indexOf(an);
+  von.geld -= mitgift; an.geld += mitgift;
+  von.ehen = von.ehen || {}; an.ehen = an.ehen || {};
+  von.ehen[ia] = G.jahr + 12; an.ehen[iv] = G.jahr + 12;
+  von.pakte = von.pakte || {}; an.pakte = an.pakte || {};
+  von.pakte[ia] = Math.max(von.pakte[ia]||0, G.jahr + 12);
+  an.pakte[iv] = Math.max(an.pakte[iv]||0, G.jahr + 12);
+  bezAendern(von, an, 25);
+  geschichte("💍", `Die Häuser ${von.name} und ${an.name} vermählen ihre Kinder (Mitgift: ${fmt(mitgift)} T).`);
+  erfolg("vermaehlt");
 }
 const KI_TYP_NAMEN = { aggressor:"der Eroberer", haendler:"der Händler", baumeister:"der Baumeister" };
 
@@ -635,7 +704,11 @@ const ERFOLGE = [
   { id:"chronist",  n:"Chronist",            d:"Anno 1750 als Regent erlebt.",              i:"📜" },
   { id:"szenarist", n:"Prüfungen bestanden", d:"Ein Szenario zu Ende gespielt.",            i:"🧭" },
   { id:"spion",     n:"Meister der Schatten", d:"Ein Geheimbericht wurde beschafft.",        i:"🕵️" },
-  { id:"eroberer",  n:"Städtebezwinger",      d:"Eine ganze Stadt erobert.",                 i:"🏰" }
+  { id:"eroberer",  n:"Städtebezwinger",      d:"Eine ganze Stadt erobert.",                 i:"🏰" },
+  { id:"festung",   n:"Burgherr",              d:"Festungswerke auf höchster Stufe errichtet.",i:"🧱" },
+  { id:"vermaehlt", n:"Dynastie-Schmied",      d:"Eine Vermählung zwischen zwei Häusern gestiftet.", i:"💍" },
+  { id:"kaufmann",  n:"Wegbereiter",           d:"Eine Handelsroute eröffnet.",               i:"🚚" },
+  { id:"kampagne",  n:"Vom Bauernsohn zum Kaiser", d:"Die Kampagne abgeschlossen.",           i:"📖" }
 ];
 let _erfolge = null;
 function erfolge(){
@@ -758,6 +831,11 @@ function jahresschluss(p){
   const ertrag = rf(0.038,0.050) * wetter.f * (1 + Math.min(p.muehlen*0.05, 1.0));
   r.ernte = Math.round(bearbeitet * ertrag);
   p.korn += r.ernte;
+  /* Baustoff-Ertrag aus Forsthöfen und Steinbrüchen */
+  r.holzErtrag = (p.forst||0) * 30;
+  r.steinErtrag = (p.bruch||0) * 20;
+  p.holz = (p.holz||0) + r.holzErtrag;
+  p.stein = (p.stein||0) + r.steinErtrag;
 
   /* Wirtschafts-Ereignisse */
   const ev = Math.random() / diffFaktor();
@@ -774,6 +852,8 @@ function jahresschluss(p){
   r.steuern = Math.round(p.pop*(p.einkSt*0.08 + p.mwSt*0.05)/10)*10
             + p.zoll*p.maerkte*6 + p.maerkte*150 + staedte(p)*2000 + (p.haefen||0)*700;
   if(p.berater && p.berater.schatz) r.steuern = Math.round(r.steuern * 1.08);
+  r.routenGeld = routenZoll(p);
+  p.geld += r.routenGeld;
   p.geld += r.steuern;
   p.stat.steuern += r.steuern;
   r.unterhalt = unterhalt(p);
@@ -807,7 +887,7 @@ function jahresschluss(p){
 
   if(G.jahr >= 1750 && !p.ki) erfolg("chronist");
   p.report = r;
-  p.chronik = (p.chronik||[]).concat({ j:G.jahr, pop:p.pop, geld:Math.round(p.geld), land:p.land }).slice(-80);
+  p.chronik = (p.chronik||[]).concat({ j:G.jahr, pop:p.pop, geld:Math.round(p.geld), land:p.land, heer:heerGroesse(p.heer) }).slice(-80);
   quicksave();
 }
 
@@ -844,6 +924,7 @@ function wegZwischen(a,b){
 
 function kriegVorbereiten(zielIdx){
   const a = G.aktiv, d = zielIdx;
+  if(routeAktiv(a, d)) routeTrennen(a, d, "durch die Kriegserklärung zerbrochen");
   const weg = wegZwischen(a,d);
   const alle = lebende().map(x=>x.i).filter(i=>i!==a && i!==d);
   const kr = { a, d, weg, fragen:[], frageIdx:0, wahl:{}, abgebrochen:false,
@@ -883,6 +964,12 @@ function diploFertig(){
     G.spieler[kr.a].kriegGefuehrt = true;
     if(mpMein(kr.a)) zeige("kriegAbbruch");
     else mpPend("kriegAbbruch", kr.a);
+    return;
+  }
+  const ver = G.spieler[kr.d];
+  if(((ver.mauer||0) + (ver.burg||0)) > 0 && !kr.belagerung){
+    if(mpMein(kr.a)) zeige("belagerung");
+    else mpPend("belagerung", kr.a);
     return;
   }
   if(mpMein(kr.a)){ G._aufW = [2,2,2,2,2]; zeige("aufstellungA"); }
@@ -976,6 +1063,38 @@ function laneVerlust(u, anzahl){
   }
   return echt;
 }
+/* ---------- Belagerung: Festungen verzögern und verteuern den Angriff ---------- */
+function festungsBonus(p){ return 1 + (p.mauer||0)*0.10 + (p.burg||0)*0.15; }
+function festungsFaktor(kr){
+  let fest = festungsBonus(G.spieler[kr.d]);
+  if(kr.mauerBruch) fest = 1 + (fest-1)*0.4;      /* Breschen im Mauerwerk */
+  if(kr.hunger)     fest = 1 + (fest-1)*0.55;     /* ausgehungerte Verteidiger */
+  return fest;
+}
+function belagerungAnwenden(kr, art){
+  kr.belagerung = art;
+  const ver = G.spieler[kr.d];
+  if(art === "beschuss"){
+    kr.mauerBruch = true;
+    if((ver.mauer||0) > 0 && Math.random() < 0.5){ ver.mauer--; kr.mauerZerstoert = true; }
+  } else if(art === "aushungern"){
+    kr.hunger = true;
+    kr.hungerKorn = Math.round(ver.korn*0.25);
+    kr.hungerTote = Math.round(ver.pop*0.02);
+    ver.korn -= kr.hungerKorn;
+    ver.pop  -= kr.hungerTote;
+    ver.stimmung = clamp(ver.stimmung-8, 5, 100);
+  }
+}
+function belagerungWahl(art){
+  const kr = G._kr;
+  const ang = G.spieler[kr.a];
+  if(art === "beschuss" && ang.heer.art < 2) return;
+  belagerungAnwenden(kr, art);
+  mpSync();
+  G._aufW = [2,2,2,2,2];
+  zeige("aufstellungA");
+}
 function schlachtStarten(){
   const kr = G._kr;
   const helferA = kr.fragen.filter(i=>kr.wahl[i]==="atk");
@@ -984,6 +1103,7 @@ function schlachtStarten(){
   const D = seiteBauen(kr.d, helferD, true);
   const eA = { inf:A.inf, kav:A.kav, art:A.art, miliz:A.miliz, auf:0 };
   const eD = { inf:D.inf, kav:D.kav, art:D.art, miliz:D.miliz, auf:D.aufgebot };
+  if(kr.hunger){ eD.miliz = Math.round(eD.miliz*0.6); eD.auf = Math.round(eD.auf*0.6); }
   const lanesA = verteileEinheiten(eA, kr.aufA || [2,2,2,2,2]);
   const lanesD = verteileEinheiten(eD, kr.aufD || [2,2,2,2,2]);
   G._s = {
@@ -992,9 +1112,13 @@ function schlachtStarten(){
     start:{ A:{...eA}, D:{...eD} },
     startG:{ A:Math.max(1,laneGroesse(eA)), D:Math.max(1,laneGroesse(eD)) },
     gelaende: kr.gelaende || wuerfleGelaende(), regen: Math.random()<0.22,
+    festung: festungsFaktor(kr), belagerung: kr.belagerung || null,
     moralA:100, moralD:100, routA:false, routD:false,
     tick:0, maxTicks:40, log:[], partikel:[], fertig:false, sieger:null, iv:null, still:false
   };
+  if(kr.belagerung === "sturm") G._s.log.unshift("⚔️ Sturmangriff auf die Festungswerke — die ersten Reihen zahlen den Blutzoll!");
+  if(kr.belagerung === "beschuss") G._s.log.unshift(`💣 Die Artillerie hat Breschen geschossen${kr.mauerZerstoert?" — ein Mauerring liegt in Trümmern":""}.`);
+  if(kr.belagerung === "aushungern") G._s.log.unshift(`⏳ Nach langer Belagerung: ${fmt(kr.hungerKorn||0)} Fuder verdorben, die Verteidiger sind entkräftet.`);
   cur().kriegGefuehrt = true;
   sTrommel();
   zeige("schlacht");
@@ -1004,6 +1128,11 @@ const sRest = (s,seite) => s.lanes.reduce((a,l)=>a+laneGroesse(l[seite]),0);
 const sRestTyp = (s,seite,typ) => s.lanes.reduce((a,l)=>a+l[seite][typ],0);
 function einTick(s, leise){
   s.tick++;
+  if(s.tick === 1 && s.belagerung === "sturm"){
+    let sturmTote = 0;
+    s.lanes.forEach(l => { sturmTote += laneVerlust(l.A, laneGroesse(l.A)*0.06); });
+    if(sturmTote > 0) s.log.unshift(`Der Sturm auf die Mauern kostet die Angreifer ${fmt(sturmTote)} Mann.`);
+  }
   const jetzt = performance.now();
   /* Verlauf für das Zeitraffer-Replay aufzeichnen */
   s.verlauf = s.verlauf || [];
@@ -1034,7 +1163,7 @@ function einTick(s, leise){
       const kavFx = gel.kavFaktor || 1;
       const nah = u => u.inf + u.kav*2.5*kavFx + u.art*0.4 + u.miliz*0.8 + u.auf*0.5;
       const stA = nah(a) * rf(0.85,1.15);
-      const stD = nah(d) * 1.15 * (gel.defBonus || 1) * rf(0.85,1.15);
+      const stD = nah(d) * 1.15 * (gel.defBonus || 1) * (s.festung || 1) * rf(0.85,1.15);
       gefD += laneVerlust(d, gD * stA/(stA+stD) * 0.15);
       gefA += laneVerlust(a, gA * stD/(stA+stD) * 0.15);
       if(!leise){
@@ -1495,6 +1624,22 @@ function malDomKarte(ctx, x, y, teile){
     ctx.strokeRect(x-20.5, y-13.5, 43, 18);
   }
 }
+function malForst(ctx, x, y, sn){
+  malBaum(ctx, x-8, y+2, 5, sn?sn.b1:"#1e3a1c", sn?sn.b2:"#25491f", sn?sn.schnee:false);
+  malBaum(ctx, x+2, y+4, 6, sn?sn.b1:"#1e3a1c", sn?sn.b2:"#25491f", sn?sn.schnee:false);
+  malBaum(ctx, x+10, y+1, 4.5, sn?sn.b1:"#1e3a1c", sn?sn.b2:"#25491f", sn?sn.schnee:false);
+  ctx.fillStyle = "#7a5c37"; ctx.fillRect(x-4, y+5, 9, 5);   /* Holzstapel */
+  ctx.strokeStyle = "#5c4426"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x-4, y+7.5); ctx.lineTo(x+5, y+7.5); ctx.stroke();
+}
+function malBruch(ctx, x, y){
+  ctx.fillStyle = "#9a938a";
+  ctx.beginPath(); ctx.moveTo(x-11, y+6); ctx.lineTo(x-5, y-6); ctx.lineTo(x+2, y+1); ctx.lineTo(x+8, y-8); ctx.lineTo(x+13, y+6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#b5aea2";
+  ctx.beginPath(); ctx.moveTo(x-5, y-6); ctx.lineTo(x-1, y+2); ctx.lineTo(x-8, y+4); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#6f695f";
+  ctx.fillRect(x-2, y+2, 5, 4); ctx.fillRect(x+5, y+3, 4, 3);
+}
 function zeichneKarte(p, canvasId, t=0){
   const c = document.getElementById(canvasId);
   if(!c || !p) return;
@@ -1628,8 +1773,41 @@ function zeichneKarte(p, canvasId, t=0){
       ctx.strokeStyle = "rgba(224,180,88,.35)";
       ctx.beginPath(); ctx.arc(gx, gy-4, 23*puls, 0, 7); ctx.stroke();
     }
-    if(g.t==="m") malMarkt(ctx, gx, gy); else malMuehle(ctx, gx, gy, t);
+    if(g.t==="m") malMarkt(ctx, gx, gy);
+    else if(g.t==="k") malMuehle(ctx, gx, gy, t);
+    else if(g.t==="f") malForst(ctx, gx, gy, sn);
+    else if(g.t==="s") malBruch(ctx, gx, gy);
+    else malMuehle(ctx, gx, gy, t);
   });
+  /* Stadtmauer: Palisadenring um das Dorf — Burg als Turm */
+  if((p.mauer||0) > 0){
+    const mr = 34 + (p.mauer||0)*5;
+    ctx.strokeStyle = "#8d8577"; ctx.lineWidth = 2 + (p.mauer||0);
+    ctx.beginPath(); ctx.ellipse(cx, cy+6, mr*1.25, mr*0.72, 0, 0, 7); ctx.stroke();
+    ctx.fillStyle = "#8d8577";
+    for(let z=0; z<14; z++){
+      const za = z/14*6.2832;
+      ctx.fillRect(cx+Math.cos(za)*mr*1.25-1.6, cy+6+Math.sin(za)*mr*0.72-2, 3.4, 4.5);
+    }
+    if(p._neu==="mauer"){
+      ctx.strokeStyle = "rgba(224,180,88,.9)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(cx, cy+6, (mr+7)*1.25, (mr+7)*0.72, 0, 0, 7); ctx.stroke();
+    }
+  }
+  if((p.burg||0) > 0){
+    const bx = cx + rr*0.30, by = cy - rr*0.18;
+    ctx.fillStyle = "#7d7568";
+    ctx.fillRect(bx-8, by-16, 16, 20);
+    for(let z=0; z<3; z++) ctx.fillRect(bx-8+z*6, by-20, 4, 5);
+    if((p.burg||0) >= 2){ ctx.fillRect(bx-13, by-8, 5, 12); ctx.fillRect(bx+8, by-8, 5, 12); }
+    ctx.fillStyle = p.farbe;
+    ctx.fillRect(bx-1, by-30, 2, 11);
+    ctx.beginPath(); ctx.moveTo(bx+1, by-30); ctx.lineTo(bx+9, by-27.5); ctx.lineTo(bx+1, by-25); ctx.closePath(); ctx.fill();
+    if(p._neu==="burg"){
+      ctx.strokeStyle = "rgba(224,180,88,.9)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(bx, by-8, 22 + Math.sin(t/220)*2, 0, 7); ctx.stroke();
+    }
+  }
   /* Häfen am Fluss */
   for(let h=0; h<(p.haefen||0); h++){
     const hx = cx + (h===0 ? -rr*0.55 : rr*0.62), hy = fy + (h===0 ? -rr*0.10 : rr*0.02);
@@ -1750,6 +1928,24 @@ function zeichneWelt(t=0){
       ctx.quadraticCurveTo(cx, cy, pos[b][0], pos[b][1]); ctx.stroke();
     }
     ctx.setLineDash([]);
+  }
+  /* Aktive Handelsrouten: goldene Wege mit wandernden Karawanen */
+  for(const r of (G.routen||[])){
+    const A = pos[r.a], B = pos[r.b];
+    if(!A || !B || G.spieler[r.a].tot || G.spieler[r.b].tot) continue;
+    ctx.strokeStyle = "rgba(224,180,88,.55)"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(A[0], A[1]);
+    ctx.quadraticCurveTo(cx, cy, B[0], B[1]); ctx.stroke();
+    /* Karawane pendelt auf der Kurve */
+    const phase = (Math.sin(t/1400 + (r.a*3+r.b)) + 1) / 2;
+    const q = 1-phase;
+    const kx = q*q*A[0] + 2*q*phase*cx + phase*phase*B[0];
+    const ky = q*q*A[1] + 2*q*phase*cy + phase*phase*B[1];
+    ctx.fillStyle = "#e0b458";
+    ctx.fillRect(kx-4, ky-3, 8, 5);
+    ctx.fillStyle = "#8a5a2a";
+    ctx.beginPath(); ctx.arc(kx-2.5, ky+3, 1.6, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(kx+2.5, ky+3, 1.6, 0, 7); ctx.fill();
   }
   /* Reiche */
   G.spieler.forEach((p,i)=>{
@@ -2144,412 +2340,7 @@ function zeichneAufstellung(cid, einheiten, gewichte, farbe, rechts){
   });
 }
 
-/* ---------- Gesamtkarte/* ---------- Gesamtkarte: alle Reiche im Nachbarschaftskreis ---------- */
-function zeichneWelt(t=0){
-  const c = document.getElementById("welt");
-  if(!c) return;
-  const ctx = c.getContext("2d");
-  const W = c.width, H = c.height;
-  ctx.clearRect(0,0,W,H);
-  ctx.fillStyle = "#111b26"; ctx.fillRect(0,0,W,H);
-  const wr = mulberry(999);
-  ctx.fillStyle = "rgba(46,70,56,.16)";
-  for(let i=0;i<30;i++){ ctx.beginPath(); ctx.arc(wr()*W, wr()*H, wr()*30+8, 0, 7); ctx.fill(); }
-  const n = G.spieler.length;
-  const cx = W/2, cy = H/2 + 4, ex = W*0.36, ey = H*0.32;
-  const pos = G.spieler.map((_,i)=>{
-    const a = -Math.PI/2 + i/n*6.2832;
-    return [cx + Math.cos(a)*ex*(n>1?1:0), cy + Math.sin(a)*ey*(n>1?1:0)];
-  });
-  /* Handelswege zwischen lebenden Nachbarn */
-  const leb = lebende().map(x=>x.i);
-  if(leb.length > 1){
-    ctx.strokeStyle = "rgba(209,187,138,.25)"; ctx.lineWidth = 2; ctx.setLineDash([5,7]);
-    const paare = leb.length===2 ? [[leb[0],leb[1]]] : leb.map((a,k)=>[a, leb[(k+1)%leb.length]]);
-    for(const [a,b] of paare){
-      ctx.beginPath(); ctx.moveTo(pos[a][0], pos[a][1]);
-      ctx.quadraticCurveTo(cx, cy, pos[b][0], pos[b][1]); ctx.stroke();
-    }
-    ctx.setLineDash([]);
-  }
-  /* Reiche */
-  G.spieler.forEach((p,i)=>{
-    const [px,py] = pos[i];
-    const rrW = 24 + 34*Math.sqrt(Math.min(p.land,50000)/50000);
-    const rngB = mulberry(i*97+5);
-    ctx.save();
-    if(p.tot) ctx.globalAlpha = 0.45;
-    const bl = [];
-    for(let k=0;k<10;k++){
-      const a = k/10*6.2832;
-      bl.push([px+Math.cos(a)*rrW*(0.8+rngB()*0.35)*1.25, py+Math.sin(a)*rrW*(0.8+rngB()*0.35)*0.8]);
-    }
-    ctx.beginPath();
-    ctx.moveTo((bl[0][0]+bl[9][0])/2,(bl[0][1]+bl[9][1])/2);
-    for(let k=0;k<10;k++){
-      const nx = bl[(k+1)%10];
-      ctx.quadraticCurveTo(bl[k][0], bl[k][1], (bl[k][0]+nx[0])/2, (bl[k][1]+nx[1])/2);
-    }
-    ctx.closePath();
-    ctx.fillStyle = p.tot ? "#39404a" : saison().g2;
-    ctx.fill();
-    ctx.strokeStyle = p.farbe; ctx.lineWidth = 2; ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]);
-    if(i===G.aktiv && !p.tot){
-      ctx.strokeStyle = "rgba(224,180,88,"+(0.55+Math.sin(t/300)*0.3)+")"; ctx.lineWidth = 3; ctx.setLineDash([]);
-      ctx.beginPath(); ctx.arc(px, py, rrW*1.35, 0, 7); ctx.stroke();
-    }
-    ctx.font = `${Math.round(rrW*0.62)}px sans-serif`; ctx.textAlign = "center";
-    ctx.fillText(p.wappen, px, py + rrW*0.2);
-    ctx.font = "600 13px sans-serif"; ctx.fillStyle = "#dbe2ee";
-    ctx.fillText(`${titelName(p)} ${p.name}${p.tot?" †":""}`, px, py + rrW*0.85 + 16);
-    ctx.font = "11px sans-serif"; ctx.fillStyle = "#8b96a8";
-    ctx.fillText(`${fmt(p.land)} ha · ${fmt(p.pop)} Einw.`, px, py + rrW*0.85 + 30);
-    ctx.restore();
-  });
-  ctx.fillStyle = "rgba(13,17,23,.78)";
-  ctx.fillRect(10, H-32, 250, 24);
-  ctx.strokeStyle = "#2a3446"; ctx.strokeRect(10, H-32, 250, 24);
-  ctx.fillStyle = "#dbe2ee"; ctx.font = "600 12px sans-serif"; ctx.textAlign = "left";
-  ctx.fillText(`Die bekannte Welt · Anno ${G.jahr} · ${saison().n}`, 18, H-15);
-}
-/* Animierte Wetterszene für die Jahresbilanz */
-function zeichneWetter(t=0){
-  const c = document.getElementById("wetterBild");
-  const p = cur();
-  if(!c || !p || !p.report) return;
-  const ctx = c.getContext("2d");
-  const W = c.width, H = c.height;
-  const f = p.report.wetter.f;
-  const art = f<=0.6 ? "duerre" : f<=0.85 ? "regen" : f<1.12 ? "wechsel" : f<1.3 ? "gut" : "pracht";
-  ctx.clearRect(0,0,W,H);
-  const himmel = ctx.createLinearGradient(0,0,0,H);
-  if(art==="duerre"){ himmel.addColorStop(0,"#7a5c30"); himmel.addColorStop(1,"#8a6a38"); }
-  else if(art==="regen"){ himmel.addColorStop(0,"#28313f"); himmel.addColorStop(1,"#39434f"); }
-  else if(art==="wechsel"){ himmel.addColorStop(0,"#3a4456"); himmel.addColorStop(1,"#55607a"); }
-  else { himmel.addColorStop(0,"#3d4a68"); himmel.addColorStop(1,"#7a6a48"); }
-  ctx.fillStyle = himmel; ctx.fillRect(0,0,W,H);
-  /* Hügelkamm */
-  ctx.fillStyle = art==="duerre" ? "#5c4a26" : "#22301f";
-  ctx.beginPath(); ctx.moveTo(0,H);
-  ctx.quadraticCurveTo(W*0.3, H-26, W*0.55, H-14);
-  ctx.quadraticCurveTo(W*0.8, H-4, W, H-18);
-  ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
-  if(art==="duerre"){
-    /* gleißende Sonne mit Hitzeflimmern */
-    const sx = W*0.78, sy = H*0.35;
-    const grad = ctx.createRadialGradient(sx,sy,2,sx,sy,34);
-    grad.addColorStop(0,"#fff0c0"); grad.addColorStop(0.6,"#e8c05a"); grad.addColorStop(1,"rgba(232,192,90,0)");
-    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(sx,sy,34,0,7); ctx.fill();
-    ctx.strokeStyle = "rgba(255,240,200,.25)"; ctx.lineWidth = 1.5;
-    for(let i=0;i<8;i++){
-      const x0 = W*0.08 + i*W*0.11;
-      ctx.beginPath();
-      for(let y=H-16; y>H*0.45; y-=6)
-        ctx.lineTo(x0 + Math.sin(y/9 + t/160 + i)*3.5, y);
-      ctx.stroke();
-    }
-  } else if(art==="regen" || art==="wechsel"){
-    /* Wolkenbänke */
-    ctx.fillStyle = "rgba(210,214,224,.16)";
-    for(let i=0;i<5;i++){
-      const wx = ((t/(60+i*18) + i*220) % (W+240)) - 120;
-      for(let b=0;b<4;b++){ ctx.beginPath(); ctx.arc(wx+b*30, 22+i*7+(b%2)*6, 18+(b%3)*7, 0, 7); ctx.fill(); }
-    }
-    if(art==="regen"){
-      ctx.strokeStyle = "rgba(170,200,230,.45)"; ctx.lineWidth = 1.3;
-      for(let i=0;i<46;i++){
-        const seed = ((i*61)%97)/97;
-        const rx2 = (seed*W + t/(2.2+seed)) % W;
-        const ry2 = (t/(3+seed*2) + i*37) % H;
-        ctx.beginPath(); ctx.moveTo(rx2, ry2); ctx.lineTo(rx2-3, ry2+11); ctx.stroke();
-      }
-      /* Blitz alle paar Sekunden */
-      const blitzPhase = (t % 4200);
-      if(blitzPhase < 160){
-        ctx.fillStyle = `rgba(255,255,240,${0.35*(1-blitzPhase/160)})`;
-        ctx.fillRect(0,0,W,H);
-        const bx = W*0.3 + (Math.floor(t/4200)%3)*W*0.2;
-        ctx.strokeStyle = "#fff8d0"; ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.moveTo(bx, 6);
-        ctx.lineTo(bx-8, H*0.35); ctx.lineTo(bx+4, H*0.4); ctx.lineTo(bx-6, H*0.75);
-        ctx.stroke();
-      }
-    }
-  } else {
-    /* goldene Strahlen und Sonne */
-    const sx = W*0.72, sy = H*0.4;
-    ctx.save(); ctx.translate(sx,sy); ctx.rotate(t/9000);
-    ctx.fillStyle = art==="pracht" ? "rgba(255,220,120,.10)" : "rgba(230,205,140,.07)";
-    for(let i=0;i<10;i++){ ctx.rotate(Math.PI/5); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(190,-18); ctx.lineTo(190,18); ctx.closePath(); ctx.fill(); }
-    ctx.restore();
-    const grad = ctx.createRadialGradient(sx,sy,3,sx,sy,30);
-    grad.addColorStop(0,"#fff3cf"); grad.addColorStop(0.6,"#e0b458"); grad.addColorStop(1,"rgba(224,180,88,0)");
-    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(sx,sy,30,0,7); ctx.fill();
-    if(art==="pracht"){
-      ctx.strokeStyle = "rgba(200,205,220,.5)"; ctx.lineWidth = 1.5;
-      for(let i=0;i<2;i++){
-        const vx = ((t/(26+i*9) + i*300) % (W+60)) - 30;
-        const vy = 26 + i*16 + Math.sin(t/400+i)*5;
-        ctx.beginPath(); ctx.moveTo(vx-5,vy); ctx.quadraticCurveTo(vx-1.5,vy-3.5,vx,vy);
-        ctx.quadraticCurveTo(vx+1.5,vy-3.5,vx+5,vy); ctx.stroke();
-      }
-    }
-  }
-  /* Textzeile */
-  ctx.fillStyle = "rgba(13,17,23,.72)"; ctx.fillRect(10, H-28, 300, 20);
-  ctx.fillStyle = "#dbe2ee"; ctx.font = "600 12px sans-serif"; ctx.textAlign = "left";
-  ctx.fillText(`${p.report.wetter.ico} ${p.report.wetter.t}`, 16, H-14);
-}
-function weltAuf(){ G._vorWelt = G.screen; zeige("welt"); }
-function weltZu(){ zeige(G._vorWelt || "status"); }
-function angreifenAus(i){ G._zielVorwahl = i; zeige("kriegPlan"); }
-
-/* ---------- Einheiten-Sprites (Schlachtfeld & Aufstellungs-Vorschau) ---------- */
-function malSoldat(ctx, x, y, farbe, richt, pike=true){
-  ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineWidth = 1.4; ctx.lineCap = "round";
-  ctx.beginPath(); ctx.arc(x, y-4.5, 1.7, 0, 7); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(x, y-2.8); ctx.lineTo(x, y+1.6); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x, y+1.6); ctx.lineTo(x-1.8, y+5);
-  ctx.moveTo(x, y+1.6); ctx.lineTo(x+1.8, y+5); ctx.stroke();
-  if(pike){ ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(x+richt*2, y+2); ctx.lineTo(x+richt*5, y-8); ctx.stroke(); }
-}
-function malReiter(ctx, x, y, farbe, richt){
-  ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineWidth = 1.5; ctx.lineCap = "round";
-  ctx.beginPath(); ctx.ellipse(x, y+1, 5.2, 2.7, 0, 0, 7); ctx.fill();          /* Pferdeleib */
-  ctx.beginPath(); ctx.moveTo(x+richt*4, y);                                     /* Hals & Kopf */
-  ctx.lineTo(x+richt*6.6, y-3.6); ctx.lineTo(x+richt*8.4, y-2.8); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x-3, y+3); ctx.lineTo(x-3.4, y+6.4);               /* Beine */
-  ctx.moveTo(x+3, y+3); ctx.lineTo(x+3.4, y+6.4); ctx.stroke();
-  ctx.beginPath(); ctx.arc(x-richt*0.6, y-5, 1.6, 0, 7); ctx.fill();             /* Reiter */
-  ctx.beginPath(); ctx.moveTo(x-richt*0.6, y-3.4); ctx.lineTo(x-richt*0.6, y-0.5); ctx.stroke();
-  ctx.lineWidth = 1.1;
-  ctx.beginPath(); ctx.moveTo(x+richt*1, y-2.5); ctx.lineTo(x+richt*7, y-7); ctx.stroke(); /* Lanze */
-}
-function malKanone(ctx, x, y, farbe, richt){
-  ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineCap = "round";
-  ctx.lineWidth = 2.4;
-  ctx.beginPath(); ctx.moveTo(x-richt*1.5, y+1.5); ctx.lineTo(x+richt*6.5, y-3); ctx.stroke(); /* Rohr */
-  ctx.lineWidth = 1.3;
-  ctx.beginPath(); ctx.arc(x, y+3.4, 3.1, 0, 7); ctx.stroke();                    /* Rad */
-  ctx.beginPath(); ctx.moveTo(x, y+3.4); ctx.lineTo(x-richt*5.5, y+6.5); ctx.stroke(); /* Lafette */
-}
-function malAufgebot(ctx, x, y, farbe, richt){
-  ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineWidth = 1.3; ctx.lineCap = "round";
-  ctx.beginPath(); ctx.arc(x, y-4, 1.5, 0, 7); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(x, y-2.5); ctx.lineTo(x, y+1.5); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x, y+1.5); ctx.lineTo(x-1.6, y+4.6);
-  ctx.moveTo(x, y+1.5); ctx.lineTo(x+1.6, y+4.6); ctx.stroke();
-  /* Heugabel */
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(x+richt*2, y+2.5); ctx.lineTo(x+richt*3.6, y-6); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x+richt*2.6, y-6.5); ctx.lineTo(x+richt*4.6, y-5.5); ctx.stroke();
-}
-/* Ein Trupp Sprites eines Typs in Reihen zeichnen; gibt die Blocktiefe zurück */
-function malTrupp(ctx, typ, anzahl, maxSprites, front, richt, y0, laneH, farbe){
-  if(anzahl <= 0) return 0;
-  const sprites = clamp(Math.ceil(anzahl/Math.max(1,Math.round(anzahl/maxSprites))), 1, maxSprites);
-  const abst = typ==="kav" ? 13 : typ==="art" ? 13 : 7.5;
-  const reihenH = typ==="kav" ? 14 : 11;
-  const reihen = Math.max(1, Math.floor((laneH-12)/reihenH));
-  let tiefe = 0;
-  for(let i=0;i<sprites;i++){
-    const reihe = i % reihen, spalte = Math.floor(i/reihen);
-    const x = front - richt*(spalte*abst);
-    const y = y0 + 8 + reihe*reihenH;
-    if(typ==="inf") malSoldat(ctx, x, y, farbe, richt, true);
-    else if(typ==="miliz") malSoldat(ctx, x, y, farbe, richt, false);
-    else if(typ==="auf") malAufgebot(ctx, x, y, farbe, richt);
-    else if(typ==="kav") malReiter(ctx, x, y, farbe, richt);
-    else malKanone(ctx, x, y, farbe, richt);
-    tiefe = Math.max(tiefe, spalte*abst + abst);
-  }
-  return tiefe;
-}
-
-/* Schlachtfeld-Canvas: Truppen als Formationen, Partikel an der Front */
-function zeichneFeld(t=0){
-  const c = $("#feld"), s = G._s;
-  if(!c || !s || !s.lanes) return;
-  const ctx = c.getContext("2d");
-  const W = c.width, H = c.height;
-  ctx.clearRect(0,0,W,H);
-  /* Gelände */
-  const brng = mulberry(777);
-  ctx.fillStyle = "rgba(255,255,255,.03)";
-  for(let h=0;h<4;h++){
-    const hx = brng()*W, hw = 90+brng()*160;
-    ctx.beginPath(); ctx.ellipse(hx, H*0.24, hw, 14+brng()*8, 0, Math.PI, 0); ctx.fill();
-  }
-  for(let b=0;b<6;b++) malBaum(ctx, brng()*W, H*(0.17+brng()*0.06), 4+brng()*3);
-  /* Abschnittslinien */
-  const oben = H*0.27, laneH = (H-oben-10)/LANES;
-  ctx.strokeStyle = "rgba(255,255,255,.05)";
-  for(let i=0;i<=LANES;i++){
-    ctx.beginPath(); ctx.moveTo(0,oben+i*laneH); ctx.lineTo(W,oben+i*laneH); ctx.stroke();
-  }
-  ctx.font = "10px sans-serif"; ctx.textAlign = "left"; ctx.fillStyle = "rgba(219,226,238,.4)";
-  for(let i=0;i<LANES;i++) ctx.fillText(LANE_NAMEN[i], 8, oben+i*laneH+12);
-
-  const fA = G._kr ? G.spieler[G._kr.a].farbe : "#5fb8d4";
-  const fD = G._kr ? G.spieler[G._kr.d].farbe : "#d9973f";
-  const basisA = W*0.13, basisD = W*0.87, spann = W*0.34;
-  const skala = Math.max(1, Math.ceil((s.startG.A+s.startG.D)/560));
-
-  /* Truppen als Einheiten-Sprites je Abschnitt */
-  s.lanes.forEach((lane,i)=>{
-    const y0 = oben + i*laneH + 2;
-    const frontA = basisA + (100-lane.dist)/100*spann;
-    const frontD = basisD - (100-lane.dist)/100*spann;
-    const malSeite2 = (u, farbe, front, richt) => {
-      let x = front;
-      x -= richt * malTrupp(ctx, "inf",   u.inf,   10, x, richt, y0, laneH, farbe);
-      x -= richt * malTrupp(ctx, "miliz", u.miliz,  7, x, richt, y0, laneH, farbe+"99");
-      x -= richt * malTrupp(ctx, "auf",   u.auf,    5, x, richt, y0, laneH, farbe+"77");
-      malTrupp(ctx, "kav", u.kav, 5, x, richt, y0, laneH, farbe);
-      /* Artillerie an der Basis */
-      malTrupp(ctx, "art", u.art, 3, richt>0 ? basisA-34 : basisD+34, richt, y0, laneH, farbe);
-    };
-    if(laneGroesse(lane.A)>0) malSeite2(lane.A, fA, frontA, 1);
-    if(laneGroesse(lane.D)>0) malSeite2(lane.D, fD, frontD, -1);
-    /* Truppenzahlen an den Rändern */
-    ctx.font = "600 11px sans-serif";
-    ctx.fillStyle = fA; ctx.textAlign = "left";
-    ctx.fillText(fmt(laneGroesse(lane.A)), 8, y0 + laneH - 8);
-    ctx.fillStyle = fD; ctx.textAlign = "right";
-    ctx.fillText(fmt(laneGroesse(lane.D)), W-8, y0 + laneH - 8);
-    if(laneGroesse(lane.A)===0 && laneGroesse(lane.D)===0){
-      ctx.fillStyle = "rgba(219,226,238,.18)"; ctx.font = "11px sans-serif"; ctx.textAlign="center";
-      ctx.fillText("— verwaist —", W/2, y0+laneH/2);
-    } else if(laneGroesse(lane.D)===0 && laneGroesse(lane.A)>0){
-      ctx.fillStyle = "rgba(224,180,88,.5)"; ctx.font = "600 10px sans-serif"; ctx.textAlign="center";
-      ctx.fillText("⚡ Durchbruch", W*0.72, y0+12);
-    }
-  });
-
-  /* Feldbanner */
-  const banner = (bx, farbe, ph) => {
-    ctx.strokeStyle = "#5a4a30"; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(bx, oben-4); ctx.lineTo(bx, oben-34); ctx.stroke();
-    ctx.fillStyle = farbe;
-    const wf = Math.sin(t/240 + ph)*3;
-    ctx.beginPath(); ctx.moveTo(bx, oben-34);
-    ctx.quadraticCurveTo(bx+10, oben-32+wf, bx+20, oben-29+wf);
-    ctx.quadraticCurveTo(bx+10, oben-26+wf*0.5, bx, oben-22);
-    ctx.closePath(); ctx.fill();
-  };
-  banner(W*0.05, fA, 0); banner(W*0.95-20, fD, 2);
-
-  /* Partikel: Kanonenkugeln (Flugbahn), Explosionen, Nahkampfstaub */
-  const jetzt = performance.now();
-  for(const pk of (s.partikel||[])){
-    const alter = jetzt - pk.born;
-    if(alter < 0) continue;
-    if(pk.typ==="kugel" && alter < 900){
-      const q = alter/900;
-      /* Mündungsfeuer beim Abschuss */
-      if(q < 0.14){
-        const mx = pk.von==="A" ? basisA-16 : basisD+16;
-        const my = oben + pk.lane*laneH + laneH/2;
-        ctx.fillStyle = `rgba(255,225,140,${0.9*(1-q/0.14)})`;
-        ctx.beginPath(); ctx.arc(mx, my, 5+q*30, 0, 7); ctx.fill();
-      }
-      const lane = s.lanes[pk.lane];
-      const y0 = oben + pk.lane*laneH + laneH/2;
-      const dist = lane ? lane.dist : 50;
-      const zielA = basisA + (100-dist)/100*spann, zielD = basisD - (100-dist)/100*spann;
-      const von = pk.von==="A" ? basisA-20 : basisD+20;
-      const nach = pk.von==="A" ? zielD : zielA;
-      const x = von + (nach-von)*q;
-      const y = y0 - Math.sin(q*Math.PI)*laneH*1.4;
-      ctx.fillStyle = "#20242c";
-      ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 7); ctx.fill();
-      if(q>0.93){
-        ctx.fillStyle = "rgba(255,220,130,.8)";
-        ctx.beginPath(); ctx.arc(nach, y0, 6, 0, 7); ctx.fill();
-      }
-    } else if(pk.typ==="boom" && alter < 750){
-      const q = alter/750, r = 3 + q*11;
-      const x = pk.rx*W, y = pk.ry*H;
-      const grad = ctx.createRadialGradient(x,y,0,x,y,r);
-      grad.addColorStop(0,`rgba(255,230,140,${0.95*(1-q)})`);
-      grad.addColorStop(0.5,`rgba(230,120,60,${0.7*(1-q)})`);
-      grad.addColorStop(1,"rgba(230,120,60,0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
-    } else if(pk.typ==="gefallen" && alter < 4200){
-      const q = alter/4200;
-      const lane = s.lanes[pk.lane];
-      const y0 = oben + pk.lane*laneH + laneH*0.5;
-      const xm = basisA + (100-(lane?lane.dist:0))/100*spann + (pk.seite==="A"?-14:14) + pk.off*W;
-      ctx.strokeStyle = `rgba(150,150,158,${0.5*(1-q)})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(xm-4, y0+6); ctx.lineTo(xm+4, y0+6);
-      ctx.moveTo(xm, y0+2); ctx.lineTo(xm, y0+9); ctx.stroke();
-    } else if(pk.typ==="staub" && alter < 1300){
-      const q = alter/1300;
-      const lane = s.lanes[pk.lane];
-      const y0 = oben + pk.lane*laneH + laneH/2;
-      const xm = basisA + (100-(lane?lane.dist:0))/100*spann + 8;
-      ctx.fillStyle = `rgba(170,160,140,${0.25*(1-q)})`;
-      for(let k=0;k<3;k++){
-        ctx.beginPath(); ctx.arc(xm+rf(-10,10), y0 - q*16 + rf(-6,6), 5+q*10, 0, 7); ctx.fill();
-      }
-    }
-  }
-  if(s.partikel) s.partikel = s.partikel.filter(pk => jetzt - pk.born < (pk.typ==="gefallen" ? 4200 : 1900));
-  /* Weisse Flagge */
-  if(s.fertig && !s.replayAktiv){
-    ctx.font = "22px sans-serif"; ctx.textAlign = "center";
-    ctx.fillText("🏳️", s.sieger==="A" ? W*0.8 : W*0.2, H*0.16);
-  }
-  if(s.replayAktiv){
-    ctx.fillStyle = "rgba(13,17,23,.72)"; ctx.fillRect(10, 10, 158, 24);
-    ctx.fillStyle = "#e0b458"; ctx.font = "600 13px sans-serif"; ctx.textAlign = "left";
-    ctx.fillText("🎞️ Zeitraffer läuft …", 18, 27);
-  }
-}
-/* Vorschau der eigenen Aufstellung (Platzierungs-Bildschirm) */
-function zeichneAufstellung(cid, einheiten, gewichte, farbe, rechts){
-  const c = document.getElementById(cid);
-  if(!c) return;
-  const ctx = c.getContext("2d");
-  const W = c.width, H = c.height;
-  ctx.clearRect(0,0,W,H);
-  ctx.fillStyle = "#1c2b1e"; ctx.fillRect(0,0,W,H);
-  const laneH = (H-12)/LANES;
-  const lanes = verteileEinheiten(einheiten, gewichte);
-  ctx.strokeStyle = "rgba(255,255,255,.06)";
-  for(let i=0;i<=LANES;i++){ ctx.beginPath(); ctx.moveTo(0,6+i*laneH); ctx.lineTo(W,6+i*laneH); ctx.stroke(); }
-  lanes.forEach((u,i)=>{
-    const y0 = 10 + i*laneH;
-    const reihen = Math.max(2, Math.floor((laneH-8)/8));
-    let n = 0;
-    const basis = rechts ? W-24 : 24, richt = rechts ? -1 : 1;
-    const dot = (anz, radius, fill) => {
-      for(let k=0;k<anz;k++){
-        const reihe = n % reihen, spalte = Math.floor(n/reihen);
-        ctx.beginPath();
-        ctx.arc(basis + richt*(spalte*7), y0 + reihe*8, radius, 0, 7);
-        ctx.fillStyle = fill; ctx.fill();
-        n++;
-      }
-    };
-    const skala = Math.max(1, Math.ceil(laneGroesse(einheiten)/420));
-    dot(Math.ceil(u.inf/skala), 2.4, farbe);
-    dot(Math.ceil(u.miliz/skala), 2.0, farbe+"99");
-    dot(Math.ceil(u.auf/skala), 1.8, farbe+"77");
-    dot(Math.ceil(u.kav/skala), 3.2, farbe);
-    for(let k=0;k<Math.min(5, u.art>0?Math.max(1,Math.ceil(u.art/skala)):0);k++){
-      ctx.fillStyle = farbe;
-      ctx.fillRect(rechts ? W-12 : 4, y0 + k*10, 6, 6);
-    }
-    ctx.fillStyle = "rgba(219,226,238,.55)"; ctx.font = "10px sans-serif";
-    ctx.textAlign = rechts ? "left" : "right";
-    ctx.fillText(`${fmt(laneGroesse(u))}`, rechts ? 6 : W-6, y0+laneH-8);
-  });
-}
-
-
+/* ---------- Gesamtkarte: alle Reiche im Nachbarschaftskreis ---------- */
 function schlachtAbschliessen(){
   const s = G._s, kr = G._kr;
   const ang = G.spieler[kr.a], ver = G.spieler[kr.d];
@@ -2559,8 +2350,9 @@ function schlachtAbschliessen(){
     /* Eindringtiefe: geräumte Abschnitte — oder Überrennen nach der Flucht */
     const geraeumt = s.lanes.filter(l => laneGroesse(l.D) === 0).length;
     const verlustquote = 1 - sRest(s,"D")/s.startG.D;
-    const tiefe = clamp(Math.max(geraeumt,
+    let tiefe = clamp(Math.max(geraeumt,
       s.routD ? Math.round(verlustquote*5) + 1 : Math.round(verlustquote*3)), 0, 5);
+    if((ver.mauer||0) >= 2 && !kr.mauerBruch) tiefe = Math.max(0, tiefe - 1);   /* die Mauer deckt das Hinterland */
     const beute = Math.min(Math.round(ver.land*(0.10 + tiefe*0.02)), Math.max(0,freiLand(ver)));
     ver.land -= beute; ang.land += beute;
     const gefallene = Math.round(ver.pop*0.03);
@@ -2577,6 +2369,13 @@ function schlachtAbschliessen(){
           ver.muehlen--; entferneGebaeude(ver,"k"); schaeden.push("eine Mühle");
         }
       }
+    }
+    /* Festungswerke nehmen Schaden */
+    if(tiefe >= 2 && (ver.mauer||0) > 0 && Math.random() < 0.55){
+      ver.mauer--; schaeden.push("ein Ring der Stadtmauer");
+    }
+    if(tiefe >= 4 && (ver.burg||0) > 0 && Math.random() < 0.35){
+      ver.burg--; schaeden.push("ein Turm der Burg");
     }
     if(tiefe >= 3){
       if(ver.palast>0 && Math.random()<0.5){
@@ -2637,6 +2436,21 @@ function geschichte(ico, text){
 /* ---------- Dynastie: die Erbfolge ---------- */
 function erben(p){
   const alterName = `${titelName(p)} ${p.name}`;
+  /* Heiratspolitik: vermählte Häuser erheben Erbansprüche */
+  const pi = G.spieler.indexOf(p);
+  G.spieler.forEach((x, xi) => {
+    if(x === p || x.tot) return;
+    if(x.ehen && x.ehen[pi] && x.ehen[pi] >= G.jahr){
+      const anspruch = Math.min(Math.round(p.land*0.05), freiLand(p));
+      if(anspruch > 0){
+        p.land -= anspruch; x.land += anspruch;
+        geschichte("⚰️", `Haus ${x.name} erbt durch die Ehe ${fmt(anspruch)} ha aus ${p.name}s Nachlass.`);
+        if(!x.ki) toast(`💍 Durch die Vermählung erbt Euer Haus ${fmt(anspruch)} ha von ${p.name}.`, 6000);
+      }
+      delete x.ehen[pi];
+      if(p.ehen) delete p.ehen[xi];
+    }
+  });
   p.gen = (p.gen||1) + 1;
   p.startAlter = ri(18,26) - (G.jahr - 1700);      /* Alter = startAlter + Regierungsjahre */
   p.todesJahr = G.jahr + (G.tempo>=2.5 ? ri(17,23) : G.tempo>1 ? ri(28,38) : ri(42,55)) + Math.random();
@@ -2752,6 +2566,41 @@ function diploAktion(art){
       mpSync();
     }
     p.diploZaehler++;
+  } else if(art === "route"){
+    const pi = G.spieler.indexOf(p), zi = G.spieler.indexOf(ziel);
+    if(routeAktiv(pi, zi)){ alertMsg("Zwischen Euren Reichen verkehren bereits Karawanen."); return; }
+    if(routenVon(pi).length >= 3){ alertMsg("Mehr als drei Routen kann Euer Reich nicht unterhalten."); return; }
+    if(p.geld < 1500){ alertMsg("Der Aufbau einer Route kostet 1.500 Taler."); return; }
+    if(bezWert(p, ziel) < 0){ alertMsg("Dafür ist das Verhältnis zu frostig — sendet erst Geschenke."); return; }
+    if(ziel.ki){
+      if(routenVon(zi).length < 3 && (ziel.kiTyp === "haendler" || bezWert(ziel, p) >= 10)){
+        p.geld -= 1500;
+        routeEroeffnen(pi, zi);
+        toast(`🚚 ${ziel.name} lässt die Karawanen rollen — beide Reiche kassieren fortan Zoll.`);
+      } else toast(`❌ ${ziel.name} winkt ab — kein Interesse an Eurer Route.`);
+    } else {
+      G.angebote.push({ von:pi, an:zi, richtung:"route", menge:0, preis:0, jahr:G.jahr });
+      toast(`📜 Routen-Angebot an ${ziel.name} übermittelt.`);
+      mpSync();
+    }
+    p.diploZaehler++;
+  } else if(art === "ehe"){
+    if(eheAktiv(p, ziel)){ alertMsg("Zwischen Euren Häusern besteht bereits eine Ehe."); return; }
+    const mitgift = Math.floor(+$("#dipMitgift").value||0);
+    if(mitgift < 2000){ alertMsg("Unter 2.000 Talern Mitgift gilt ein Antrag als Beleidigung."); return; }
+    if(mitgift > p.geld){ alertMsg("So viel Mitgift gibt Eure Kasse nicht her."); return; }
+    if(ziel.ki){
+      const schwelle = ziel.kiTyp === "aggressor" ? 40 : 20;
+      if(bezWert(ziel, p) + mitgift/300 >= schwelle){
+        eheSchliessen(p, ziel, mitgift);
+        toast(`💍 ${ziel.name} nimmt den Heiratsantrag an — die Häuser sind vereint (12 Jahre Frieden).`);
+      } else toast(`❌ ${ziel.name} weist den Antrag zurück. Pflegt erst das Verhältnis.`);
+    } else {
+      G.angebote.push({ von:G.spieler.indexOf(p), an:G.spieler.indexOf(ziel), richtung:"ehe", menge:mitgift, preis:0, jahr:G.jahr });
+      toast(`📜 Heiratsantrag an ${ziel.name} übermittelt.`);
+      mpSync();
+    }
+    p.diploZaehler++;
   } else if(art === "pakt"){
     if(paktAktiv(p, ziel)){ alertMsg("Es besteht bereits ein Pakt."); return; }
     const angebot = { von:G.spieler.indexOf(p), an:G.spieler.indexOf(ziel), richtung:"pakt", menge:0, preis:0, jahr:G.jahr };
@@ -2829,6 +2678,17 @@ function spionBericht(p, zielIdx){
 }
 function angebotAusfuehren(a){
   const von = G.spieler[a.von], an = G.spieler[a.an];
+  if(a.richtung === "ehe"){
+    if(von.geld < a.menge) return;
+    eheSchliessen(von, an, a.menge);
+    return;
+  }
+  if(a.richtung === "route"){
+    if(von.geld < 1500 || routenVon(a.von).length >= 3 || routenVon(a.an).length >= 3) return;
+    von.geld -= 1500;
+    routeEroeffnen(a.von, a.an);
+    return;
+  }
   if(a.richtung === "pakt"){
     von.pakte[a.an] = G.jahr + 5;
     an.pakte[a.von] = G.jahr + 5;
@@ -2907,8 +2767,11 @@ function wuerfleGelaende(){
 }
 const kiAufstellung = () => AUFSTELLUNGEN[ri(0,AUFSTELLUNGEN.length-1)].g;
 function kiSchlacht(a, d){
+  if(routeAktiv(a, d)) routeTrennen(a, d, "durch die Kriegserklärung zerbrochen");
   const kr = { a, d, weg: wegZwischen(a,d), fragen: [], wahl: {},
     aufA: kiAufstellung(), aufD: kiAufstellung(), gelaende: wuerfleGelaende() };
+  if(((G.spieler[d].mauer||0) + (G.spieler[d].burg||0)) > 0)
+    belagerungAnwenden(kr, G.spieler[a].heer.art >= 2 ? "beschuss" : "sturm");
   /* übrige KI-Regenten entscheiden, Menschen bleiben bei KI-Kriegen neutral */
   kr.fragen = lebende().map(x=>x.i).filter(i=>i!==a && i!==d);
   for(const i of kr.fragen){
@@ -2922,6 +2785,7 @@ function kiSchlacht(a, d){
   const D = seiteBauen(d, helferD, true);
   const eA = { inf:A.inf, kav:A.kav, art:A.art, miliz:A.miliz, auf:0 };
   const eD = { inf:D.inf, kav:D.kav, art:D.art, miliz:D.miliz, auf:D.aufgebot };
+  if(kr.hunger){ eD.miliz = Math.round(eD.miliz*0.6); eD.auf = Math.round(eD.auf*0.6); }
   const lanesA = verteileEinheiten(eA, kr.aufA);
   const lanesD = verteileEinheiten(eD, kr.aufD);
   const s = {
@@ -2930,8 +2794,10 @@ function kiSchlacht(a, d){
     start:{ A:{...eA}, D:{...eD} },
     startG:{ A:Math.max(1,laneGroesse(eA)), D:Math.max(1,laneGroesse(eD)) },
     gelaende: kr.gelaende || wuerfleGelaende(), regen: Math.random()<0.22,
+    festung: festungsFaktor(kr), belagerung: kr.belagerung || null,
     moralA:100, moralD:100, routA:false, routD:false,
     tick:0, maxTicks:40, log:[], partikel:[], fertig:false, sieger:null, still:true };
+  if(kr.hunger){ /* Hunger schwächt Miliz und Aufgebot auch im KI-Krieg */ }
   G._kr = kr; G._s = s;
   while(!s.fertig) einTick(s, true);
   schlachtAbschliessen();
@@ -2943,6 +2809,7 @@ function kiZug(p){
   /* Preise wie im normalen Zug */
   p.kornPreis = clamp(Math.round((G.kornMarkt||100) * rf(0.93,1.07)), 20, 430);
   p.landPreis = ri(16,70);
+  p.holzPreis = ri(8,16); p.steinPreis = ri(14,26);
   p.kornHist = (p.kornHist||[]).concat(p.kornPreis).slice(-32);
   p.kriegGefuehrt = false;
   p.turnStart = Date.now();
@@ -2972,6 +2839,18 @@ function kiZug(p){
     const k = p.geld > 6000 ? 0 : ev2.wahl.length-1;
     try{ ev2.wahl[k].fx(p); bericht.push(`entscheidet über „${ev2.ico}"-Vorfall`); }catch(e){}
   }
+  /* Baustoffe: fehlendes Material am Markt zukaufen */
+  const kiMaterial = (was) => {
+    const m = MATERIAL[was] || {holz:0,stein:0};
+    const fh = Math.max(0, m.holz - (p.holz||0)), fs = Math.max(0, m.stein - (p.stein||0));
+    const kosten = fh*(p.holzPreis||12) + fs*(p.steinPreis||20);
+    if(p.geld - kosten < 2500) return false;
+    p.geld -= kosten; p.holz = (p.holz||0) + fh; p.stein = (p.stein||0) + fs;
+    return true;
+  };
+  /* eigene Betriebe zuerst — sie machen alle späteren Bauten billiger */
+  if((p.forst||0) < 2 && p.geld > 8000 && p.land >= 3000){ p.geld -= KOSTEN.forst; p.forst=(p.forst||0)+1; platziereGebaeude(p,"f"); bericht.push("legt einen Forsthof an"); }
+  if((p.bruch||0) < 2 && p.geld > 10000 && p.land >= 5000 && kiMaterial("bruch")){ p.geld -= KOSTEN.bruch; zahleMaterial(p,"bruch"); p.bruch=(p.bruch||0)+1; platziereGebaeude(p,"s"); bericht.push("eröffnet einen Steinbruch"); }
   /* Bauen */
   let gebaut = 0;
   const bauLimit = p.kiTyp==="baumeister" ? 12 : 8;
@@ -2979,12 +2858,23 @@ function kiZug(p){
   for(let i=0;i<bauLimit;i++){
     if(p.geld < bauReserve || (p.maerkte+p.muehlen) >= bauplaetze(p)) break;
     if(p.maerkte >= 25 && p.muehlen >= 15) break;
-    if(p.maerkte*3 <= p.muehlen*5){ if(p.geld>=KOSTEN.markt){ p.geld-=KOSTEN.markt; p.maerkte++; platziereGebaeude(p,"m"); gebaut++; } }
-    else if(p.geld>=KOSTEN.muehle){ p.geld-=KOSTEN.muehle; p.muehlen++; platziereGebaeude(p,"k"); gebaut++; }
+    if(p.maerkte*3 <= p.muehlen*5){ if(p.geld>=KOSTEN.markt && kiMaterial("markt")){ p.geld-=KOSTEN.markt; zahleMaterial(p,"markt"); p.maerkte++; platziereGebaeude(p,"m"); gebaut++; } else break; }
+    else if(p.geld>=KOSTEN.muehle && kiMaterial("muehle")){ p.geld-=KOSTEN.muehle; zahleMaterial(p,"muehle"); p.muehlen++; platziereGebaeude(p,"k"); gebaut++; } else break;
   }
   if(gebaut) bericht.push(`errichtet ${gebaut} Bauwerk${gebaut>1?"e":""}`);
-  if(p.land >= LAND.palast){ let t=0; while(p.geld > 25000 && p.palast < PALAST_TEILE){ p.geld-=KOSTEN.palastTeil; p.palast++; t++; } if(t) bericht.push(`baut am Palast (${p.palast}/${PALAST_TEILE})`); }
-  if(p.palast >= PALAST_TEILE && p.land >= LAND.dom){ let t=0; while(p.geld > 112000 && p.dom < DOM_TEILE){ p.geld-=KOSTEN.domTeil; p.dom++; t++; } if(t) bericht.push(`baut an der Kathedrale (${p.dom}/${DOM_TEILE})`); }
+  /* Festung: wer Nachbarn mit großen Heeren hat, mauert sich ein */
+  const drohung = nachbarn(idx).map(i=>G.spieler[i]).filter(z=>!z.tot)
+    .some(z => heerStaerke(z.heer) > heerStaerke(p.heer)*1.2 + 100);
+  if((p.mauer||0) < (drohung?2:1) && p.maerkte>=2 && p.geld > 16000 && kiMaterial("mauer")){
+    p.geld -= KOSTEN.mauer; zahleMaterial(p,"mauer"); p.mauer=(p.mauer||0)+1;
+    bericht.push(`verstärkt die Stadtmauer (${p.mauer}/${MAUER_MAX})`);
+  }
+  if(drohung && (p.burg||0)<1 && (p.mauer||0)>=1 && p.land>=8000 && p.geld > 26000 && kiMaterial("burg")){
+    p.geld -= KOSTEN.burg; zahleMaterial(p,"burg"); p.burg=(p.burg||0)+1;
+    bericht.push("errichtet eine Burg");
+  }
+  if(p.land >= LAND.palast){ let t=0; while(p.geld > 25000 && p.palast < PALAST_TEILE && kiMaterial("palastTeil")){ p.geld-=KOSTEN.palastTeil; zahleMaterial(p,"palastTeil"); p.palast++; t++; } if(t) bericht.push(`baut am Palast (${p.palast}/${PALAST_TEILE})`); }
+  if(p.palast >= PALAST_TEILE && p.land >= LAND.dom){ let t=0; while(p.geld > 112000 && p.dom < DOM_TEILE && kiMaterial("domTeil")){ p.geld-=KOSTEN.domTeil; zahleMaterial(p,"domTeil"); p.dom++; t++; } if(t) bericht.push(`baut an der Kathedrale (${p.dom}/${DOM_TEILE})`); }
   /* Heer — der Eroberer rüstet stärker */
   const heerZiel = (p.kiTyp==="aggressor" ? 260 : 130) + p.titel*80;
   if(p.titel>=1 && p.geld > (p.kiTyp==="aggressor" ? 14000 : 20000) && heerGroesse(p.heer) < heerZiel){
@@ -3002,7 +2892,33 @@ function kiZug(p){
       bericht.push(`sendet ${partner.name} ein Geschenk`);
     }
   }
-  if(p.kiTyp==="haendler" && (p.haefen||0)<2 && p.land>=12000 && p.geld>18000){ p.geld-=KOSTEN.hafen; p.haefen=(p.haefen||0)+1; bericht.push("baut einen Hafen"); }
+  if(p.kiTyp==="haendler" && (p.haefen||0)<2 && p.land>=12000 && p.geld>18000 && hatMaterial(p,"hafen")){ p.geld-=KOSTEN.hafen; zahleMaterial(p,"hafen"); p.haefen=(p.haefen||0)+1; bericht.push("baut einen Hafen"); }
+  /* Handelsrouten: der Händler knüpft Netze, andere folgen guten Beziehungen */
+  if(routenVon(idx).length < 3 && p.geld > 8000 && Math.random() < (p.kiTyp==="haendler" ? 0.35 : 0.10)){
+    const partner = lebende().map(x=>x.i).filter(i=>i!==idx && !routeAktiv(idx,i)
+      && routenVon(i).length < 3 && bezWert(p, G.spieler[i]) >= 0)
+      .sort((a,b)=>bezWert(p,G.spieler[b])-bezWert(p,G.spieler[a]))[0];
+    if(partner !== undefined){
+      const z = G.spieler[partner];
+      if(z.ki){
+        if(z.kiTyp === "haendler" || bezWert(z, p) >= 10){
+          p.geld -= 1500;
+          routeEroeffnen(idx, partner);
+          bericht.push(`eröffnet eine Handelsroute mit ${z.name}`);
+        }
+      } else if(!(G.angebote||[]).some(x=>x.von===idx && x.an===partner && x.richtung==="route")){
+        G.angebote.push({ von:idx, an:partner, richtung:"route", menge:0, preis:0, jahr:G.jahr });
+      }
+    }
+  }
+  /* Heiratspolitik unter KI-Häusern */
+  if(Math.random() < 0.06 && p.geld > 12000){
+    const partner = lebende().map(x=>x.p).filter(z=>z!==p && z.ki && bezWert(p,z)>=25 && !eheAktiv(p,z))[0];
+    if(partner){
+      eheSchliessen(p, partner, ri(2000,4000));
+      bericht.push(`vermählt sein Haus mit ${partner.name}`);
+    }
+  }
   if(p.kiTyp==="haendler" && p.korn > noetigKorn(p)*2.5 && p.kornPreis > 130){
     const m = p.korn - Math.ceil(noetigKorn(p)*2);
     p.korn -= m; p.geld += Math.round(m*p.kornPreis*0.9);
@@ -3044,7 +2960,7 @@ function storageOK(){
   try{ const t="__kaiser_t"; window.localStorage.setItem(t,"1"); window.localStorage.removeItem(t); return true; }
   catch(e){ return false; }
 }
-function spielstand(){ return JSON.stringify({v:7, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler, opt:G.opt||{vergleich:true}, diff:G.diff||2, tipps:G.tipps||{}, kornMarkt:G.kornMarkt||100, marktDruck:G.marktDruck||0, angebote:G.angebote||[], szenario:G.szenario||"frei", geschichte:G.geschichte||[]}); }
+function spielstand(){ return JSON.stringify({v:8, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler, opt:G.opt||{vergleich:true}, diff:G.diff||2, tipps:G.tipps||{}, kornMarkt:G.kornMarkt||100, marktDruck:G.marktDruck||0, angebote:G.angebote||[], szenario:G.szenario||"frei", geschichte:G.geschichte||[], routen:G.routen||[], marktHist:G.marktHist||[], kampagne:G.kampagne||null}); }
 function ladeSpielstand(json){
   const d = JSON.parse(json);
   if(!d || !Array.isArray(d.spieler) || !d.spieler.length) throw new Error("ungültig");
@@ -3058,6 +2974,9 @@ function ladeSpielstand(json){
   G.angebote = d.angebote || [];
   G.szenario = d.szenario || "frei";
   G.geschichte = d.geschichte || [];
+  G.routen = d.routen || [];
+  G.marktHist = d.marktHist || [];
+  G.kampagne = d.kampagne || null;
   G._kiBerichte = [];
   G.spieler.forEach((p,i)=>{
     if(!p.heer) p.heer = {inf:0,kav:0,art:0};
@@ -3076,6 +2995,15 @@ function ladeSpielstand(json){
     if(p.haefen===undefined) p.haefen = 0;
     if(!p.berater) p.berater = {};
     if(!p.spionage) p.spionage = {};
+    if(!p.ehen) p.ehen = {};
+    if(p.holz===undefined) p.holz = 120;
+    if(p.stein===undefined) p.stein = 60;
+    if(p.forst===undefined) p.forst = 0;
+    if(p.bruch===undefined) p.bruch = 0;
+    if(p.mauer===undefined) p.mauer = 0;
+    if(p.burg===undefined) p.burg = 0;
+    if(!p.holzPreis) p.holzPreis = ri(8,16);
+    if(!p.steinPreis) p.steinPreis = ri(14,26);
     if(!p.gebaeude){
       p.gebaeude = [];
       for(let m=0;m<p.maerkte;m++) p.gebaeude.push({t:"m",ang:Math.random()*6.2832,dist:0.34+Math.random()*0.58});
@@ -3112,6 +3040,82 @@ function hatQuicksave(){
   try{ return storageOK() && !!window.localStorage.getItem("kaiser_save"); }catch(e){ return false; }
 }
 
+/* ============================================================
+   Kampagne: vier verkettete Kapitel — vom Bauernsohn zum Kaiser
+   ============================================================ */
+const KAMPAGNE = [
+  { titel:"Der Bauernsohn", ico:"🌾",
+    intro:`Anno 1700. Euer Vater, ein freier Bauer, hinterlässt Euch ein kleines Gut am Fluss.
+      Die Nachbarn — ein geschäftiger Baumeister und ein listiger Kaufmann — belächeln den
+      Emporkömmling. Zeigt ihnen, dass in Euch mehr steckt als Ackerschmutz und Schwielen.`,
+    ziel:"Steigt bis Anno 1716 zum Landgrafen auf.",
+    bis:1716, ok:p=>p.titel>=2,
+    kis:["baumeister","haendler"], szenario:"frei", diff:2 },
+  { titel:"Die Schulden des Vaters", ico:"🪙",
+    intro:`Euer Aufstieg weckt Begehrlichkeiten: Ein vergessener Schuldbrief des Vaters taucht auf —
+      4.000 Taler, sofort fällig. Die Gläubiger lachen schon. Wirtschaftet Euch frei und beweist,
+      dass Euer Haus mehr kann als Schulden erben.`,
+    ziel:"Erwirtschaftet bis Anno 1720 ein Vermögen von 30.000 Talern und eine Stadt.",
+    bis:1720, ok:p=>p.geld>=30000 && staedte(p)>=1,
+    kis:["haendler","haendler"], szenario:"erbe", diff:2 },
+  { titel:"Die Kriegstreiber", ico:"⚔️",
+    intro:`Euer Reichtum ist den Säbelrasslern ein Dorn im Auge. Aufgerüstete Nachbarn scharren an
+      den Grenzen — diesmal helfen keine Taler, sondern nur Mut und ein gutes Heer. Schlagt sie
+      auf dem Feld, ehe sie Euch schlagen.`,
+    ziel:"Gewinnt bis Anno 1722 zwei Schlachten.",
+    bis:1722, ok:p=>p.stat.siege>=2,
+    kis:["aggressor","aggressor","baumeister"], szenario:"kriegstreiber", diff:2 },
+  { titel:"Die Krone", ico:"👑",
+    intro:`Der Kaiserthron ist verwaist, und das Reich blickt auf Euch. Alles, was Ihr gelernt habt —
+      Wirtschaft, Diplomatie, Krieg — entscheidet nun über die Krone. Vollendet die Kathedrale
+      und werdet, was Euer Vater nie zu träumen wagte: Kaiser.`,
+    ziel:"Werdet Kaiser, ehe Eure Linie endet.",
+    bis:9999, ok:p=>p.titel>=8,
+    kis:["baumeister","haendler","aggressor"], szenario:"frei", diff:2, dynastie:true }
+];
+function kampagneFortschritt(){
+  try{ return JSON.parse(window.localStorage.getItem("kaiser_kampagne")||"{}"); }catch(e){ return {}; }
+}
+function kampagneSpeichern(f){
+  try{ window.localStorage.setItem("kaiser_kampagne", JSON.stringify(f)); }catch(e){}
+}
+function kampagneStart(k){
+  const f = kampagneFortschritt();
+  const name = ($("#kampName") && $("#kampName").value.trim()) || f.name || "Friedrich";
+  const w = $("#kampW") ? $("#kampW").value === "1" : !!f.w;
+  kampagneSpeichern({ ...f, name, w });
+  kampagneStartDirekt(k);
+}
+function kampagneStartDirekt(k){
+  const K = KAMPAGNE[k];
+  if(!K) return;
+  const f = kampagneFortschritt();
+  const name = f.name || "Friedrich", w = !!f.w;
+  const namen = [name], geschl = [w], kis = [false];
+  K.kis.forEach((typ,i)=>{ namen.push(NAMEN[(i+2)%NAMEN.length]); geschl.push(i%2===1); kis.push(true); });
+  starteSpiel(namen.length, namen, geschl, 1.8, kis, {
+    vergleich:true, tutorial:true, diff:K.diff, szenario:K.szenario, dynastie: !!K.dynastie
+  });
+  K.kis.forEach((typ,i)=>{ G.spieler[i+1].kiTyp = typ; });
+  G.kampagne = { k };
+  /* mitgebrachtes Vermögen aus dem letzten Kapitel */
+  if(k > 0 && f.bonus){
+    G.spieler[0].geld += f.bonus;
+    G.spieler[0].holz = (G.spieler[0].holz||0) + 40;
+  }
+  geschichte("📖", `Kampagne, Kapitel ${k+1}: ${K.titel}.`);
+  zeige("kapitelIntro");
+}
+function kampagneErfolg(){
+  const p = cur();
+  const k = G.kampagne.k;
+  const f = kampagneFortschritt();
+  const bonus = clamp(Math.round(Math.max(0, p.geld)*0.25), 0, 20000);
+  kampagneSpeichern({ ...f, frei: Math.max(f.frei||0, k+1), bonus, name:p.name.replace(/ (II\.|III\.|IV\.|V\.|VI\.|VII\.|\d+\.)$/,""), w:p.w });
+  if(k >= KAMPAGNE.length-1) erfolg("kampagne");
+  zeige("kapitelSieg");
+}
+
 /* ---------- Ablauf ---------- */
 function starteSpiel(anzahl, namen, geschlechter, tempo, kis, opts){
   opts = opts || {};
@@ -3142,7 +3146,9 @@ function starteSpiel(anzahl, namen, geschlechter, tempo, kis, opts){
   G.kornMarkt = G.kornMarkt || ri(85,120);
   G.marktDruck = 0;
   G.angebote = [];
+  G.routen = [];
   G.jahr = 1700; G.aktiv = 0; G.sieger = null; G._kiBerichte = []; G._ruhmFertig = false;
+  G.kampagne = null; G.marktHist = [];
   if(cur().ki){ G.aktiv = -1; naechsterSpieler(); }
   else zeige("intro");
 }
@@ -3151,6 +3157,7 @@ function beginneZug(){
   const p = cur();
   p.kornPreis = clamp(Math.round((G.kornMarkt||100) * rf(0.93,1.07)), 20, 430);
   p.landPreis = ri(16,70);
+  p.holzPreis = ri(8,16); p.steinPreis = ri(14,26);
   p.kornHist = (p.kornHist||[]).concat(p.kornPreis).slice(-32);
   if(p.snap){
     p.delta = { geld:p.geld-p.snap.geld, land:p.land-p.snap.land,
@@ -3178,6 +3185,7 @@ function naechsterSpieler(){
       if(Math.random() < 0.06) kp *= rf(1.5,2.4);
       G.kornMarkt = clamp(Math.round(kp), 20, 430);
       G.marktDruck = Math.round((G.marktDruck||0)*0.4);
+      G.marktHist = (G.marktHist||[]).concat({ j:G.jahr, k:G.kornMarkt }).slice(-100);
     }
     const p = cur();
     if(alleTot()){ zeige("ende"); return; }
@@ -3377,6 +3385,52 @@ function vergleichsChart(){
     <p class="muted small" style="margin-top:6px">${legende} · Spitze: ${fmt(max)} Untertanen</p>
   </div>`;
 }
+/* Statistik-Dashboard: Kennzahlen-Kurven aller Reiche über die Jahre */
+function statChart(key, titel, einheit){
+  const teilnehmer = G.spieler.filter(p=>(p.chronik||[]).length>=2 && p.chronik.some(e=>e[key]!==undefined));
+  if(teilnehmer.length < 1) return "";
+  const alle = teilnehmer.flatMap(p=>p.chronik.map(e=>e[key]||0));
+  const max = Math.max(1, ...alle), min = Math.min(0, ...alle);
+  const sp = Math.max(1, max-min);
+  const j0 = Math.min(...teilnehmer.map(p=>p.chronik[0].j));
+  const j1 = Math.max(...teilnehmer.map(p=>p.chronik[p.chronik.length-1].j));
+  const w = 640, h = 150;
+  const y0 = h-12 - (0-min)/sp*(h-28);
+  const linien = teilnehmer.map(p=>{
+    const pts = p.chronik.map(e=>
+      `${((e.j-j0)/Math.max(1,j1-j0)*w).toFixed(1)},${(h-12-((e[key]||0)-min)/sp*(h-28)).toFixed(1)}`);
+    return `<polyline points="${pts.join(" ")}" fill="none" stroke="${p.farbe}" stroke-width="2.2" stroke-linejoin="round" opacity=".92"/>`;
+  }).join("");
+  return `<div class="card">
+    <h3>${titel} · ${j0}–${j1}</h3>
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
+      <line x1="0" y1="${y0.toFixed(1)}" x2="${w}" y2="${y0.toFixed(1)}" stroke="#2a3446"/>
+      ${linien}
+      <text x="2" y="12" font-size="10" fill="#8b96a8">${fmt(max)}${einheit}</text>
+    </svg>
+  </div>`;
+}
+function marktChart(){
+  const h0 = G.marktHist || [];
+  if(h0.length < 2) return "";
+  const w = 640, h = 120;
+  const max = Math.max(...h0.map(e=>e.k)), min = Math.min(...h0.map(e=>e.k));
+  const sp = Math.max(1, max-min);
+  const pts = h0.map((e,i)=>`${(i/(h0.length-1)*w).toFixed(1)},${(h-10-(e.k-min)/sp*(h-24)).toFixed(1)}`);
+  return `<div class="card">
+    <h3>Kornkurs des gemeinsamen Marktes · ${h0[0].j}–${h0[h0.length-1].j}</h3>
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
+      <polyline points="${pts.join(" ")}" fill="none" stroke="var(--gold)" stroke-width="2.2" stroke-linejoin="round"/>
+      <text x="2" y="12" font-size="10" fill="#8b96a8">${fmt(max)} T</text>
+      <text x="2" y="${h-2}" font-size="10" fill="#8b96a8">${fmt(min)} T</text>
+    </svg>
+  </div>`;
+}
+function statAuf(){
+  if(G.screen === "statistik" || G.screen === "schlacht") return;
+  G._vorStat = G.screen;
+  zeige("statistik");
+}
 function deltaBadge(v, einheit=""){
   if(v===undefined || v===null || v===0 || !isFinite(v)) return "";
   return v>0 ? `<span class="up">▲ ${fmt(v)}${einheit}</span>` : `<span class="down">▼ ${fmt(Math.abs(v))}${einheit}</span>`;
@@ -3408,6 +3462,7 @@ const SCREENS = {
     </div>
     <div class="center">
       <button class="btn-primary btn-lg" onclick="zeige('setup')">Neues Spiel</button>
+      <button class="btn-lg" onclick="zeige('kampagne')">📖 Kampagne</button>
       ${hatQuicksave()?`<button class="btn-lg" onclick="quickload()">Fortsetzen</button>`:""}
       <button class="btn-lg" onclick="zeige('online')">🌐 Online spielen</button>
       <button class="btn-lg" onclick="$('#importFile').click()">Spielstand laden</button>
@@ -3556,6 +3611,9 @@ const SCREENS = {
           <p class="muted small" style="margin-top:8px">Der Gratis-Server schläft bei Inaktivität —
           das Spiel weckt ihn automatisch und versucht es bis zu viermal (~1 Minute). Einfach
           kurz warten, die Lobby öffnet sich von selbst.</p>
+          <p class="small" style="margin-top:8px">♻️ <b>Asynchron spielen:</b> Der Server merkt sich laufende
+          Partien. Verlasst das Spiel, wann Ihr wollt — mit <b>Code und demselben Namen</b> steigt Ihr
+          jederzeit wieder ein, auch Tage später. Niemand muss gleichzeitig online sein.</p>
         </div>
       </div>
       <button class="btn-lg" onclick="weltrangAuf()">🌍 Weltrangliste</button>
@@ -3633,6 +3691,7 @@ const SCREENS = {
     const was = pend
       ? (pend.typ==="diplo" ? "entscheidet über eine Kriegs-Botschaft"
         : pend.typ==="aufD" ? "stellt heimlich die Verteidigung auf"
+        : pend.typ==="belagerung" ? "belagert eine Festung"
         : pend.typ==="schlacht" || pend.typ==="schlachtplan" ? "führt eine Schlacht"
         : "ist am Zug")
       : "ist am Zug";
@@ -3706,6 +3765,7 @@ const SCREENS = {
           <h2 style="margin-bottom:4px">${anrede(p)}, ${titelName(p)} ${p.name}</h2>
           <p class="muted">${alterJahre(p)} Jahre alt · Anno ${G.jahr} · ${saison().n}</p>
           <button class="btn-sm" onclick="weltAuf()" style="margin-top:8px">🗺️ Gesamtkarte</button>
+          <button class="btn-sm" onclick="statAuf()" style="margin-top:8px">📈 Statistik</button>
         </div>
       </div>
       ${statKarten(p)}
@@ -3719,6 +3779,8 @@ const SCREENS = {
             <tr><td>Bauplätze <span class="muted small">(1 je 1.000 ha)</span></td><td class="r">${p.maerkte+p.muehlen} / ${bauplaetze(p)}</td></tr>
             <tr><td>Anbaufläche <span class="muted small">(Bebauung frisst Acker)</span></td><td class="r">${fmt(anbau(p))} ha</td></tr>
             <tr><td>Heer <span class="muted small">(Unterhalt ${fmt(unterhalt(p))} T/Jahr)</span></td><td class="r">${fmt(heerGroesse(p.heer))} Mann</td></tr>
+            <tr><td>Befestigung</td><td class="r">${(p.mauer||0)>0||(p.burg||0)>0?`Mauer ${p.mauer||0}/${MAUER_MAX}${(p.burg||0)>0?` · Burg ${p.burg||0}/${BURG_MAX}`:""}`:"—"}</td></tr>
+            <tr><td>Baustoffe <span class="muted small">(${p.forst||0} Forsthöfe, ${p.bruch||0} Steinbrüche)</span></td><td class="r">${fmt(p.holz||0)} 🪵 · ${fmt(p.stein||0)} 🪨</td></tr>
             <tr><td>Nachbarreiche</td><td class="r">${nb}</td></tr>
           </table>
         </div>
@@ -3800,6 +3862,18 @@ const SCREENS = {
             <button class="btn-sm" onclick="$('#lverk').value=${freiLand(p)}">Max</button>
             <button onclick="handelLand(-1)">Verkauf</button></div>
         </div>
+      </div>
+      <div class="card">
+        <h3>🪵🪨 Baustoffe — Holz ${fmt(p.holzPreis||12)} T · Stein ${fmt(p.steinPreis||20)} T</h3>
+        <p class="muted small">Bauwerke brauchen neben Talern auch Holz und Stein. Eigene Forsthöfe
+        (30 🪵/Jahr) und Steinbrüche (20 🪨/Jahr) liefern günstiger als der Markt. Verkauf zum halben Preis.</p>
+        <p style="margin-top:8px">Lager: <b>${fmt(p.holz||0)} 🪵 Holz</b> · <b>${fmt(p.stein||0)} 🪨 Stein</b></p>
+        <div class="rowflex">Holz: <input type="number" id="hkauf" min="0" value="0">
+          <button class="btn-sm" onclick="handelMaterial('holz',1)">Kauf</button>
+          <button class="btn-sm" onclick="handelMaterial('holz',-1)">Verkauf</button></div>
+        <div class="rowflex">Stein: <input type="number" id="skauf" min="0" value="0">
+          <button class="btn-sm" onclick="handelMaterial('stein',1)">Kauf</button>
+          <button class="btn-sm" onclick="handelMaterial('stein',-1)">Verkauf</button></div>
       </div>
       <div class="card"><b>Vermögen: <span class="${p.geld<0?'red':'gold'}">${fmt(p.geld)} Taler</span></b>
         <span id="hmsg" class="red" style="margin-left:16px"></span></div>
@@ -3898,14 +3972,25 @@ const SCREENS = {
       <div class="grid g2">
         <div class="card">
           <h3>Bauen</h3>
-          ${bBtn(`${G._bauModus==="markt"?"✳️ ":""}Markt — ${fmt(KOSTEN.markt)} T`,"baue('markt')", p.geld>=KOSTEN.markt && platz)}
-          ${bBtn(`${G._bauModus==="muehle"?"✳️ ":""}Mühle — ${fmt(KOSTEN.muehle)} T`,"baue('muehle')", p.geld>=KOSTEN.muehle && platz)}
-          ${bBtn(`Hafen ${p.haefen||0}/2 — ${fmt(KOSTEN.hafen)} T`,"baue('hafen')",
-              (p.haefen||0)<2 && p.geld>=KOSTEN.hafen && p.land>=12000)}
-          ${bBtn(`Palast-Teil ${p.palast}/${PALAST_TEILE} — ${fmt(KOSTEN.palastTeil)} T`,"baue('palast')",
-              p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast)}
-          ${bBtn(`Dom-Teil ${p.dom}/${DOM_TEILE} — ${fmt(KOSTEN.domTeil)} T`,"baue('dom')",
-              p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom)}
+          <p class="small" style="margin-bottom:6px">Lager: <b>${fmt(p.holz||0)} 🪵</b> · <b>${fmt(p.stein||0)} 🪨</b>
+            <span class="muted small">— Baustoffe gibt's im Handel oder aus eigenen Betrieben</span></p>
+          ${bBtn(`${G._bauModus==="markt"?"✳️ ":""}Markt — ${fmt(KOSTEN.markt)} T${matText('markt')}`,"baue('markt')", p.geld>=KOSTEN.markt && platz && hatMaterial(p,'markt'))}
+          ${bBtn(`${G._bauModus==="muehle"?"✳️ ":""}Mühle — ${fmt(KOSTEN.muehle)} T${matText('muehle')}`,"baue('muehle')", p.geld>=KOSTEN.muehle && platz && hatMaterial(p,'muehle'))}
+          ${bBtn(`Forsthof ${p.forst||0}/${FORST_MAX} — ${fmt(KOSTEN.forst)} T <span class="muted small">(+30 🪵/J)</span>`,"baue('forst')",
+              (p.forst||0)<FORST_MAX && p.geld>=KOSTEN.forst && p.land>=3000)}
+          ${bBtn(`Steinbruch ${p.bruch||0}/${BRUCH_MAX} — ${fmt(KOSTEN.bruch)} T${matText('bruch')} <span class="muted small">(+20 🪨/J)</span>`,"baue('bruch')",
+              (p.bruch||0)<BRUCH_MAX && p.geld>=KOSTEN.bruch && p.land>=5000 && hatMaterial(p,'bruch'))}
+          ${bBtn(`Hafen ${p.haefen||0}/2 — ${fmt(KOSTEN.hafen)} T${matText('hafen')}`,"baue('hafen')",
+              (p.haefen||0)<2 && p.geld>=KOSTEN.hafen && p.land>=12000 && hatMaterial(p,'hafen'))}
+          ${bBtn(`Stadtmauer ${p.mauer||0}/${MAUER_MAX} — ${fmt(KOSTEN.mauer)} T${matText('mauer')}`,"baue('mauer')",
+              (p.mauer||0)<MAUER_MAX && p.geld>=KOSTEN.mauer && p.maerkte>=2 && hatMaterial(p,'mauer'))}
+          ${bBtn(`Burg ${p.burg||0}/${BURG_MAX} — ${fmt(KOSTEN.burg)} T${matText('burg')}`,"baue('burg')",
+              (p.burg||0)<BURG_MAX && p.geld>=KOSTEN.burg && (p.mauer||0)>=1 && p.land>=8000 && hatMaterial(p,'burg'))}
+          ${(p.mauer||0)<MAUER_MAX && p.maerkte<2?`<p class="muted small">Die Stadtmauer verlangt mindestens 2 Märkte.</p>`:""}
+          ${bBtn(`Palast-Teil ${p.palast}/${PALAST_TEILE} — ${fmt(KOSTEN.palastTeil)} T${matText('palastTeil')}`,"baue('palast')",
+              p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast && hatMaterial(p,'palastTeil'))}
+          ${bBtn(`Dom-Teil ${p.dom}/${DOM_TEILE} — ${fmt(KOSTEN.domTeil)} T${matText('domTeil')}`,"baue('dom')",
+              p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom && hatMaterial(p,'domTeil'))}
           ${p.land<LAND.palast?`<p class="muted small">Für den Palast fehlen Euch noch ${fmt(LAND.palast-p.land)} ha Land.</p>`:
             p.land<LAND.dom && p.palast>=PALAST_TEILE?`<p class="muted small">Für die Kathedrale fehlen Euch noch ${fmt(LAND.dom-p.land)} ha Land.</p>`:""}
         </div>
@@ -3950,7 +4035,7 @@ const SCREENS = {
       const lbl = w>40?"freundschaftlich":w>10?"wohlwollend":w>-10?"neutral":w>-40?"kühl":"feindselig";
       return `<tr><td>${z.p.wappen} ${z.p.name}</td>
         <td class="r ${w>10?'green':w<-10?'red':''}">${w>0?"+":""}${w} · ${lbl}</td>
-        <td class="r">${paktAktiv(p,z.p)?`🕊️ Pakt bis ${p.pakte[z.i]}`:"—"}</td></tr>`;
+        <td class="r">${routeAktiv(G.aktiv,z.i)?"🚚 ":""}${eheAktiv(p,z.p)?`💍 Ehe bis ${p.ehen[z.i]}`:paktAktiv(p,z.p)?`🕊️ Pakt bis ${p.pakte[z.i]}`:"—"}</td></tr>`;
     }).join("");
     return `
       ${stepper("Bauen")}
@@ -3982,6 +4067,16 @@ const SCREENS = {
             <button onclick="diploAktion('pakt')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>🕊️ Nichtangriffspakt anbieten (5 Jahre)</button>
           </div>
           <div class="rowflex">
+            <button onclick="diploAktion('route')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>🚚 Handelsroute anbieten (1.500 T)</button>
+            <span class="muted small">${routenVon(G.aktiv).length}/3 Routen</span>
+          </div>
+          <div class="rowflex">
+            <input type="number" id="dipMitgift" min="2000" step="500" value="3000" style="width:100px" title="Mitgift in Talern">
+            <button onclick="diploAktion('ehe')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>💍 Vermählung anbieten</button>
+          </div>
+          <p class="muted small">Eine Ehe stiftet 12 Jahre Frieden zwischen den Häusern — und beim Tod des
+          vermählten Regenten erbt Euer Haus einen Teil seines Landes.</p>
+          <div class="rowflex">
             <button onclick="spionEntsenden()" ${p.spionGenutzt?'disabled':''}>🕵️ Spion entsenden (600 T)</button>
             ${p.spionGenutzt?'<span class="muted small">Spion dieses Jahr bereits unterwegs</span>':''}
           </div>
@@ -4010,7 +4105,11 @@ const SCREENS = {
     if(!meine.length){ setTimeout(()=>zeige("status"), 10); return ""; }
     const karten = meine.map(({a,i})=>{
       const von = G.spieler[a.von];
-      const txt = a.richtung==="pakt"
+      const txt = a.richtung==="route"
+        ? `möchte eine <b>Handelsroute</b> zwischen Euren Reichen eröffnen — beide Seiten kassieren jährlich Zoll, der Antragsteller trägt die Kosten.`
+        : a.richtung==="ehe"
+        ? `bittet um die <b>Vermählung Eurer Häuser</b> — mit einer Mitgift von <b>${fmt(a.menge)} Talern</b> (12 Jahre Frieden, Erbanspruch bei Todesfällen).`
+        : a.richtung==="pakt"
         ? `bietet Euch einen <b>Nichtangriffspakt</b> über 5 Jahre an.`
         : a.richtung==="kauf"
           ? `möchte <b>${fmt(a.menge)} Fuder Korn</b> von Euch kaufen — zu <b>${fmt(a.preis)} T/Fuder</b> (${fmt(a.menge*a.preis)} T gesamt).`
@@ -4037,7 +4136,8 @@ const SCREENS = {
     const opts = ziele.map(z=>{
       const adj = nb.includes(z.i);
       const weg = adj ? [] : wegZwischen(G.aktiv, z.i);
-      return `<option value="${z.i}" ${z.i===vorwahl?'selected':''}>${titelName(z.p)} ${z.p.name} — ${fmt(z.p.land)} ha, ${fmt(z.p.pop)} Einw.${adj?" · Nachbar":" · Durchmarsch über "+weg.map(i=>G.spieler[i].name).join(", ")}</option>`;
+      const burg = ((z.p.mauer||0)+(z.p.burg||0))>0 ? " · 🏰 befestigt" : "";
+      return `<option value="${z.i}" ${z.i===vorwahl?'selected':''}>${titelName(z.p)} ${z.p.name} — ${fmt(z.p.land)} ha, ${fmt(z.p.pop)} Einw.${burg}${adj?" · Nachbar":" · Durchmarsch über "+weg.map(i=>G.spieler[i].name).join(", ")}</option>`;
     }).join("");
     return `
       ${stepper("Bauen")}
@@ -4104,6 +4204,30 @@ const SCREENS = {
         <p class="muted" style="margin-top:8px">Die Gelegenheit dieses Jahres ist vertan.</p>
       </div>
       <button class="btn-primary btn-lg" onclick="zeige('bauen')">Weiter</button>`;
+  },
+
+  belagerung(){
+    const kr = G._kr;
+    const ang = G.spieler[kr.a], ver = G.spieler[kr.d];
+    const fest = festungsBonus(ver);
+    return `
+      <h2>🏰 Belagerung — ${ver.name}s Festungswerke</h2>
+      <div class="card">
+        <p><b class="cyan">${titelName(ver)} ${ver.name}</b> hat sich verschanzt:
+          ${ver.mauer?`Stadtmauer Stufe ${ver.mauer}`:""}${ver.mauer&&ver.burg?" und ":""}${ver.burg?`Burg Stufe ${ver.burg}`:""}.
+          Im offenen Feld kämpfen die Verteidiger dahinter mit <b>+${Math.round((fest-1)*100)} %</b> Stärke.</p>
+        <p class="muted small" style="margin-top:6px">Wählt, wie Ihr die Festung brechen wollt, ${titelName(ang)} ${ang.name}:</p>
+      </div>
+      <div style="max-width:680px">
+        <button class="btn-lg" onclick="belagerungWahl('sturm')" style="display:block;width:100%;text-align:left;margin:6px 0">
+          ⚔️ <b>Sturmangriff</b> — sofort angreifen. Die Mauern stehen (voller Bonus), die ersten Sturmreihen erleiden Verluste.</button>
+        <button class="btn-lg" onclick="belagerungWahl('beschuss')" ${ang.heer.art>=2?"":"disabled"} style="display:block;width:100%;text-align:left;margin:6px 0">
+          💣 <b>Beschuss</b> ${ang.heer.art<2?'<span class="red small">(braucht mind. 2 Artillerie)</span>':""} — Breschen schießen:
+          Mauerbonus stark geschwächt, gute Chance, einen Mauerring dauerhaft zu zerstören.</button>
+        <button class="btn-lg" onclick="belagerungWahl('aushungern')" style="display:block;width:100%;text-align:left;margin:6px 0">
+          ⏳ <b>Aushungern</b> — lange Belagerung: der Verteidiger verliert Korn und Volk, Miliz und Aufgebot kämpfen entkräftet,
+          der Mauerbonus sinkt beinahe zur Hälfte.</button>
+      </div>`;
   },
 
   aufstellungA(){
@@ -4187,7 +4311,7 @@ const SCREENS = {
       </div>`;
     return `
       <h2>⚔️ Schlacht um ${ver.name}s Land</h2>
-      <span class="phasebadge">Gefecht ${Math.min(s.tick,s.maxTicks)}/${s.maxTicks}${s.regen?" · 🌧️ Regen — Artillerie geschwächt":""}</span>
+      <span class="phasebadge">Gefecht ${Math.min(s.tick,s.maxTicks)}/${s.maxTicks}${s.regen?" · 🌧️ Regen — Artillerie geschwächt":""}${(s.festung||1)>1?` · 🏰 Festung ×${(s.festung||1).toFixed(2)}`:""}${s.belagerung?` · ${s.belagerung==="sturm"?"⚔️ Sturmangriff":s.belagerung==="beschuss"?"💣 nach Beschuss":"⏳ nach Aushungern"}`:""}</span>
       <canvas id="feld" width="900" height="380"></canvas>
       <div class="battlefield">
         <div>
@@ -4236,7 +4360,9 @@ const SCREENS = {
           <table>
             ${row("Ernte ("+fmt(Math.min(p.pop*4,anbau(p)))+" ha bestellt)", "+"+fmt(r.ernte)+" Fuder", "delta-pos")}
             ${row("Kornspeicher jetzt", fmt(p.korn)+" Fuder")}
+            ${r.holzErtrag||r.steinErtrag?row("Forst & Steinbruch", "+"+fmt(r.holzErtrag||0)+" 🪵, +"+fmt(r.steinErtrag||0)+" 🪨", "delta-pos"):""}
             ${row("Steuern & Wirtschaft", "+"+fmt(r.steuern)+" Taler", "delta-pos")}
+            ${r.routenGeld?row("Zoll aus "+routenVon(G.spieler.indexOf(p)).length+" Handelsroute"+(routenVon(G.spieler.indexOf(p)).length>1?"n":""), "+"+fmt(r.routenGeld)+" Taler", "delta-pos"):""}
             ${r.unterhalt?row("Heer-Unterhalt", "−"+fmt(r.unterhalt)+" Taler", "delta-neg"):""}
             ${r.gehaelter?row("Berater-Gehälter", "−"+fmt(r.gehaelter)+" Taler", "delta-neg"):""}
             ${row("Vermögen jetzt", fmt(p.geld)+" Taler", p.geld<0?"red":"")}
@@ -4292,6 +4418,7 @@ const SCREENS = {
             ? `<button class="btn-primary btn-lg" onclick="erben(cur()); zeige('handoff')">👶 Erbfolge antreten</button>
                <p class="muted small" style="margin-top:8px">Der Erbstreit kostet 20 % des Vermögens, 8 % des Landes und eine Titelstufe.</p>`
             : ""}
+          ${G.kampagne?`<button class="btn-lg" onclick="kampagneStartDirekt(G.kampagne.k)">📖 Kapitel erneut versuchen</button>`:""}
           <button class="btn-lg" onclick="naechsterSpieler()">${G.opt && G.opt.dynastie ? "Die Linie endet hier" : "Weiter"}</button>
         </div>
       </div>`;
@@ -4340,8 +4467,9 @@ const SCREENS = {
       <h2>🗺️ Die bekannte Welt — Anno ${G.jahr}</h2>
       <div class="card">
         <canvas id="welt" width="920" height="430"></canvas>
-        <p class="muted small">Die Sitzreihenfolge bildet den Nachbarschaftskreis — Handelswege verbinden
-        benachbarte Reiche. Euer Reich trägt den goldenen Ring.</p>
+        <p class="muted small">Die Sitzreihenfolge bildet den Nachbarschaftskreis — blasse Wege verbinden
+        Nachbarn, <span class="gold">goldene Wege mit Karawanen</span> sind aktive Handelsrouten (jährlicher
+        Zoll für beide Seiten). Euer Reich trägt den goldenen Ring.</p>
       </div>
       <div class="card">
         <h3>Die Konkurrenz</h3>
@@ -4352,7 +4480,8 @@ const SCREENS = {
         ${!ausBauen?'<p class="muted small">Feldzüge lassen sich in der Bauphase beginnen (Landkarte &amp; Bauen → Gesamtkarte).</p>':
           !kk.ok?`<p class="muted small">Für einen Feldzug fehlt Euch noch: ${kk.fehlt.join(" · ")}.</p>`:""}
       </div>
-      <button class="btn-primary btn-lg" onclick="weltZu()">Zurück</button>`;
+      <button class="btn-primary btn-lg" onclick="weltZu()">Zurück</button>
+      <button class="btn-lg" onclick="statAuf()">📈 Statistik</button>`;
   },
 
   ruhm(){
@@ -4417,8 +4546,131 @@ const SCREENS = {
           Märkte, Mühlen, Korn und sogar Palast- und Dom-Teile des Verteidigers.
           Steuerung auch per Gamepad: Steuerkreuz wählt, A drückt.</p>
         </div>
+        <div class="card">
+          <h3>Baustoffe & Festungen</h3>
+          <p class="small">Bauwerke kosten neben Talern auch Holz 🪵 und Stein 🪨 — kauft sie im
+          Handel oder betreibt Forsthöfe (+30 🪵/Jahr) und Steinbrüche (+20 🪨/Jahr). Stadtmauer
+          (bis Stufe 3) und Burg (bis Stufe 2) stärken die Verteidiger im Kampf kräftig; eine hohe
+          Mauer deckt zudem das Hinterland vor Plünderern. Angreifer müssen befestigte Reiche erst
+          belagern: Sturmangriff (blutig), Beschuss (braucht 2 Artillerie, schießt Breschen) oder
+          Aushungern (schwächt die Verteidiger, kostet sie Korn und Volk).</p>
+        </div>
+        <div class="card">
+          <h3>Routen, Ehen & Kampagne</h3>
+          <p class="small">Handelsrouten 🚚 (max. 3) bringen beiden Seiten jährlichen Zoll — eine
+          Kriegserklärung kappt die Route. Eine Vermählung 💍 stiftet 12 Jahre Frieden zwischen den
+          Häusern; stirbt der vermählte Regent, erbt Euer Haus einen Teil seines Landes. Die
+          Kampagne 📖 führt in vier Kapiteln vom Bauernsohn zum Kaiser — ein Viertel des Vermögens
+          reist jeweils mit. Online-Partien laufen asynchron: mit Raum-Code und Namen steigt Ihr
+          jederzeit wieder ein. Das Statistik-Dashboard 📈 zeichnet alle Reiche über die Jahre auf.</p>
+        </div>
       </div>
       <button class="btn-primary btn-lg" onclick="hilfeZu()">Zurück zum Spiel</button>`;
+  },
+
+  kampagne(){
+    const f = kampagneFortschritt();
+    const frei = f.frei || 0;
+    const karten = KAMPAGNE.map((K,k)=>{
+      const offen = k <= frei;
+      const geschafft = k < frei;
+      return `<div class="card" style="${offen?"":"opacity:.45"}">
+        <h3>${geschafft?"✅":offen?K.ico:"🔒"} Kapitel ${k+1}: ${K.titel}</h3>
+        <p class="small" style="margin:6px 0">${offen?K.intro:"Noch verschlossen — meistert erst die vorigen Kapitel."}</p>
+        ${offen?`<p class="gold small"><b>Ziel:</b> ${K.ziel}</p>
+        <button class="btn-primary" onclick="kampagneStart(${k})">${geschafft?"Erneut antreten":"Antreten"}</button>`:""}
+      </div>`;
+    }).join("");
+    return `
+      <h2>📖 Kampagne — Vom Bauernsohn zum Kaiser</h2>
+      <div class="card">
+        <p class="small">Vier verkettete Kapitel mit eigenen Zielen. Wer ein Kapitel meistert, nimmt
+        ein Viertel seines Vermögens (bis 20.000 Taler) mit ins nächste.</p>
+        <div class="rowflex" style="margin-top:8px">
+          Euer Name: <input type="text" id="kampName" maxlength="14" value="${f.name||"Friedrich"}">
+          <select id="kampW"><option value="0" ${f.w?"":"selected"}>Herr</option><option value="1" ${f.w?"selected":""}>Dame</option></select>
+          ${f.bonus?`<span class="muted small">Mitgebracht: ${fmt(f.bonus)} T</span>`:""}
+        </div>
+      </div>
+      <div class="grid g2">${karten}</div>
+      <button class="btn-lg" onclick="zeige('title')">Zurück</button>`;
+  },
+
+  kapitelIntro(){
+    const K = KAMPAGNE[G.kampagne.k];
+    return `
+      <div class="hero" style="padding-top:40px">
+        <span class="crown">${K.ico}</span>
+        <h1 style="font-size:30px;margin:12px 0">Kapitel ${G.kampagne.k+1}: ${K.titel}</h1>
+        <p style="max-width:600px;margin:14px auto;font-size:16px">${K.intro}</p>
+        <p class="gold" style="margin:10px 0"><b>Euer Ziel:</b> ${K.ziel}</p>
+        <div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="zeige('handoff')">Es beginnt</button></div>
+      </div>`;
+  },
+
+  kapitelSieg(){
+    const k = G.kampagne.k, K = KAMPAGNE[k];
+    const naechste = k < KAMPAGNE.length-1 ? KAMPAGNE[k+1] : null;
+    setTimeout(()=>{ konfetti(90); sFanfare(); }, 200);
+    return `
+      <div class="hero" style="padding-top:36px">
+        <span class="crown">${K.ico}</span>
+        <h1 class="green" style="font-size:28px;margin:12px 0">Kapitel ${k+1} gemeistert!</h1>
+        <p style="max-width:580px;margin:12px auto">„${K.titel}" ist Geschichte — ${K.ziel.replace("Steigt","Ihr stiegt").replace("Erwirtschaftet","Ihr erwirtschaftetet").replace("Gewinnt","Ihr gewannt").replace("Werdet","Ihr wurdet")}</p>
+        ${naechste
+          ? `<p class="muted">Ein Viertel Eures Vermögens reist mit ins nächste Kapitel.</p>
+             <div style="margin-top:20px">
+               <button class="btn-primary btn-lg" onclick="kampagneStartDirekt(${k+1})">${naechste.ico} Weiter: ${naechste.titel}</button>
+               <button class="btn-lg" onclick="G.kampagne=null;naechsterSpieler()">Erst weiterregieren</button>
+             </div>`
+          : `<p class="gold" style="font-size:17px">Vom Bauernsohn zum Kaiser — die Kampagne ist vollendet!</p>
+             <div style="margin-top:20px"><button class="btn-primary btn-lg" onclick="zeige('ende')">Zur Schlusswertung</button></div>`}
+      </div>`;
+  },
+
+  kapitelNiederlage(){
+    const k = G.kampagne.k, K = KAMPAGNE[k];
+    return `
+      <div class="hero" style="padding-top:36px">
+        <span class="crown">🕯️</span>
+        <h1 class="red" style="font-size:26px;margin:12px 0">Das Kapitel ist verloren …</h1>
+        <p style="max-width:560px;margin:12px auto">Anno ${G.jahr} — das Ziel „${K.ziel}" wurde nicht erreicht.
+        Doch jede Niederlage lehrt: Tretet erneut an!</p>
+        <div style="margin-top:20px">
+          <button class="btn-primary btn-lg" onclick="kampagneStartDirekt(${k})">📖 Kapitel erneut versuchen</button>
+          <button class="btn-lg" onclick="G.kampagne=null;naechsterSpieler()">Frei weiterspielen</button>
+          <button class="btn-lg" onclick="G.spieler=[];zeige('title')">Zum Hauptmenü</button>
+        </div>
+      </div>`;
+  },
+
+  statistik(){
+    const legende = G.spieler.map(p=>
+      `<span style="margin-right:14px"><span class="dot" style="background:${p.farbe}"></span>${p.wappen} ${p.name}${p.tot?" †":""}</span>`).join("");
+    const kriege = G.spieler.map(p=>`
+      <tr><td><span class="dot" style="background:${p.farbe}"></span>${p.wappen} ${p.name}</td>
+        <td class="r">${p.stat.siege}</td><td class="r">${p.stat.niederlagen}</td>
+        <td class="r">${fmt(heerGroesse(p.heer))}</td>
+        <td class="r">${(p.mauer||0)>0||(p.burg||0)>0?`🏰 ${p.mauer||0}/${p.burg||0}`:"—"}</td>
+        <td class="r">${routenVon(G.spieler.indexOf(p)).length}</td></tr>`).join("");
+    return `
+      <h2>📈 Statistik — Anno ${G.jahr}</h2>
+      <p class="muted small" style="margin-bottom:8px">${legende}</p>
+      <div class="grid g2">
+        ${statChart("pop","👥 Untertanen","")}
+        ${statChart("geld","💰 Vermögen"," T")}
+        ${statChart("land","🌍 Land"," ha")}
+        ${statChart("heer","⚔️ Heeresstärke","")}
+      </div>
+      ${marktChart()}
+      <div class="card">
+        <h3>Kriegs- und Handelsbilanz</h3>
+        <table>
+          <tr><th>Regent</th><th class="r">Siege</th><th class="r">Niederlagen</th><th class="r">Heer</th><th class="r">Mauer/Burg</th><th class="r">Routen</th></tr>
+          ${kriege}
+        </table>
+      </div>
+      <button class="btn-primary btn-lg" onclick="zeige(G._vorStat || 'status')">Zurück</button>`;
   },
 
   ende(){
@@ -4467,6 +4719,7 @@ const SCREENS = {
       </div>`:""}
       ${charts?`<h3 style="margin:14px 0 8px">Die Regierungsjahre im Rückblick</h3><div class="grid g2">${charts}</div>`:""}
       <button class="btn-primary btn-lg" onclick="G.spieler=[];zeige('title')">Neues Spiel</button>
+      <button class="btn-lg" onclick="statAuf()">📈 Statistik</button>
       <button class="btn-lg" onclick="erfolgeAuf()">🏅 Erfolge</button>
       <button class="btn-lg" onclick="ruhmAuf()">🏆 Ruhmeshalle</button>`;
   }
@@ -4551,6 +4804,23 @@ function handelLand(dir){
   }
   render();
 }
+function handelMaterial(art, dir){
+  const p = cur();
+  const feld = art === "holz" ? "#hkauf" : "#skauf";
+  const preis = art === "holz" ? (p.holzPreis||12) : (p.steinPreis||20);
+  const m = Math.floor(+$(feld).value||0);
+  if(m<=0) return;
+  if(dir>0){
+    const kosten = m*preis;
+    if(kosten>p.geld){ $("#hmsg").textContent="Zu wenig Taler!"; return; }
+    p.geld -= kosten; p[art] = (p[art]||0) + m; sMuenze();
+  } else {
+    const echt = Math.min(m, p[art]||0);
+    if(echt<=0) return;
+    p[art] -= echt; p.geld += Math.round(echt*preis*0.5); sMuenze();
+  }
+  render();
+}
 function steuernSetzen(){
   const p = cur();
   p.zoll = +$("#zoll").value; p.einkSt = +$("#einkSt").value;
@@ -4574,8 +4844,9 @@ function karteKlick(ev){
   if(dist > 0.92){ toast("⚠️ Dieser Platz liegt außerhalb Eures Territoriums.", 3000); return; }
   const typ = G._bauModus === "markt" ? "m" : "k";
   const kosten = G._bauModus === "markt" ? KOSTEN.markt : KOSTEN.muehle;
-  if(p.geld < kosten) { G._bauModus = null; render(); return; }
+  if(p.geld < kosten || !hatMaterial(p, G._bauModus)) { G._bauModus = null; render(); return; }
   p.geld -= kosten;
+  zahleMaterial(p, G._bauModus);
   if(typ==="m") p.maerkte++; else p.muehlen++;
   p.gebaeude.push({ t:typ, ang:Math.atan2(dy, dx), dist:clamp(dist, 0.08, 0.9) });
   p._neu = p.gebaeude.length - 1;
@@ -4601,17 +4872,21 @@ function baue(was){
   /* Markt & Mühle: erst wählen, dann auf die Karte klicken */
   if((was==="markt" || was==="muehle") && G.screen==="bauen" && !p.ki){
     const kosten = was==="markt" ? KOSTEN.markt : KOSTEN.muehle;
-    if(p.geld < kosten || !platz) return;
+    if(p.geld < kosten || !platz || !hatMaterial(p, was)) return;
     G._bauModus = (G._bauModus === was) ? null : was;
     if(G._bauModus) toast(`🏗️ Klickt auf die Karte, um den Bauplatz für ${was==="markt"?"den Markt":"die Mühle"} zu wählen.`, 3500);
     render();
     return;
   }
-  if(was==="markt"  && p.geld>=KOSTEN.markt  && platz){ p.geld-=KOSTEN.markt; p.maerkte++; platziereGebaeude(p,"m"); }
-  if(was==="muehle" && p.geld>=KOSTEN.muehle && platz){ p.geld-=KOSTEN.muehle; p.muehlen++; platziereGebaeude(p,"k"); }
-  if(was==="palast" && p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast){ p.geld-=KOSTEN.palastTeil; p.palast++; p._neu="palast"; }
-  if(was==="dom"    && p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom){ p.geld-=KOSTEN.domTeil; p.dom++; p._neu="dom"; }
-  if(was==="hafen"  && (p.haefen||0)<2 && p.geld>=KOSTEN.hafen && p.land>=12000){ p.geld-=KOSTEN.hafen; p.haefen=(p.haefen||0)+1; p._neu="hafen"; }
+  if(was==="markt"  && p.geld>=KOSTEN.markt  && platz && hatMaterial(p,"markt")){ p.geld-=KOSTEN.markt; zahleMaterial(p,"markt"); p.maerkte++; platziereGebaeude(p,"m"); }
+  if(was==="muehle" && p.geld>=KOSTEN.muehle && platz && hatMaterial(p,"muehle")){ p.geld-=KOSTEN.muehle; zahleMaterial(p,"muehle"); p.muehlen++; platziereGebaeude(p,"k"); }
+  if(was==="palast" && p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast && hatMaterial(p,"palastTeil")){ p.geld-=KOSTEN.palastTeil; zahleMaterial(p,"palastTeil"); p.palast++; p._neu="palast"; }
+  if(was==="dom"    && p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom && hatMaterial(p,"domTeil")){ p.geld-=KOSTEN.domTeil; zahleMaterial(p,"domTeil"); p.dom++; p._neu="dom"; }
+  if(was==="hafen"  && (p.haefen||0)<2 && p.geld>=KOSTEN.hafen && p.land>=12000 && hatMaterial(p,"hafen")){ p.geld-=KOSTEN.hafen; zahleMaterial(p,"hafen"); p.haefen=(p.haefen||0)+1; p._neu="hafen"; }
+  if(was==="forst"  && (p.forst||0)<FORST_MAX && p.geld>=KOSTEN.forst && p.land>=3000){ p.geld-=KOSTEN.forst; p.forst=(p.forst||0)+1; platziereGebaeude(p,"f"); }
+  if(was==="bruch"  && (p.bruch||0)<BRUCH_MAX && p.geld>=KOSTEN.bruch && p.land>=5000 && hatMaterial(p,"bruch")){ p.geld-=KOSTEN.bruch; zahleMaterial(p,"bruch"); p.bruch=(p.bruch||0)+1; platziereGebaeude(p,"s"); }
+  if(was==="mauer"  && (p.mauer||0)<MAUER_MAX && p.geld>=KOSTEN.mauer && p.maerkte>=2 && hatMaterial(p,"mauer")){ p.geld-=KOSTEN.mauer; zahleMaterial(p,"mauer"); p.mauer=(p.mauer||0)+1; p._neu="mauer"; if(p.mauer>=MAUER_MAX) erfolg("festung"); }
+  if(was==="burg"   && (p.burg||0)<BURG_MAX && p.geld>=KOSTEN.burg && (p.mauer||0)>=1 && p.land>=8000 && hatMaterial(p,"burg")){ p.geld-=KOSTEN.burg; zahleMaterial(p,"burg"); p.burg=(p.burg||0)+1; p._neu="burg"; erfolg("festung"); }
   p.stat.bauten++;
   if(staedte(p)>=1) erfolg("stadt");
   if(p.palast>=PALAST_TEILE) erfolg("palast");
@@ -4638,7 +4913,13 @@ function jahrAbschliessen(){
 }
 function nachBilanz(){
   const p = cur();
-  if(pruefeBefoerderung(p)){ zeige("befoerderung"); return; }
+  const befoerdert = pruefeBefoerderung(p);
+  if(G.kampagne && !p.ki){
+    const K = KAMPAGNE[G.kampagne.k];
+    if(K && K.ok(p)){ kampagneErfolg(); return; }
+    if(K && G.jahr >= K.bis){ zeige("kapitelNiederlage"); return; }
+  }
+  if(befoerdert){ zeige("befoerderung"); return; }
   naechsterSpieler();
 }
 
@@ -4767,18 +5048,33 @@ function mpVerlassen(){
 }
 function mpNachricht(m){
   if(!MP) return;
-  if(m.t === "raum"){ MP.code = m.code; MP.id = m.id; MP.roster = m.roster; zeige("lobby"); }
-  else if(m.t === "roster"){ MP.roster = m.roster; if(G.screen === "lobby") render(); }
+  if(m.t === "raum"){
+    MP.code = m.code; MP.id = m.id; MP.roster = m.roster;
+    const ich = (m.roster||[]).find(r=>r.id===m.id);
+    if(ich) MP.host = !!ich.host;
+    zeige("lobby");
+  }
+  else if(m.t === "roster"){
+    MP.roster = m.roster;
+    /* Rückkehrer: wieder verbundene Namen aus der Getrennt-Liste streichen */
+    if(MP.aktiv && MP.zuordnung){
+      MP.getrennt = MP.getrennt || {};
+      const da = new Set((m.roster||[]).map(r=>r.name));
+      for(const idx of Object.keys(MP.getrennt))
+        if(da.has(MP.zuordnung[idx])) delete MP.getrennt[idx];
+    }
+    if(G.screen === "lobby" || G.screen === "warten") render();
+  }
   else if(m.t === "fehler"){ alertMsg(m.text); }
   else if(m.t === "start"){ mpStartEmpfangen(m); }
   else if(m.t === "sync"){ mpSyncEmpfangen(m); }
   else if(m.t === "weg"){
     MP.getrennt = MP.getrennt || {};
-    if(MP.zuordnung){
-      for(const [idx, cid] of Object.entries(MP.zuordnung))
-        if(cid === m.id && !G.spieler[+idx].ki) MP.getrennt[+idx] = true;
+    if(MP.zuordnung && m.name){
+      for(const [idx, wer] of Object.entries(MP.zuordnung))
+        if(wer === m.name && G.spieler[+idx] && !G.spieler[+idx].ki) MP.getrennt[+idx] = true;
     }
-    toast("⚠️ Ein Mitspieler hat die Verbindung verloren." + (MP.host?" Ihr könnt sein Reich der KI übergeben.":""));
+    toast("⚠️ Ein Mitspieler hat die Verbindung verloren — er kann jederzeit mit Code und Namen zurückkehren." + (MP.host?" Oder Ihr übergebt sein Reich der KI.":""));
     if(G.screen === "warten" || G.screen === "lobby") render();
   }
   else if(m.t === "rangliste"){
@@ -4865,7 +5161,7 @@ function kiUebernehmen(idx){
     } else if(pend.typ === "aufD"){
       G._kr.aufD = kiAufstellung();
       if(mpMein(G._kr.a)) schlachtStarten(); else mpPend("schlacht", G._kr.a);
-    } else if(pend.typ === "schlacht" || pend.typ === "schlachtplan" || pend.typ === "kriegAbbruch"){
+    } else if(pend.typ === "schlacht" || pend.typ === "schlachtplan" || pend.typ === "belagerung" || pend.typ === "kriegAbbruch"){
       G.spieler[G._kr.a].kriegGefuehrt = true;
       naechsterSpieler();
     }
@@ -4886,7 +5182,7 @@ function mpStartEmpfangen(m){
   MP.aktiv = true;
   MP.zuordnung = {};
   const namen=[], w=[], kis=[];
-  m.roster.forEach((r,i)=>{ namen.push(r.name); w.push(i%2===1); kis.push(false); MP.zuordnung[i]=r.id; });
+  m.roster.forEach((r,i)=>{ namen.push(r.name); w.push(i%2===1); kis.push(false); MP.zuordnung[i]=r.name; });
   for(let k=0;k<(m.kis||0);k++){
     const i = namen.length;
     namen.push(NAMEN[i%NAMEN.length]); w.push(i%2===1); kis.push(true); MP.zuordnung[i]=null;
@@ -4895,7 +5191,9 @@ function mpStartEmpfangen(m){
   G._pend = null;
   /* Intro läuft auf allen Geräten; der Weiter-Knopf routet dann über mpRoute() */
 }
-const mpMein = i => !MP || !MP.aktiv || (MP.zuordnung && MP.zuordnung[i] === MP.id);
+/* Sitz i gehört mir, wenn mein Regentenname dort eingetragen ist —
+   so überlebt die Zuordnung auch Trennung und Wiedereinstieg (asynchrone Partien). */
+const mpMein = i => !MP || !MP.aktiv || (MP.zuordnung && MP.zuordnung[i] === MP.name);
 let _mpTimer = null;
 function mpSync(){
   if(!MP || !MP.aktiv || !G.spieler.length) return;
@@ -4920,11 +5218,19 @@ function mpSyncEmpfangen(m){
     const d = JSON.parse(m.state);
     G.jahr = d.jahr; G.tempo = d.tempo; G.aktiv = d.aktiv; G.spieler = d.spieler;
     G.opt = d.opt || G.opt; G.diff = d.diff || 2; G.tipps = d.tipps || {};
+    G.kornMarkt = d.kornMarkt || G.kornMarkt; G.marktDruck = d.marktDruck || 0;
+    G.angebote = d.angebote || []; G.szenario = d.szenario || "frei";
+    G.geschichte = d.geschichte || [];
+    G.routen = d.routen || []; G.marktHist = d.marktHist || [];
     G.spieler.forEach((p,i)=>{
       if(!p.heer) p.heer = {inf:0,kav:0,art:0};
       if(!p.gebaeude) p.gebaeude = [];
       if(!p.chronik) p.chronik = [];
       if(!p.kornHist) p.kornHist = [];
+      if(!p.ehen) p.ehen = {};
+      if(p.holz===undefined) p.holz = 120;
+      if(p.stein===undefined) p.stein = 60;
+      ["forst","bruch","mauer","burg"].forEach(k=>{ if(p[k]===undefined) p[k]=0; });
     });
     if(m.zuordnung) MP.zuordnung = m.zuordnung;
     G._kr = m.kr || null;
@@ -4941,6 +5247,7 @@ function mpRoute(){
     if(mpMein(pend.fuer)){
       G._pend = null;
       if(pend.typ === "diplo") zeige("diplomatie");
+      else if(pend.typ === "belagerung") zeige("belagerung");
       else if(pend.typ === "schlachtplan"){ G._aufW = [2,2,2,2,2]; zeige("aufstellungA"); }
       else if(pend.typ === "aufD"){ G._aufW = [2,2,2,2,2]; zeige("aufstellungD"); }
       else if(pend.typ === "schlacht") schlachtStarten();
