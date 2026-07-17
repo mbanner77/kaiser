@@ -81,3 +81,30 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
   Truppenzahlen je Abschnitt, Plünderung nach Eindringtiefe (Gebäude-, Korn- und
   Monumentschäden), Vergleichs-Chart in der Schlusswertung, Gamepad-Steuerung,
   Phasen-Übergangsblenden, Blitz-Spielmodus
+
+## Version 2.1 — Tiefe zwischen den Schlachten
+
+- **Friedens-Diplomatie**: Geschenke, Kornhandel zwischen Regenten und
+  Nichtangriffspakte (5 Jahre, blockieren Angriffe) — eine Aktion pro Jahr;
+  Angebote an Menschen werden zu Beginn ihres Zuges beantwortet
+- **Beziehungs-System**: Verhältnis von -100 bis +100 je Regentenpaar, sichtbar
+  in Diplomatie und Gesamtkarte; Kriege zerstören, Geschenke und faire
+  Geschäfte verbessern es
+- **KI-Persönlichkeiten**: der Eroberer, der Händler, der Baumeister — mit
+  eigener Kriegslust, Handelsfreude, Baupriorität und beziehungsgeleiteter
+  Diplomatie in Kriegen
+- **Gelände in der Schlacht**: Hügel (Verteidigerbonus), Furten (halber
+  Vormarsch), Wald (Kavallerie/Artillerie behindert) je Abschnitt, sichtbar
+  bei Aufstellung und auf dem Feld; Regen schwächt die Artillerie
+- **Entscheidungs-Ereignisse**: sieben Hof-Ereignisse mit 2-3 Wahlmöglichkeiten
+  und spürbaren Folgen (auch die KI entscheidet)
+- **Gemeinsamer Kornmarkt**: ein Weltmarktpreis für alle — große Verkäufe
+  drücken den Kurs des Folgejahres, Aufkäufe treiben ihn
+- **Online-Ausbau**: Feldpost-Chat in Lobby und Wartebildschirm; getrennte
+  Spieler kann der Gastgeber der KI übergeben (auch mitten in Diplomatie
+  oder Verteidigung)
+- **Musik**: eigenes Titelthema und Kriegsthema (Sequenzer), getrennte
+  Lautstärkeregler für Musik und Effekte im Menü
+- **Szenarien**: Das verschuldete Erbe, Die Kriegstreiber, Die Kornkrise —
+  lokal und online wählbar; Bilanz der Regentschaften in der Schlusswertung;
+  fünf neue Erfolge (15 gesamt)

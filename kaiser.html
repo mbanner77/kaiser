@@ -195,6 +195,11 @@
     box-shadow:0 6px 22px rgba(0,0,0,.45);}
   .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:baseline;}
   .kiber{border-left:3px solid var(--cyan);}
+  .setup-tabelle{table-layout:fixed;width:100%;}
+  .setup-tabelle td{padding:4px 3px;overflow:hidden;}
+  .setup-tabelle td:first-child{width:26px;}
+  .setup-tabelle input[type=text]{width:100%;min-width:70px;padding:8px 8px;}
+  .setup-tabelle select{width:100%;padding:8px 4px;}
   .blink{animation:blinkA 1.6s ease-in-out infinite;}
   @keyframes blinkA{0%,100%{opacity:.45;}50%{opacity:1;}}
   /* --- Schlachtfeld-Canvas --- */
@@ -290,12 +295,20 @@
       <button onclick="erfolgeAuf()">🏅 Erfolge</button>
       <button onclick="ruhmAuf()">🏆 Ruhmeshalle</button>
       <button onclick="hilfeAuf()">❓ Spielhilfe</button>
+      <div style="padding:8px 10px" onclick="event.stopPropagation()">
+        <p class="muted small">🎵 Musik</p>
+        <input type="range" min="0" max="1" step="0.05" style="width:100%"
+          oninput="lautSetzen('musik', this.value)" id="lautMusik">
+        <p class="muted small" style="margin-top:6px">🔔 Effekte</p>
+        <input type="range" min="0" max="1" step="0.05" style="width:100%"
+          oninput="lautSetzen('fx', this.value)" id="lautFx">
+      </div>
     </div>
   </details>
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser v2.0 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v2.1 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -344,6 +357,8 @@ function neuerSpieler(name,w,idx,ki){
     name, w, ki:!!ki,
     farbe:FARBEN[idx%FARBEN.length], wappen:WAPPEN[idx%WAPPEN.length],
     gebaeude:[], chronik:[], startAlter:ri(22,30),
+    bez:{}, pakte:{}, kiTyp:null,
+    stat:{ steuern:0, kornErloes:0, siege:0, niederlagen:0, bauten:0 },
     geld:15000, land:10000, korn:400, pop:2500,
     maerkte:0, muehlen:0, palast:0, dom:0,
     heer:{inf:0,kav:0,art:0},
@@ -371,6 +386,20 @@ const anbau = p => Math.max(0, p.land - bebautFarm(p));
 const heerStaerke = h => h.inf + h.kav*2.5 + h.art*4;
 const alterJahre = p => (p.startAlter||26) + (G.jahr - 1700);
 const GEWAND = ["#6e5f45","#5d7a4f","#4f6d7a","#7a4f5d","#6a4f7a","#3f5d8a","#7a3f8a","#8a2f3f","#a8842f"];
+/* Beziehungen (-100 bis 100) und Nichtangriffspakte */
+function bezWert(a, b){ return clamp((a.bez && a.bez[G.spieler.indexOf(b)]) || 0, -100, 100); }
+function bezAendern(a, b, delta){
+  const ia = G.spieler.indexOf(a), ib = G.spieler.indexOf(b);
+  a.bez = a.bez || {}; b.bez = b.bez || {};
+  a.bez[ib] = clamp((a.bez[ib]||0) + delta, -100, 100);
+  b.bez[ia] = clamp((b.bez[ia]||0) + delta, -100, 100);
+}
+function paktAktiv(a, b){
+  const ib = G.spieler.indexOf(b);
+  return a.pakte && a.pakte[ib] && a.pakte[ib] >= G.jahr;
+}
+const KI_TYP_NAMEN = { aggressor:"der Eroberer", haendler:"der Händler", baumeister:"der Baumeister" };
+
 /* Prüft die Kriegsvoraussetzungen und benennt, was fehlt */
 function kannKrieg(p){
   const fehlt = [];
@@ -404,6 +433,14 @@ function score(p){
 
 /* ---------- Sound-Design (Web Audio: Synthese, Rauschen, Hall) ---------- */
 let _ac = null, muted = false, _master = null, _delay = null;
+/* Getrennte Lautstärken für Musik und Effekte (persistent) */
+let LAUT = { musik: 0.65, fx: 0.85 };
+try{ LAUT = Object.assign(LAUT, JSON.parse(window.localStorage.getItem("kaiser_laut")||"{}")); }catch(e){}
+function lautSetzen(art, wert){
+  LAUT[art] = clamp(+wert, 0, 1);
+  try{ window.localStorage.setItem("kaiser_laut", JSON.stringify(LAUT)); }catch(e){}
+}
+let _musikModus = false;
 function toggleMute(){ muted = !muted; $("#btnMute").textContent = muted ? "🔇" : "🔊"; }
 function audioCtx(){
   if(_ac) return _ac;
@@ -426,6 +463,8 @@ function beep(freq, dur, delay=0, type="triangle", vol=0.12, hall=false){
     const o = ac.createOscillator(), g = ac.createGain();
     o.type = type; o.frequency.value = freq;
     o.connect(g); g.connect(_master); if(hall) g.connect(_delay);
+    vol *= _musikModus ? LAUT.musik : LAUT.fx;
+    if(vol <= 0.0005) return;
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(vol, t + 0.014);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
@@ -445,7 +484,8 @@ function rausch(dur, delay=0, vol=0.2, tief=false, hall=false){
     const f = ac.createBiquadFilter();
     f.type = tief ? "lowpass" : "highpass";
     f.frequency.value = tief ? 320 : 2400;
-    const g = ac.createGain(); g.gain.value = vol;
+    const g = ac.createGain(); g.gain.value = vol * (_musikModus ? LAUT.musik : LAUT.fx);
+    if(g.gain.value <= 0.0005) return;
     src.connect(f); f.connect(g); g.connect(_master); if(hall) g.connect(_delay);
     src.start(t);
   }catch(e){}
@@ -521,18 +561,51 @@ const SKALEN = {
   "Herbst":   [196,220,233,294,311,392,415],
   "Winter":   [175,196,208,262,311,349,415]
 };
+/* Eigene kleine Kompositionen: Titelthema und Kriegsthema (0 = Pause) */
+const THEMA_TITEL = {
+  takt: 380,
+  melodie: [294,0,349,392,440,0,392,349, 330,0,294,330, 349,392,440,523,
+            440,0,392,349, 330,392,294,0, 262,294,330,349, 294,0,0,0],
+  bass:    [147,0,0,0, 175,0,0,0, 165,0,0,0, 147,0,0,0,
+            175,0,0,0, 165,0,0,0, 131,0,0,0, 147,0,0,0]
+};
+const THEMA_KRIEG = {
+  takt: 300,
+  melodie: [220,0,220,262, 294,0,262,220, 196,0,196,220, 262,0,220,196],
+  bass:    [110,0,0,110, 110,0,0,110, 98,0,0,98, 110,0,0,110]
+};
+let themaPos = 0;
 function starteMusik(){
   clearInterval(musikIv);
   let pos = 3;
   musikIv = setInterval(()=>{
     if(muted || !musikAn) return;
-    const skala = G.spieler.length ? (SKALEN[saison().n] || SKALEN["Sommer"]) : SKALEN["Sommer"];
-    pos = clamp(pos + ri(-2,2), 0, skala.length-1);
-    if(Math.random() < 0.8) beep(skala[pos], .6, 0, "triangle", .024, true);
-    if(Math.random() < 0.25) beep(skala[pos]*1.5, .4, .17, "sine", .014, true);
-    if(musikStep % 8 === 0)  beep(98,  1.4, 0, "sine", .034);
-    if(musikStep % 16 === 8) beep(147, 1.4, 0, "sine", .028);
-    musikStep++;
+    _musikModus = true;
+    try{
+      if(G.screen === "title" || G.screen === "setup" || G.screen === "online" || G.screen === "lobby"){
+        /* Titelthema (eigene Komposition) */
+        const T = THEMA_TITEL, i = themaPos % T.melodie.length;
+        if(T.melodie[i]) beep(T.melodie[i], .52, 0, "triangle", .05, true);
+        if(T.bass[i])    beep(T.bass[i],   1.2, 0, "sine",     .05);
+        themaPos++;
+      } else if(G.screen === "schlacht" && G._s && !G._s.fertig){
+        /* Kriegsthema: treibende Trommel + Moll-Motiv */
+        const T = THEMA_KRIEG, i = themaPos % T.melodie.length;
+        if(i % 4 === 0) rausch(.09, 0, .12, true);
+        if(T.melodie[i]) beep(T.melodie[i], .32, 0, "sawtooth", .035, true);
+        if(T.bass[i])    beep(T.bass[i],    .6,  0, "sine",     .05);
+        themaPos++;
+      } else {
+        /* Friedens-Laute: generativ, moduliert mit der Jahreszeit */
+        const skala = G.spieler.length ? (SKALEN[saison().n] || SKALEN["Sommer"]) : SKALEN["Sommer"];
+        pos = clamp(pos + ri(-2,2), 0, skala.length-1);
+        if(Math.random() < 0.8) beep(skala[pos], .6, 0, "triangle", .04, true);
+        if(Math.random() < 0.25) beep(skala[pos]*1.5, .4, .17, "sine", .022, true);
+        if(musikStep % 8 === 0)  beep(98,  1.4, 0, "sine", .055);
+        if(musikStep % 16 === 8) beep(147, 1.4, 0, "sine", .045);
+        musikStep++;
+      }
+    } finally { _musikModus = false; }
   }, 350);
 }
 
@@ -553,7 +626,12 @@ const ERFOLGE = [
   { id:"land",      n:"Großgrundbesitzer",   d:"25.000 Hektar Land besessen.",              i:"🌍" },
   { id:"volk",      n:"Liebling des Volkes", d:"Eine Volksstimmung von 90 erreicht.",       i:"❤️" },
   { id:"spekulant", n:"Kornspekulant",       d:"Korn für über 300 Taler je Fuder verkauft.",i:"📈" },
-  { id:"kaiser",    n:"Die Krone",           d:"Zum Kaiser gekrönt.",                       i:"👑" }
+  { id:"kaiser",    n:"Die Krone",           d:"Zum Kaiser gekrönt.",                       i:"👑" },
+  { id:"pakt",      n:"Friedensstifter",     d:"Einen Nichtangriffspakt geschlossen.",      i:"🕊️" },
+  { id:"handel",    n:"Handelsmeister",      d:"Ein Handelsangebot wurde angenommen.",      i:"🤝" },
+  { id:"brandschatzer", n:"Brandschatzer",   d:"Mit voller Eindringtiefe geplündert.",      i:"🔥" },
+  { id:"chronist",  n:"Chronist",            d:"Anno 1750 als Regent erlebt.",              i:"📜" },
+  { id:"szenarist", n:"Prüfungen bestanden", d:"Ein Szenario zu Ende gespielt.",            i:"🧭" }
 ];
 let _erfolge = null;
 function erfolge(){
@@ -691,6 +769,7 @@ function jahresschluss(p){
   r.steuern = Math.round(p.pop*(p.einkSt*0.08 + p.mwSt*0.05)/10)*10
             + p.zoll*p.maerkte*6 + p.maerkte*150 + staedte(p)*2000;
   p.geld += r.steuern;
+  p.stat.steuern += r.steuern;
   r.unterhalt = unterhalt(p);
   p.geld -= r.unterhalt;
   if(r.unterhalt > 0 && p.geld < 0){
@@ -708,6 +787,7 @@ function jahresschluss(p){
   r.ueberzeit = Math.max(0, dauer - 90);
   if(r.ueberzeit > 0) p.todesJahr -= r.ueberzeit/180;
 
+  if(G.jahr >= 1750 && !p.ki) erfolg("chronist");
   p.report = r;
   p.chronik = (p.chronik||[]).concat({ j:G.jahr, pop:p.pop, geld:Math.round(p.geld), land:p.land }).slice(-80);
   quicksave();
@@ -749,6 +829,7 @@ function kriegVorbereiten(zielIdx){
   const alle = lebende().map(x=>x.i).filter(i=>i!==a && i!==d);
   const kr = { a, d, weg, fragen:[], frageIdx:0, wahl:{}, abgebrochen:false,
                taktikA: G._taktikA || "sturm", taktikD: null };
+  kr.gelaende = wuerfleGelaende();
   /* KI-Regenten antworten sofort, Menschen werden am Gerät befragt */
   for(const i of alle){
     const s = G.spieler[i];
@@ -891,6 +972,7 @@ function schlachtStarten(){
     lanes: Array.from({length:LANES}, (_,i)=>({ A:lanesA[i], D:lanesD[i], dist:100 })),
     start:{ A:{...eA}, D:{...eD} },
     startG:{ A:Math.max(1,laneGroesse(eA)), D:Math.max(1,laneGroesse(eD)) },
+    gelaende: kr.gelaende || wuerfleGelaende(), regen: Math.random()<0.22,
     moralA:100, moralD:100, routA:false, routD:false,
     tick:0, maxTicks:40, log:[], partikel:[], fertig:false, sieger:null, iv:null, still:false
   };
@@ -914,12 +996,14 @@ function einTick(s, leise){
     const gA = laneGroesse(a), gD = laneGroesse(d);
     if(gA===0 && gD===0) return;
     const ry = 0.30 + (i+0.5)*0.135;
+    const gel = (s.gelaende && s.gelaende[i]) || GELAENDE[0];
     if(lane.dist > 0 && gA > 0 && gD > 0){
-      /* Vormarsch — Kavallerie beschleunigt den Abschnitt */
-      lane.dist = Math.max(0, lane.dist - (9 + (a.kav/Math.max(1,gA))*16));
-      /* Artillerie-Fernkampf beider Seiten */
-      const feuerA = a.art * rf(0.7,1.3);
-      const feuerD = d.art * rf(0.7,1.3) * 1.15;   /* eingeschossene Verteidiger */
+      /* Vormarsch — Kavallerie beschleunigt, Furten bremsen */
+      lane.dist = Math.max(0, lane.dist - (9 + (a.kav/Math.max(1,gA))*16) * (gel.tempo || 1));
+      /* Artillerie-Fernkampf beider Seiten — Regen macht das Pulver feucht */
+      const artFx = (gel.artFaktor || 1) * (s.regen ? 0.65 : 1);
+      const feuerA = a.art * rf(0.7,1.3) * artFx;
+      const feuerD = d.art * rf(0.7,1.3) * 1.15 * artFx;
       gefD += laneVerlust(d, feuerA*0.30);
       gefA += laneVerlust(a, feuerD*0.30);
       if(!leise){
@@ -927,9 +1011,11 @@ function einTick(s, leise){
         if(d.art>0) s.partikel.push({ typ:"kugel", von:"D", lane:i, born:jetzt+rf(0,250) });
       }
     } else if(gA > 0 && gD > 0){
-      /* Nahkampf im Abschnitt */
-      const stA = laneNahkampf(a) * rf(0.85,1.15);
-      const stD = laneNahkampf(d) * 1.15 * rf(0.85,1.15);
+      /* Nahkampf im Abschnitt — Hügel schützen, Wald bremst die Reiterei */
+      const kavFx = gel.kavFaktor || 1;
+      const nah = u => u.inf + u.kav*2.5*kavFx + u.art*0.4 + u.miliz*0.8 + u.auf*0.5;
+      const stA = nah(a) * rf(0.85,1.15);
+      const stD = nah(d) * 1.15 * (gel.defBonus || 1) * rf(0.85,1.15);
       gefD += laneVerlust(d, gD * stA/(stA+stD) * 0.15);
       gefA += laneVerlust(a, gA * stD/(stA+stD) * 0.15);
       if(!leise){
@@ -1845,7 +1931,36 @@ function zeichneFeld(t=0){
     ctx.beginPath(); ctx.moveTo(0,oben+i*laneH); ctx.lineTo(W,oben+i*laneH); ctx.stroke();
   }
   ctx.font = "10px sans-serif"; ctx.textAlign = "left"; ctx.fillStyle = "rgba(219,226,238,.4)";
-  for(let i=0;i<LANES;i++) ctx.fillText(LANE_NAMEN[i], 8, oben+i*laneH+12);
+  for(let i=0;i<LANES;i++){
+    const gel = (s.gelaende && s.gelaende[i]) || GELAENDE[0];
+    ctx.fillText(`${LANE_NAMEN[i]}${gel.ico?" "+gel.ico:""}`, 8, oben+i*laneH+12);
+  }
+  /* Gelände in der Feldmitte einzeichnen */
+  (s.gelaende||[]).forEach((gel,i)=>{
+    const ym = oben + i*laneH + laneH/2;
+    if(gel.k==="huegel"){
+      ctx.fillStyle = "rgba(120,130,110,.28)";
+      ctx.beginPath(); ctx.ellipse(W*0.62, ym+laneH*0.28, 60, 13, 0, Math.PI, 0); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(W*0.55, ym+laneH*0.32, 40, 9, 0, Math.PI, 0); ctx.fill();
+    } else if(gel.k==="furt"){
+      ctx.fillStyle = "rgba(80,140,180,.30)";
+      ctx.fillRect(W*0.47, oben+i*laneH+2, 26, laneH-4);
+      ctx.strokeStyle = "rgba(180,220,250,.35)"; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(W*0.5, oben+i*laneH+4); ctx.lineTo(W*0.5, oben+(i+1)*laneH-4); ctx.stroke();
+    } else if(gel.k==="wald"){
+      for(let b=0;b<4;b++) malBaum(ctx, W*0.5 + (b-1.5)*16, ym + laneH*0.3, 4.5);
+    }
+  });
+  /* Schlachtwetter: Regen */
+  if(s.regen){
+    ctx.strokeStyle = "rgba(170,200,230,.28)"; ctx.lineWidth = 1;
+    for(let i=0;i<34;i++){
+      const seed = ((i*61)%97)/97;
+      const rx2 = (seed*W + t/(2.5+seed)) % W;
+      const ry2 = (t/(3+seed*2) + i*41) % H;
+      ctx.beginPath(); ctx.moveTo(rx2, ry2); ctx.lineTo(rx2-2.5, ry2+9); ctx.stroke();
+    }
+  }
 
   const fA = G._kr ? G.spieler[G._kr.a].farbe : "#5fb8d4";
   const fD = G._kr ? G.spieler[G._kr.d].farbe : "#d9973f";
@@ -2440,6 +2555,9 @@ function schlachtAbschliessen(){
     const kornBeute = tiefe>0 ? Math.min(ver.korn, Math.round(ver.korn * 0.04 * tiefe)) : 0;
     ver.korn -= kornBeute; ang.korn += kornBeute;
     s.tiefe = tiefe;
+    ang.stat.siege++; ver.stat.niederlagen++;
+    bezAendern(ang, ver, -35);
+    if(tiefe >= 5) erfolg("brandschatzer");
     s.plünder = schaeden.length || kornBeute
       ? `Eindringtiefe ${tiefe}/5 — geplündert: ${[...schaeden, kornBeute?fmt(kornBeute)+" Fuder Korn":null].filter(Boolean).join(", ")}.`
       : (tiefe>0 ? `Eindringtiefe ${tiefe}/5 — die Plünderer fanden wenig.` : "");
@@ -2452,6 +2570,8 @@ function schlachtAbschliessen(){
     const tribut = Math.round(Math.max(0,ang.geld)*0.2);
     ang.geld -= tribut; ver.geld += tribut;
     ang.stimmung = clamp(ang.stimmung-15,5,100);
+    ang.stat.niederlagen++; ver.stat.siege++;
+    bezAendern(ang, ver, -25);
     s.ergebnis = `Niederlage! Euer Heer wird geschlagen. Ihr zahlt ${fmt(tribut)} Taler Tribut an ${ver.name}.`;
     if(!s.still) setTimeout(sNieder, 300);
   }
@@ -2459,19 +2579,192 @@ function schlachtAbschliessen(){
   mpSync();
 }
 
+/* ---------- Entscheidungs-Ereignisse am Hofe (eigene Texte) ---------- */
+const EREIGNISSE = [
+  { id:"bettler", ico:"🥣",
+    txt:p=>`Ein Zug ausgehungerter Bettelleute lagert vor Euren Toren und fleht um Brot.`,
+    wahl:[
+      { t:"Kornkammern öffnen", fx:p=>{ const k=Math.min(p.korn,Math.ceil(noetigKorn(p)*0.15)); p.korn-=k; p.stimmung=clamp(p.stimmung+8,5,100); return `Ihr gebt ${fmt(k)} Fuder — das Volk preist Eure Milde.`; } },
+      { t:"Abweisen", fx:p=>{ p.stimmung=clamp(p.stimmung-5,5,100); return "Die Bettler ziehen weiter. Man munkelt über Euer hartes Herz."; } }
+    ]},
+  { id:"raeuber", ico:"🗡️",
+    txt:p=>`Eine Räuberbande brandschatzt die Dörfer am Waldrand.`,
+    wahl:[
+      { t:"Kopfgeld aussetzen (800 T)", fx:p=>{ p.geld-=800; p.stimmung=clamp(p.stimmung+4,5,100); return "Die Bande wird gefasst — Ruhe kehrt ein."; } },
+      { t:"Die Miliz schicken", fx:p=>{ const v=ri(15,45); p.pop-=v; p.stimmung=clamp(p.stimmung+2,5,100); return `Die Räuber werden vertrieben, doch ${v} Männer kehren nicht heim.`; } },
+      { t:"Ignorieren", fx:p=>{ const k=Math.round(p.korn*0.08); p.korn-=k; p.stimmung=clamp(p.stimmung-4,5,100); return `Die Bande plündert ${fmt(k)} Fuder aus den Speichern.`; } }
+    ]},
+  { id:"hochzeit", ico:"💍",
+    txt:p=>`Eine angesehene Adelsfamilie bittet Euch, ihre Hochzeit auszurichten.`,
+    wahl:[
+      { t:"Prunkvoll feiern (1.500 T)", fx:p=>{ p.geld-=1500; p.stimmung=clamp(p.stimmung+10,5,100); G.spieler.forEach(z=>{ if(z!==p&&!z.tot) bezAendern(p,z,4); }); return "Ein Fest, von dem man in allen Reichen spricht!"; } },
+      { t:"Bescheiden gratulieren", fx:p=>{ p.stimmung=clamp(p.stimmung+2,5,100); return "Ein höfliches Geschenk, mehr nicht."; } }
+    ]},
+  { id:"damm", ico:"🌊",
+    txt:p=>`Der Fluss steigt bedrohlich — die Deiche sind alt und morsch.`,
+    wahl:[
+      { t:"Dämme verstärken (2.000 T)", fx:p=>{ p.geld-=2000; return "Die neuen Deiche halten. Die Felder bleiben trocken."; } },
+      { t:"Auf Gott vertrauen", fx:p=>{ if(Math.random()<0.45){ const k=Math.round(p.korn*0.15); p.korn-=k; p.stimmung=clamp(p.stimmung-6,5,100); return `Die Flut kommt! ${fmt(k)} Fuder verderben in den Speichern.`; } return "Der Fluss beruhigt sich — Glück gehabt."; } }
+    ]},
+  { id:"wucherer", ico:"🎭",
+    txt:p=>`Ein fahrender Händler bietet 200 Fuder Korn zum halben Marktpreis — die Herkunft ist zweifelhaft.`,
+    wahl:[
+      { t:p=>`Kaufen (${fmt(Math.round((G.kornMarkt||100)*100))} T)`, fx:p=>{ const kosten=Math.round((G.kornMarkt||100)*100); if(p.geld<kosten) return "Eure Kasse gibt das nicht her."; p.geld-=kosten; p.korn+=200; if(Math.random()<0.25){ p.stimmung=clamp(p.stimmung-6,5,100); return "Das Korn stammt aus einem Raubzug — das Volk murrt über den Hehlerhandel."; } return "Ein Schnäppchen — niemand fragt nach."; } },
+      { t:"Ablehnen", fx:p=>{ p.stimmung=clamp(p.stimmung+2,5,100); return "Ihr bleibt sauber — das spricht sich herum."; } }
+    ]},
+  { id:"gaukler", ico:"🎪",
+    txt:p=>`Eine berühmte Gauklertruppe bietet an, ein Fest für das Volk zu geben.`,
+    wahl:[
+      { t:"Fest ausrichten (400 T)", fx:p=>{ p.geld-=400; p.stimmung=clamp(p.stimmung+8,5,100); return "Drei Tage Musik und Feuerschlucker — das Volk jubelt."; } },
+      { t:"Wegschicken", fx:p=>"Die Gaukler ziehen zum Nachbarn weiter." }
+    ]},
+  { id:"grenzstein", ico:"🪨",
+    txt:p=>{ const nb=nachbarn(G.spieler.indexOf(p)).map(i=>G.spieler[i]).filter(z=>!z.tot)[0]; return `Bauern melden: ${nb?nb.name+"s":"des Nachbarn"} Leute haben Grenzsteine versetzt — 300 Hektar sind strittig.`; },
+    wahl:[
+      { t:"Nachgeben", fx:p=>{ const nb=nachbarn(G.spieler.indexOf(p)).map(i=>G.spieler[i]).filter(z=>!z.tot)[0]; if(nb){ const ha=Math.min(300,freiLand(p)); p.land-=ha; nb.land+=ha; bezAendern(p,nb,12); return `Ihr überlasst ${nb.name} die ${fmt(ha)} Hektar — der Friede ist gewahrt.`; } return "Der Streit verläuft im Sande."; } },
+      { t:"Hart bleiben", fx:p=>{ const nb=nachbarn(G.spieler.indexOf(p)).map(i=>G.spieler[i]).filter(z=>!z.tot)[0]; if(nb) bezAendern(p,nb,-12); return "Die Grenzsteine werden zurückversetzt. Man wird sich das merken."; } }
+    ]}
+];
+function ereignisWuerfeln(p){
+  if(Math.random() >= 0.20) return null;
+  return EREIGNISSE[ri(0, EREIGNISSE.length-1)];
+}
+function ereignisWahl(k){
+  const p = cur(), e = G._ereignis;
+  if(!e) { zeige("steuern"); return; }
+  const w = e.wahl[k];
+  const ergebnis = w.fx(p);
+  G._ereignis = null;
+  toast(`${e.ico} ${ergebnis}`, 6000);
+  zeige("steuern");
+}
+
+/* ---------- Friedens-Diplomatie: Geschenke, Handel, Pakte ---------- */
+function diploAktion(art){
+  const p = cur();
+  const ziel = G.spieler[+$("#dipZiel").value];
+  if(!ziel || ziel.tot || p.diploGenutzt) return;
+  if(art === "geschenk"){
+    const betrag = clamp(Math.floor(+$("#dipGeschenk").value||0), 0, p.geld);
+    if(betrag < 100){ alertMsg("Ein Geschenk unter 100 Talern beleidigt den Empfänger."); return; }
+    p.geld -= betrag; ziel.geld += betrag;
+    bezAendern(p, ziel, clamp(Math.round(betrag/150), 2, 25));
+    p.diploGenutzt = true;
+    toast(`🎁 ${ziel.name} nimmt Euer Geschenk wohlwollend an.`);
+  } else if(art === "handel"){
+    const richtung = $("#dipRichtung").value;             /* kauf | verkauf */
+    const menge = Math.max(1, Math.floor(+$("#dipMenge").value||0));
+    const preis = Math.max(1, Math.floor(+$("#dipPreis").value||0));
+    const angebot = { von:G.spieler.indexOf(p), an:G.spieler.indexOf(ziel), richtung, menge, preis, jahr:G.jahr };
+    if(richtung === "kauf" && menge*preis > p.geld){ alertMsg("So viel Geld habt Ihr nicht."); return; }
+    if(richtung === "verkauf" && menge > p.korn){ alertMsg("So viel Korn habt Ihr nicht."); return; }
+    if(ziel.ki){
+      if(kiAngebotPruefen(ziel, angebot)){ angebotAusfuehren(angebot); toast(`🤝 ${ziel.name} schlägt ein!`); erfolg("handel"); }
+      else toast(`❌ ${ziel.name} lehnt das Angebot ab.`);
+    } else {
+      G.angebote.push(angebot);
+      toast(`📜 Angebot an ${ziel.name} übermittelt — Antwort zu Beginn ${ziel.w?"ihres":"seines"} Zuges.`);
+      mpSync();
+    }
+    p.diploGenutzt = true;
+  } else if(art === "pakt"){
+    if(paktAktiv(p, ziel)){ alertMsg("Es besteht bereits ein Pakt."); return; }
+    const angebot = { von:G.spieler.indexOf(p), an:G.spieler.indexOf(ziel), richtung:"pakt", menge:0, preis:0, jahr:G.jahr };
+    if(ziel.ki){
+      if(bezWert(ziel,p) >= -10 || ziel.kiTyp !== "aggressor"){
+        angebotAusfuehren(angebot);
+        toast(`🕊️ ${ziel.name} besiegelt den Nichtangriffspakt (5 Jahre).`); erfolg("pakt");
+      } else toast(`❌ ${ziel.name} lehnt den Pakt ab.`);
+    } else {
+      G.angebote.push(angebot);
+      toast(`📜 Paktangebot an ${ziel.name} übermittelt.`);
+      mpSync();
+    }
+    p.diploGenutzt = true;
+  }
+  render();
+}
+function angebotAusfuehren(a){
+  const von = G.spieler[a.von], an = G.spieler[a.an];
+  if(a.richtung === "pakt"){
+    von.pakte[a.an] = G.jahr + 5;
+    an.pakte[a.von] = G.jahr + 5;
+    bezAendern(von, an, 15);
+    return;
+  }
+  const kaeufer = a.richtung === "kauf" ? von : an;
+  const verkaeufer = a.richtung === "kauf" ? an : von;
+  const summe = a.menge * a.preis;
+  if(kaeufer.geld < summe || verkaeufer.korn < a.menge) return;
+  kaeufer.geld -= summe; verkaeufer.geld += summe;
+  verkaeufer.korn -= a.menge; kaeufer.korn += a.menge;
+  verkaeufer.stat.kornErloes += summe;
+  bezAendern(von, an, 6);
+}
+function kiAngebotPruefen(ki, a){
+  const markt = G.kornMarkt || 100;
+  const bez = bezWert(ki, G.spieler[a.von]);
+  const toleranz = (ki.kiTyp==="haendler" ? 0.18 : 0.06) + bez/500;
+  if(a.richtung === "kauf"){           /* Anbieter kauft — KI verkauft */
+    if(ki.korn - a.menge < noetigKorn(ki)*1.5) return false;
+    return a.preis >= markt * (1 - toleranz);
+  } else {                             /* Anbieter verkauft — KI kauft */
+    if(ki.geld < a.menge*a.preis + 4000) return false;
+    return a.preis <= markt * (1 + toleranz);
+  }
+}
+function angebotAntwort(idx, ja){
+  const a = G.angebote[idx];
+  if(!a) return;
+  G.angebote.splice(idx,1);
+  if(ja){
+    angebotAusfuehren(a);
+    if(a.richtung==="pakt") erfolg("pakt"); else erfolg("handel");
+    toast("🤝 Angebot angenommen.");
+  } else {
+    bezAendern(G.spieler[a.von], G.spieler[a.an], -4);
+    toast("❌ Angebot abgelehnt.");
+  }
+  mpSync();
+  if(G.angebote.some(x=>x.an===G.aktiv)) render();
+  else zeige("status");
+}
+
 /* ---------- KI-Regenten ---------- */
 function kiDiploWahl(p, kr){
   const aufWeg = kr.weg.includes(G.spieler.indexOf(p));
-  const r = Math.random();
-  if(r < 0.06 && heerGroesse(p.heer) > 50) return "atk";
-  if(r < 0.22 && heerGroesse(p.heer) > 50) return "def";
-  if(aufWeg) return Math.random() < 0.7 ? "frei" : "sperr";
+  const ang = G.spieler[kr.a], ver = G.spieler[kr.d];
+  const bezA = bezWert(p, ang), bezV = bezWert(p, ver);
+  const kampfbereit = heerGroesse(p.heer) > 50;
+  /* Freunden beistehen, Feinden schaden — je nach Charakter */
+  if(kampfbereit){
+    if(bezV > 30 && bezV > bezA && Math.random() < 0.6) return "def";
+    if(bezA > 30 && bezA > bezV && Math.random() < (p.kiTyp==="aggressor" ? 0.55 : 0.35)) return "atk";
+    if(p.kiTyp==="aggressor" && Math.random() < 0.12) return Math.random()<0.5 ? "atk" : "def";
+    if(bezA < -40 && Math.random() < 0.35) return "def";
+  }
+  if(aufWeg){
+    if(bezA >= 0 || paktAktiv(p, ang)) return "frei";
+    return Math.random() < 0.45 ? "frei" : "sperr";
+  }
   return "frei";
+}
+const GELAENDE = [
+  { k:"eben",   n:"Ebene", ico:"",   },
+  { k:"huegel", n:"Hügel", ico:"⛰️", defBonus:1.22 },
+  { k:"furt",   n:"Furt",  ico:"🌊", tempo:0.5 },
+  { k:"wald",   n:"Wald",  ico:"🌲", kavFaktor:0.5, artFaktor:0.7 }
+];
+function wuerfleGelaende(){
+  return Array.from({length:LANES}, ()=> {
+    const r = Math.random();
+    return r < 0.5 ? GELAENDE[0] : r < 0.68 ? GELAENDE[1] : r < 0.84 ? GELAENDE[2] : GELAENDE[3];
+  });
 }
 const kiAufstellung = () => AUFSTELLUNGEN[ri(0,AUFSTELLUNGEN.length-1)].g;
 function kiSchlacht(a, d){
   const kr = { a, d, weg: wegZwischen(a,d), fragen: [], wahl: {},
-    aufA: kiAufstellung(), aufD: kiAufstellung() };
+    aufA: kiAufstellung(), aufD: kiAufstellung(), gelaende: wuerfleGelaende() };
   /* übrige KI-Regenten entscheiden, Menschen bleiben bei KI-Kriegen neutral */
   kr.fragen = lebende().map(x=>x.i).filter(i=>i!==a && i!==d);
   for(const i of kr.fragen){
@@ -2492,6 +2785,7 @@ function kiSchlacht(a, d){
     lanes: Array.from({length:LANES}, (_,i)=>({ A:lanesA[i], D:lanesD[i], dist:100 })),
     start:{ A:{...eA}, D:{...eD} },
     startG:{ A:Math.max(1,laneGroesse(eA)), D:Math.max(1,laneGroesse(eD)) },
+    gelaende: kr.gelaende || wuerfleGelaende(), regen: Math.random()<0.22,
     moralA:100, moralD:100, routA:false, routD:false,
     tick:0, maxTicks:40, log:[], partikel:[], fertig:false, sieger:null, still:true };
   G._kr = kr; G._s = s;
@@ -2503,9 +2797,7 @@ function kiZug(p){
   const idx = G.spieler.indexOf(p);
   const bericht = [];
   /* Preise wie im normalen Zug */
-  let kp = p.kornPreis + (110 - p.kornPreis)*0.2 + rf(-45,45);
-  if(Math.random() < 0.06) kp *= rf(1.6,2.6);
-  p.kornPreis = clamp(Math.round(kp), 20, 430);
+  p.kornPreis = clamp(Math.round((G.kornMarkt||100) * rf(0.93,1.07)), 20, 430);
   p.landPreis = ri(16,70);
   p.kornHist = (p.kornHist||[]).concat(p.kornPreis).slice(-32);
   p.kriegGefuehrt = false;
@@ -2530,10 +2822,18 @@ function kiZug(p){
     if(m>0){ p.geld -= m*p.landPreis; p.land += m; bericht.push(`kauft ${fmt(m)} ha Land`); }
   }
   zwischenbilanz(p);
+  /* Entscheidungs-Ereignis: die KI wählt nach Kassenlage */
+  const ev2 = ereignisWuerfeln(p);
+  if(ev2){
+    const k = p.geld > 6000 ? 0 : ev2.wahl.length-1;
+    try{ ev2.wahl[k].fx(p); bericht.push(`entscheidet über „${ev2.ico}"-Vorfall`); }catch(e){}
+  }
   /* Bauen */
   let gebaut = 0;
-  for(let i=0;i<8;i++){
-    if(p.geld < 6000 || (p.maerkte+p.muehlen) >= bauplaetze(p)) break;
+  const bauLimit = p.kiTyp==="baumeister" ? 12 : 8;
+  const bauReserve = p.kiTyp==="baumeister" ? 4500 : 6000;
+  for(let i=0;i<bauLimit;i++){
+    if(p.geld < bauReserve || (p.maerkte+p.muehlen) >= bauplaetze(p)) break;
     if(p.maerkte >= 25 && p.muehlen >= 15) break;
     if(p.maerkte*3 <= p.muehlen*5){ if(p.geld>=KOSTEN.markt){ p.geld-=KOSTEN.markt; p.maerkte++; platziereGebaeude(p,"m"); gebaut++; } }
     else if(p.geld>=KOSTEN.muehle){ p.geld-=KOSTEN.muehle; p.muehlen++; platziereGebaeude(p,"k"); gebaut++; }
@@ -2541,17 +2841,37 @@ function kiZug(p){
   if(gebaut) bericht.push(`errichtet ${gebaut} Bauwerk${gebaut>1?"e":""}`);
   if(p.land >= LAND.palast){ let t=0; while(p.geld > 25000 && p.palast < PALAST_TEILE){ p.geld-=KOSTEN.palastTeil; p.palast++; t++; } if(t) bericht.push(`baut am Palast (${p.palast}/${PALAST_TEILE})`); }
   if(p.palast >= PALAST_TEILE && p.land >= LAND.dom){ let t=0; while(p.geld > 112000 && p.dom < DOM_TEILE){ p.geld-=KOSTEN.domTeil; p.dom++; t++; } if(t) bericht.push(`baut an der Kathedrale (${p.dom}/${DOM_TEILE})`); }
-  /* Heer */
-  if(p.titel>=1 && p.geld > 20000 && heerGroesse(p.heer) < 150 + p.titel*80){
-    const rekruten = Math.min(30, Math.floor((p.geld-15000)/KOSTEN.inf));
+  /* Heer — der Eroberer rüstet stärker */
+  const heerZiel = (p.kiTyp==="aggressor" ? 260 : 130) + p.titel*80;
+  if(p.titel>=1 && p.geld > (p.kiTyp==="aggressor" ? 14000 : 20000) && heerGroesse(p.heer) < heerZiel){
+    const rekruten = Math.min(40, Math.floor((p.geld-12000)/KOSTEN.inf));
     if(rekruten>0){ p.geld -= rekruten*KOSTEN.inf; p.heer.inf += rekruten; }
   }
-  /* Krieg? nur gegen deutlich schwächere Nachbarn, selten */
-  if(p.titel>=1 && Math.random() < 0.10){
+  /* Der Händler pflegt Beziehungen und macht Geschäfte */
+  if(p.kiTyp==="haendler" && Math.random() < 0.25 && p.geld > 18000){
+    const partner = lebende().map(x=>x.p).filter(z=>z!==p)
+      .sort((a,b)=>bezWert(p,a)-bezWert(p,b))[0];
+    if(partner){
+      const geschenk = ri(300,800);
+      p.geld -= geschenk; partner.geld += geschenk;
+      bezAendern(p, partner, clamp(Math.round(geschenk/150),2,8));
+      bericht.push(`sendet ${partner.name} ein Geschenk`);
+    }
+  }
+  if(p.kiTyp==="haendler" && p.korn > noetigKorn(p)*2.5 && p.kornPreis > 130){
+    const m = p.korn - Math.ceil(noetigKorn(p)*2);
+    p.korn -= m; p.geld += Math.round(m*p.kornPreis*0.9);
+    G.marktDruck = (G.marktDruck||0) + m;
+  }
+  /* Krieg? Charakter, Beziehungen und Pakte entscheiden */
+  const kriegslust = p.kiTyp==="aggressor" ? 0.24 : p.kiTyp==="haendler" ? 0.04 : 0.08;
+  if(p.titel>=1 && Math.random() < kriegslust){
     const nb = nachbarn(idx).filter(i=>!G.spieler[i].tot);
     const eigen = heerStaerke(p.heer) + miliz(p)*0.8;
+    const schwelle = p.kiTyp==="aggressor" ? 1.3 : 1.6;
     const ziel = nb.map(i=>G.spieler[i])
-      .filter(z => eigen > (heerStaerke(z.heer) + miliz(z)*0.8 + z.pop*0.025)*1.6)
+      .filter(z => !paktAktiv(p,z) && bezWert(p,z) < 35
+                && eigen > (heerStaerke(z.heer) + miliz(z)*0.8 + z.pop*0.025)*schwelle)
       .sort((x,y)=>heerStaerke(x.heer)-heerStaerke(y.heer))[0];
     if(ziel && eigen > 150){
       const di = G.spieler.indexOf(ziel);
@@ -2579,7 +2899,7 @@ function storageOK(){
   try{ const t="__kaiser_t"; window.localStorage.setItem(t,"1"); window.localStorage.removeItem(t); return true; }
   catch(e){ return false; }
 }
-function spielstand(){ return JSON.stringify({v:6, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler, opt:G.opt||{vergleich:true}, diff:G.diff||2, tipps:G.tipps||{}}); }
+function spielstand(){ return JSON.stringify({v:7, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler, opt:G.opt||{vergleich:true}, diff:G.diff||2, tipps:G.tipps||{}, kornMarkt:G.kornMarkt||100, marktDruck:G.marktDruck||0, angebote:G.angebote||[], szenario:G.szenario||"frei"}); }
 function ladeSpielstand(json){
   const d = JSON.parse(json);
   if(!d || !Array.isArray(d.spieler) || !d.spieler.length) throw new Error("ungültig");
@@ -2588,6 +2908,10 @@ function ladeSpielstand(json){
   G.opt = d.opt || { vergleich:true };
   G.diff = d.diff || 2;
   G.tipps = d.tipps || {};
+  G.kornMarkt = d.kornMarkt || 100;
+  G.marktDruck = d.marktDruck || 0;
+  G.angebote = d.angebote || [];
+  G.szenario = d.szenario || "frei";
   G._kiBerichte = [];
   G.spieler.forEach((p,i)=>{
     if(!p.heer) p.heer = {inf:0,kav:0,art:0};
@@ -2599,6 +2923,9 @@ function ladeSpielstand(json){
     if(!p.chronik) p.chronik = [];
     if(p.ki===undefined) p.ki = false;
     if(!p.startAlter) p.startAlter = ri(22,30);
+    if(!p.bez) p.bez = {};
+    if(!p.pakte) p.pakte = {};
+    if(!p.stat) p.stat = { steuern:0, kornErloes:0, siege:0, niederlagen:0, bauten:0 };
     if(!p.gebaeude){
       p.gebaeude = [];
       for(let m=0;m<p.maerkte;m++) p.gebaeude.push({t:"m",ang:Math.random()*6.2832,dist:0.34+Math.random()*0.58});
@@ -2646,6 +2973,24 @@ function starteSpiel(anzahl, namen, geschlechter, tempo, kis, opts){
     G.spieler.push(neuerSpieler(namen[i]||("Spieler "+(i+1)), geschlechter[i], i, kis && kis[i]));
   if(G.diff===1) for(const p of G.spieler){ p.geld = 25000; p.korn = 600; }
   if(G.diff===3) for(const p of G.spieler){ p.geld = 10000; p.korn = 300; }
+  /* KI-Persönlichkeiten */
+  const typen = ["aggressor","haendler","baumeister"];
+  let tIdx = ri(0,2);
+  for(const p of G.spieler) if(p.ki){ p.kiTyp = typen[tIdx % 3]; tIdx++; }
+  /* Szenario anwenden */
+  G.szenario = opts.szenario || "frei";
+  if(G.szenario === "erbe"){
+    for(const p of G.spieler){ p.geld = -4000; p.korn = 250; }
+  } else if(G.szenario === "kriegstreiber"){
+    for(const p of G.spieler){ if(p.ki){ p.kiTyp = "aggressor"; p.heer = {inf:ri(80,140), kav:ri(10,25), art:ri(2,6)}; p.titel = Math.max(p.titel,1); p.pop = 3200; }
+      else p.heer = {inf:60, kav:5, art:2}; }
+  } else if(G.szenario === "kornkrise"){
+    for(const p of G.spieler){ p.korn = 120; }
+    G.kornMarkt = 240;
+  }
+  G.kornMarkt = G.kornMarkt || ri(85,120);
+  G.marktDruck = 0;
+  G.angebote = [];
   G.jahr = 1700; G.aktiv = 0; G.sieger = null; G._kiBerichte = []; G._ruhmFertig = false;
   if(cur().ki){ G.aktiv = -1; naechsterSpieler(); }
   else zeige("intro");
@@ -2653,9 +2998,7 @@ function starteSpiel(anzahl, namen, geschlechter, tempo, kis, opts){
 const diffFaktor = () => G.diff===1 ? 0.6 : G.diff===3 ? 1.35 : 1;
 function beginneZug(){
   const p = cur();
-  let kp = p.kornPreis + (110 - p.kornPreis)*0.2 + rf(-45,45);
-  if(Math.random() < 0.06) kp *= rf(1.6,2.6);
-  p.kornPreis = clamp(Math.round(kp), 20, 430);
+  p.kornPreis = clamp(Math.round((G.kornMarkt||100) * rf(0.93,1.07)), 20, 430);
   p.landPreis = ri(16,70);
   p.kornHist = (p.kornHist||[]).concat(p.kornPreis).slice(-32);
   if(p.snap){
@@ -2664,17 +3007,26 @@ function beginneZug(){
   }
   p.snap = { geld:p.geld, land:p.land, korn:p.korn, pop:p.pop };
   p.kriegGefuehrt = false;
+  p.diploGenutzt = false;
   p.ausgabe = 0;
   p.turnStart = Date.now();
   G._kiBerichte = [];
   G._donnerte = false;
-  zeige("status");
+  if((G.angebote||[]).some(a => a.an === G.aktiv)) zeige("angebote");
+  else zeige("status");
 }
 function naechsterSpieler(){
   quicksave();
   for(let schutz=0; schutz<200; schutz++){
     G.aktiv++;
-    if(G.aktiv >= G.spieler.length){ G.aktiv = 0; G.jahr++; }
+    if(G.aktiv >= G.spieler.length){
+      G.aktiv = 0; G.jahr++;
+      /* Gemeinsamer Markt: Verkäufe drücken, Käufe treiben den Kurs */
+      let kp = G.kornMarkt + (110 - G.kornMarkt)*0.15 + rf(-38,38) - (G.marktDruck||0)*0.02;
+      if(Math.random() < 0.06) kp *= rf(1.5,2.4);
+      G.kornMarkt = clamp(Math.round(kp), 20, 430);
+      G.marktDruck = Math.round((G.marktDruck||0)*0.4);
+    }
     const p = cur();
     if(alleTot()){ zeige("ende"); return; }
     if(p.tot) continue;
@@ -2943,7 +3295,10 @@ const SCREENS = {
               ${[1,2,3,4,5,6,7,8,9].map(n=>`<option ${n===2?'selected':''}>${n}</option>`).join("")}
             </select>
           </div>
-          <table>${rows}</table>
+          <table class="setup-tabelle">
+            <colgroup><col style="width:26px"><col><col style="width:88px"><col style="width:112px"></colgroup>
+            ${rows}
+          </table>
           <p class="muted small" style="margin-top:8px">Die Reihenfolge bestimmt die Nachbarschaft:
           Reich 1 grenzt an Reich 2, Reich 2 an Reich 3 usw. — Kriege gegen Nicht-Nachbarn
           brauchen Durchmarschrechte.</p>
@@ -2955,6 +3310,14 @@ const SCREENS = {
               <option value="1">Original — Leben bis ca. 1760–1768 (lange Partie)</option>
               <option value="1.8" selected>Kurzspiel — schnelleres Wachstum, Leben bis ca. 1739–1746</option>
               <option value="2.6">Blitz — für einen Abend: rasantes Wachstum, Leben bis ca. 1721–1726</option>
+            </select>
+          </div>
+          <div class="rowflex">
+            <select id="szenario" style="width:100%">
+              <option value="frei" selected>Freies Spiel</option>
+              <option value="erbe">Das verschuldete Erbe — Start mit 4.000 Talern Schulden</option>
+              <option value="kriegstreiber">Die Kriegstreiber — aufgerüstete, aggressive KI-Nachbarn</option>
+              <option value="kornkrise">Die Kornkrise — leere Speicher, Wucherpreise</option>
             </select>
           </div>
           <div class="rowflex">
@@ -3026,8 +3389,9 @@ const SCREENS = {
           <details style="margin-top:10px"><summary class="muted small">Eigener Server</summary>
             <input type="text" id="mpUrl" placeholder="${MP_STANDARD}" style="width:100%;margin-top:6px">
           </details>
-          <p class="muted small" style="margin-top:8px">Hinweis: Der Gratis-Server schläft bei
-          Inaktivität — der erste Verbindungsaufbau kann bis zu einer Minute dauern.</p>
+          <p class="muted small" style="margin-top:8px">Der Gratis-Server schläft bei Inaktivität —
+          das Spiel weckt ihn automatisch und versucht es bis zu viermal (~1 Minute). Einfach
+          kurz warten, die Lobby öffnet sich von selbst.</p>
         </div>
       </div>
       <button class="btn-lg" onclick="zeige('title')">Zurück</button>`;
@@ -3057,6 +3421,12 @@ const SCREENS = {
             <div class="rowflex"><select id="mpDiff" style="width:100%">
               <option value="1">Leicht</option><option value="2" selected>Normal</option><option value="3">Schwer</option>
             </select></div>
+            <div class="rowflex"><select id="mpSzenario" style="width:100%">
+              <option value="frei" selected>Freies Spiel</option>
+              <option value="erbe">Das verschuldete Erbe</option>
+              <option value="kriegstreiber">Die Kriegstreiber</option>
+              <option value="kornkrise">Die Kornkrise</option>
+            </select></div>
             <div class="rowflex">KI-Regenten dazu:
               <input type="number" id="mpKis" min="0" max="7" value="0" style="width:70px">
             </div>
@@ -3064,7 +3434,8 @@ const SCREENS = {
           : `<p class="muted">Der Gastgeber wählt die Regeln und startet die Partie …</p>`}
         </div>
       </div>
-      <button onclick="mpVerlassen()">Lobby verlassen</button>`;
+      <button onclick="mpVerlassen()">Lobby verlassen</button>
+      ${chatBox()}`;
   },
 
   warten(){
@@ -3091,6 +3462,12 @@ const SCREENS = {
         <h3>Die Reiche im Vergleich</h3>
         <table><tr><th>Regent</th><th class="r">Land</th><th class="r">Untertanen</th><th class="r">Städte</th></tr>${zeilen}</table>
       </div>
+      ${MP && MP.host && MP.getrennt && Object.keys(MP.getrennt).length ? `
+      <div class="card" style="max-width:640px;margin:14px auto 0;border-color:var(--red)">
+        <h3>⚠️ Getrennte Regenten</h3>
+        ${Object.keys(MP.getrennt).map(i=>`<button class="btn-sm" onclick="kiUebernehmen(${i})">🤖 ${G.spieler[i].name} der KI übergeben</button>`).join("")}
+      </div>`:""}
+      ${chatBox()}
       <div class="center" style="margin-top:10px"><button class="btn-sm" onclick="mpVerlassen()">Partie verlassen</button></div>`;
   },
 
@@ -3212,7 +3589,8 @@ const SCREENS = {
         <div class="card">
           <h3>🌾 Korn — ${fmt(p.kornPreis)} Taler / Fuder</h3>
           ${sparkline(p.kornHist)}
-          <p class="muted small">Kursverlauf der letzten Jahre. Spanne 20–430 Taler, 10 % Provision auf Verkäufe.</p>
+          <p class="muted small">Gemeinsamer Markt aller Reiche: große Verkäufe drücken den Kurs des
+          Folgejahres, Aufkäufe treiben ihn. Spanne 20–430 Taler, 10 % Provision auf Verkäufe.</p>
           <p style="margin-top:8px">Lager: <b>${fmt(p.korn)} Fuder</b></p>
           <div class="rowflex">Kaufen: <input type="number" id="kkauf" min="0" value="0">
             <button class="btn-sm" onclick="$('#kkauf').value=${Math.max(0,Math.floor(p.geld/p.kornPreis))}">Max</button>
@@ -3259,7 +3637,23 @@ const SCREENS = {
         </table>
       </div>
       ${r.verhungert?'<div class="event bad">Euer Volk hungert! Das spricht sich im Reich herum.</div>':""}
-      <button class="btn-primary btn-lg" onclick="zeige('steuern')">Weiter: Steuern</button>`;
+      <button class="btn-primary btn-lg" onclick="nachZwischenbilanz()">Weiter: Steuern</button>`;
+  },
+
+  entscheidung(){
+    const p = cur(), e = G._ereignis;
+    if(!e){ setTimeout(()=>zeige("steuern"),10); return ""; }
+    const knoepfe = e.wahl.map((w,k)=>{
+      const label = typeof w.t === "function" ? w.t(p) : w.t;
+      return `<button class="btn-lg" onclick="ereignisWahl(${k})" style="display:block;width:100%;text-align:left;margin:6px 0">${label}</button>`;
+    }).join("");
+    return `
+      ${stepper("Zw.-Bilanz")}
+      <h2>${e.ico} Eine Entscheidung, ${titelName(p)}!</h2>
+      <div class="card" style="max-width:640px">
+        <p style="font-size:16px">${e.txt(p)}</p>
+      </div>
+      <div style="max-width:640px">${knoepfe}</div>`;
   },
 
   steuern(){
@@ -3346,15 +3740,87 @@ const SCREENS = {
       </div>
       <div class="card"><b>Vermögen: <span class="${p.geld<0?'red':'gold'}">${fmt(p.geld)} Taler</span></b></div>
       <button class="btn-danger" onclick="zeige('kriegPlan')" ${kriegOk?'':'disabled'}>⚔️ Krieg führen</button>
+      <button onclick="zeige('diplo')" ${lebende().length>1?'':'disabled'}>🤝 Diplomatie</button>
       <button onclick="weltAuf()">🗺️ Gesamtkarte</button>
       <button class="btn-primary btn-lg" onclick="jahrAbschliessen()">Jahr abschließen</button>
       ${!kriegOk?`<div class="event bad" style="max-width:640px">⚔️ <b>Für einen Feldzug fehlt Euch noch:</b> ${kannKrieg(p).fehlt.join(" · ")}.</div>`:''}`;
   },
 
+  diplo(){
+    const p = cur();
+    const ziele = lebende().filter(x=>x.i!==G.aktiv);
+    const opts = ziele.map(z=>`<option value="${z.i}">${z.p.wappen} ${titelName(z.p)} ${z.p.name}${z.p.ki?` (${KI_TYP_NAMEN[z.p.kiTyp]||"KI"})`:""}</option>`).join("");
+    const zielIdx = ziele.length ? ziele[0].i : -1;
+    const bezZeilen = ziele.map(z=>{
+      const w = bezWert(p, z.p);
+      const lbl = w>40?"freundschaftlich":w>10?"wohlwollend":w>-10?"neutral":w>-40?"kühl":"feindselig";
+      return `<tr><td>${z.p.wappen} ${z.p.name}</td>
+        <td class="r ${w>10?'green':w<-10?'red':''}">${w>0?"+":""}${w} · ${lbl}</td>
+        <td class="r">${paktAktiv(p,z.p)?`🕊️ Pakt bis ${p.pakte[z.i]}`:"—"}</td></tr>`;
+    }).join("");
+    return `
+      ${stepper("Bauen")}
+      <h2>🤝 Diplomatie</h2>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Beziehungen</h3>
+          <table><tr><th>Regent</th><th class="r">Verhältnis</th><th class="r">Pakt</th></tr>${bezZeilen}</table>
+          <p class="muted small" style="margin-top:6px">Geschenke und faire Geschäfte verbessern das
+          Verhältnis, Kriege zerstören es. Verbündete Regenten unterstützen Euch eher im Krieg.</p>
+        </div>
+        <div class="card">
+          <h3>Eine Aktion pro Jahr ${p.diploGenutzt?'<span class="red small">— bereits genutzt</span>':''}</h3>
+          <div class="rowflex">Partner: <select id="dipZiel">${opts}</select></div>
+          <div class="rowflex" style="margin-top:8px">
+            <input type="number" id="dipGeschenk" min="100" step="100" value="500" style="width:100px">
+            <button onclick="diploAktion('geschenk')" ${p.diploGenutzt?'disabled':''}>🎁 Geschenk senden</button>
+          </div>
+          <div class="rowflex">
+            <select id="dipRichtung" style="width:130px">
+              <option value="kauf">Ich kaufe</option><option value="verkauf">Ich verkaufe</option>
+            </select>
+            <input type="number" id="dipMenge" min="1" value="100" style="width:80px" title="Fuder">
+            <span class="muted small">Fuder à</span>
+            <input type="number" id="dipPreis" min="1" value="${G.kornMarkt||100}" style="width:80px" title="Taler je Fuder">
+            <button onclick="diploAktion('handel')" ${p.diploGenutzt?'disabled':''}>Anbieten</button>
+          </div>
+          <div class="rowflex">
+            <button onclick="diploAktion('pakt')" ${p.diploGenutzt?'disabled':''}>🕊️ Nichtangriffspakt anbieten (5 Jahre)</button>
+          </div>
+          <p class="muted small">Angebote an menschliche Regenten werden zu Beginn von deren
+          nächstem Zug beantwortet. Marktpreis derzeit ${fmt(G.kornMarkt||100)} T/Fuder.</p>
+        </div>
+      </div>
+      <button class="btn-primary btn-lg" onclick="zeige('bauen')">Zurück zur Bauphase</button>`;
+  },
+
+  angebote(){
+    const meine = (G.angebote||[]).map((a,i)=>({a,i})).filter(x=>x.a.an===G.aktiv);
+    if(!meine.length){ setTimeout(()=>zeige("status"), 10); return ""; }
+    const karten = meine.map(({a,i})=>{
+      const von = G.spieler[a.von];
+      const txt = a.richtung==="pakt"
+        ? `bietet Euch einen <b>Nichtangriffspakt</b> über 5 Jahre an.`
+        : a.richtung==="kauf"
+          ? `möchte <b>${fmt(a.menge)} Fuder Korn</b> von Euch kaufen — zu <b>${fmt(a.preis)} T/Fuder</b> (${fmt(a.menge*a.preis)} T gesamt).`
+          : `bietet Euch <b>${fmt(a.menge)} Fuder Korn</b> an — zu <b>${fmt(a.preis)} T/Fuder</b> (${fmt(a.menge*a.preis)} T gesamt).`;
+      return `<div class="card">
+        <p>${von.wappen} <b>${titelName(von)} ${von.name}</b> ${txt}</p>
+        <p class="muted small">Marktpreis derzeit ${fmt(G.kornMarkt||100)} T/Fuder · Euer Verhältnis: ${bezWert(cur(),von)}</p>
+        <button class="btn-primary" onclick="angebotAntwort(${i}, true)">Annehmen</button>
+        <button onclick="angebotAntwort(${i}, false)">Ablehnen</button>
+      </div>`;
+    }).join("");
+    return `
+      <h2>📜 Botschaften an Euren Hof</h2>
+      ${karten}`;
+  },
+
   kriegPlan(){
     const p = cur();
     const nb = nachbarn(G.aktiv);
-    const ziele = lebende().filter(x=>x.i!==G.aktiv);
+    const ziele = lebende().filter(x=>x.i!==G.aktiv && !paktAktiv(p, x.p));
+    const pakte = lebende().filter(x=>x.i!==G.aktiv && paktAktiv(p, x.p));
     const vorwahl = G._zielVorwahl;
     G._zielVorwahl = undefined;
     const opts = ziele.map(z=>{
@@ -3367,6 +3833,7 @@ const SCREENS = {
       <h2>⚔️ Feldzug planen</h2>
       <div class="card">
         <div class="rowflex">Gegner: <select id="ziel" style="max-width:100%">${opts}</select></div>
+        ${pakte.length?`<p class="muted small">🕊️ Durch Pakte geschützt: ${pakte.map(x=>x.p.name+" (bis "+p.pakte[x.i]+")").join(", ")}</p>`:""}
         <table>
           <tr><th>Eure Streitmacht</th><th class="r">Stärke</th></tr>
           <tr><td>Infanterie</td><td class="r">${fmt(p.heer.inf)}</td></tr>
@@ -3457,9 +3924,10 @@ const SCREENS = {
 
   /* gemeinsames Aufstellungs-Formular */
   _aufstellung(p, gegner, text, fertigFn, knopf){
+    const gel = (G._kr && G._kr.gelaende) || [];
     const zeilen = LANE_NAMEN.map((n,i)=>`
       <div class="sliderrow">
-        <span>${n}</span>
+        <span>${n}${gel[i]&&gel[i].ico?` <span title="${gel[i].n}">${gel[i].ico}</span>`:""}</span>
         <input type="range" min="0" max="4" step="1" value="${G._aufW[i]}"
           oninput="aufstellungGewicht(${i}, this.value)">
         <span class="v" id="gw${i}">${G._aufW[i]}</span>
@@ -3469,7 +3937,9 @@ const SCREENS = {
     setTimeout(()=>zeichneAufstellung("aufVorschau", G._aufE, G._aufW, G._aufFarbe, G._aufRechts), 30);
     return `
       <h2>🗡️ Aufstellung — ${titelName(p)} ${p.name} gegen ${titelName(gegner)} ${gegner.name}</h2>
-      <div class="card"><p class="small">${text}</p></div>
+      <div class="card"><p class="small">${text}</p>
+      <p class="muted small" style="margin-top:6px">Erkundetes Gelände:
+        ⛰️ Hügel schützen den Verteidiger · 🌊 Furten bremsen den Vormarsch · 🌲 Wald behindert Kavallerie und Artillerie.</p></div>
       <div class="grid g2">
         <div class="card">
           <h3>Gewichtung der Abschnitte</h3>
@@ -3505,7 +3975,7 @@ const SCREENS = {
       </div>`;
     return `
       <h2>⚔️ Schlacht um ${ver.name}s Land</h2>
-      <span class="phasebadge">Gefecht ${Math.min(s.tick,s.maxTicks)}/${s.maxTicks} · fünf Abschnitte</span>
+      <span class="phasebadge">Gefecht ${Math.min(s.tick,s.maxTicks)}/${s.maxTicks}${s.regen?" · 🌧️ Regen — Artillerie geschwächt":""}</span>
       <canvas id="feld" width="900" height="380"></canvas>
       <div class="battlefield">
         <div>
@@ -3637,11 +4107,12 @@ const SCREENS = {
       const angriff = ausBauen && kk.ok && !s.tot
         ? `<button class="btn-danger btn-sm" onclick="angreifenAus(${i})">⚔️ Angreifen</button>`
         : "";
+      const w = bezWert(p, s);
       return `<tr>
-        <td><span class="dot" style="background:${s.farbe}"></span>${s.wappen} ${titelName(s)} ${s.name}${s.tot?" †":""}${s.ki?' <span class="muted small">(KI)</span>':""}</td>
+        <td><span class="dot" style="background:${s.farbe}"></span>${s.wappen} ${titelName(s)} ${s.name}${s.tot?" †":""}${s.ki?` <span class="muted small">(${KI_TYP_NAMEN[s.kiTyp]||"KI"})</span>`:""}</td>
         <td class="r">${fmt(s.land)} ha</td>
         <td class="r">${fmt(s.pop)}</td>
-        <td class="r">${staedte(s)}</td>
+        <td class="r ${w>10?'green':w<-10?'red':''}">${w>0?"+":""}${w}${paktAktiv(p,s)?" 🕊️":""}</td>
         <td>${s.tot?"—":adj?'<span class="green">Nachbar</span>':'<span class="muted">Durchmarsch nötig</span>'}</td>
         <td class="r">${angriff}</td>
       </tr>`;
@@ -3656,7 +4127,7 @@ const SCREENS = {
       <div class="card">
         <h3>Die Konkurrenz</h3>
         <table>
-          <tr><th>Regent</th><th class="r">Land</th><th class="r">Untertanen</th><th class="r">Städte</th><th>Lage</th><th></th></tr>
+          <tr><th>Regent</th><th class="r">Land</th><th class="r">Untertanen</th><th class="r">Verhältnis</th><th>Lage</th><th></th></tr>
           ${zeilen}
         </table>
         ${!ausBauen?'<p class="muted small">Feldzüge lassen sich in der Bauphase beginnen (Landkarte &amp; Bauen → Gesamtkarte).</p>':
@@ -3732,8 +4203,17 @@ const SCREENS = {
   },
 
   ende(){
-    if(!G._ruhmFertig){ G._ruhmFertig = true; ruhmEintragen(); }
+    if(!G._ruhmFertig){
+      G._ruhmFertig = true; ruhmEintragen();
+      if(G.szenario && G.szenario !== "frei") erfolg("szenarist");
+    }
     const sortiert = [...G.spieler].sort((a,b)=>score(b)-score(a));
+    const statZeilen = sortiert.map(p=>`
+      <tr><td>${p.wappen} ${p.name}</td>
+        <td class="r">${fmt(p.stat.steuern)}</td>
+        <td class="r">${fmt(p.stat.kornErloes)}</td>
+        <td class="r">${p.stat.siege} / ${p.stat.niederlagen}</td>
+        <td class="r">${p.stat.bauten}</td></tr>`).join("");
     const rows = sortiert.map((p,i)=>`
       <tr style="${i===0?'color:var(--gold);font-weight:700':''}">
         <td>${i+1}.</td><td>${titelName(p)} ${p.name}${p.tot?" †":""}</td>
@@ -3748,6 +4228,13 @@ const SCREENS = {
         <table>
           <tr><th></th><th>Name</th><th class="r">Untertanen</th><th class="r">Land (ha)</th><th class="r">Taler</th><th class="r">Punkte</th></tr>
           ${rows}
+        </table>
+      </div>
+      <div class="card">
+        <h3>Bilanz der Regentschaften</h3>
+        <table>
+          <tr><th>Regent</th><th class="r">Steuern gesamt</th><th class="r">Kornerlöse</th><th class="r">Schlachten S/N</th><th class="r">Bauwerke</th></tr>
+          ${statZeilen}
         </table>
       </div>
       ${vergleichsChart()}
@@ -3781,7 +4268,8 @@ function setupStart(){
   starteSpiel(n, namen, w, +$("#tempo").value, kis, {
     vergleich: $("#optVergleich").checked,
     tutorial:  $("#optTutorial").checked,
-    diff: +$("#diff").value
+    diff: +$("#diff").value,
+    szenario: $("#szenario").value
   });
 }
 function kornAusgeben(){
@@ -3794,6 +4282,11 @@ function handelFertig(){
   zwischenbilanz(cur());
   zeige("zwbilanz");
 }
+function nachZwischenbilanz(){
+  const e = ereignisWuerfeln(cur());
+  if(e){ G._ereignis = e; zeige("entscheidung"); }
+  else zeige("steuern");
+}
 function handelKorn(dir){
   const p = cur();
   if(dir>0){
@@ -3802,10 +4295,13 @@ function handelKorn(dir){
     if(m<=0) return;
     if(kosten>p.geld){ $("#hmsg").textContent="Zu wenig Taler!"; return; }
     p.geld -= kosten; p.korn += m; sMuenze();
+    G.marktDruck = (G.marktDruck||0) - m;
   } else {
     const m = clamp(Math.floor(+$("#kverk").value||0),0,p.korn);
     if(m<=0) return;
     p.korn -= m; p.geld += Math.round(m*p.kornPreis*0.9); sMuenze();
+    G.marktDruck = (G.marktDruck||0) + m;
+    p.stat.kornErloes += Math.round(m*p.kornPreis*0.9);
     if(p.kornPreis >= 300) erfolg("spekulant");
   }
   render();
@@ -3849,6 +4345,7 @@ function baue(was){
   if(was==="muehle" && p.geld>=KOSTEN.muehle && platz){ p.geld-=KOSTEN.muehle; p.muehlen++; platziereGebaeude(p,"k"); }
   if(was==="palast" && p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast){ p.geld-=KOSTEN.palastTeil; p.palast++; p._neu="palast"; }
   if(was==="dom"    && p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom){ p.geld-=KOSTEN.domTeil; p.dom++; p._neu="dom"; }
+  p.stat.bauten++;
   if(staedte(p)>=1) erfolg("stadt");
   if(p.palast>=PALAST_TEILE) erfolg("palast");
   if(p.dom>=DOM_TEILE) erfolg("dom");
@@ -3910,37 +4407,63 @@ function hilfeZu(){ zeige(G._vorHilfe || "title"); }
    Online-Mehrspieler: WebSocket-Relay, Räume mit Code,
    rundenbasierte Zustands-Synchronisation
    ============================================================ */
-const MP_STANDARD = (location.hostname && location.hostname.endsWith("onrender.com"))
-  ? "wss://kaiser-mp.onrender.com"
-  : "ws://localhost:8081";
+const MP_STANDARD = (location.protocol.indexOf("http")===0 &&
+  ["localhost","127.0.0.1"].includes(location.hostname))
+  ? "ws://localhost:8081"
+  : "wss://kaiser-mp.onrender.com";
 let MP = null;
 
+/* Verbindungsaufbau mit Aufweck-Ping und automatischen Wiederholungen:
+   Gratis-Server schlafen bei Inaktivität und brauchen bis zu einer Minute. */
 function mpVerbinden(url, beiOffen){
+  const ziel = (url && url.trim()) || MP_STANDARD;
   try{
-    const ws = new WebSocket(url || MP_STANDARD);
-    ws.onopen = () => beiOffen(ws);
-    ws.onerror = () => alertMsg("Keine Verbindung zum Spielserver. Gratis-Server brauchen nach einer Pause ~1 Minute zum Aufwachen — gleich noch einmal versuchen.");
+    if(ziel.indexOf("wss://") === 0)
+      fetch(ziel.replace("wss://","https://"), { mode:"no-cors" }).catch(()=>{});
+  }catch(e){}
+  let versuch = 0;
+  const WARTEN = [0, 7000, 15000, 30000];
+  const naechster = () => {
+    if(!MP || MP.abbruch) return;
+    versuch++;
+    if(versuch > 4){
+      alertMsg("Keine Verbindung zum Spielserver. Prüft die Server-Adresse (Standard: " + MP_STANDARD + ") — oder versucht es in einer Minute erneut.");
+      MP = null;
+      return;
+    }
+    if(versuch > 1) toast(`🌐 Server wird geweckt — Versuch ${versuch}/4 …`, 6500);
+    let offen = false;
+    let ws;
+    try{ ws = new WebSocket(ziel); }
+    catch(e){ alertMsg("WebSocket nicht verfügbar — in dieser Umgebung ist Online-Spiel womöglich blockiert. Nutzt die Spiel-URL im Browser."); MP = null; return; }
+    ws.onopen = () => { offen = true; if(MP){ MP.ws = ws; beiOffen(ws); toast("🌐 Mit dem Spielserver verbunden."); } };
     ws.onmessage = ev => { try{ mpNachricht(JSON.parse(ev.data)); }catch(e){} };
-    ws.onclose = () => { if(MP && MP.aktiv){ alertMsg("Verbindung zum Spielserver verloren."); } };
-    return ws;
-  }catch(e){ alertMsg("WebSocket nicht verfügbar."); return null; }
+    ws.onerror = () => {};
+    ws.onclose = () => {
+      if(offen){ if(MP && MP.aktiv) alertMsg("Verbindung zum Spielserver verloren."); return; }
+      setTimeout(naechster, WARTEN[Math.min(versuch, WARTEN.length-1)]);
+    };
+  };
+  naechster();
 }
 function mpHost(){
-  const url = $("#mpUrl") ? $("#mpUrl").value.trim() : "";
+  const url = $("#mpUrl") ? $("#mpUrl").value : "";
   const name = ($("#mpName").value.trim() || "Gastgeber");
-  const ws = mpVerbinden(url, w => w.send(JSON.stringify({t:"neu", name})));
-  if(ws) MP = { ws, name, host:true, roster:[], code:null, id:null, aktiv:false };
+  MP = { name, host:true, roster:[], code:null, id:null, aktiv:false };
+  toast("🌐 Verbinde mit dem Spielserver …");
+  mpVerbinden(url, ws => ws.send(JSON.stringify({t:"neu", name})));
 }
 function mpBeitritt(){
-  const url = $("#mpUrl") ? $("#mpUrl").value.trim() : "";
+  const url = $("#mpUrl") ? $("#mpUrl").value : "";
   const code = $("#mpCode").value.trim().toUpperCase();
   const name = ($("#mpName").value.trim() || "Gast");
   if(!code){ alertMsg("Bitte den Raum-Code eingeben."); return; }
-  const ws = mpVerbinden(url, w => w.send(JSON.stringify({t:"beitritt", code, name})));
-  if(ws) MP = { ws, name, host:false, roster:[], code, id:null, aktiv:false };
+  MP = { name, host:false, roster:[], code, id:null, aktiv:false };
+  toast("🌐 Verbinde mit dem Spielserver …");
+  mpVerbinden(url, ws => ws.send(JSON.stringify({t:"beitritt", code, name})));
 }
 function mpVerlassen(){
-  if(MP && MP.ws){ MP.aktiv = false; try{ MP.ws.close(); }catch(e){} }
+  if(MP){ MP.abbruch = true; MP.aktiv = false; if(MP.ws){ try{ MP.ws.close(); }catch(e){} } }
   MP = null;
   G.spieler = [];
   zeige("title");
@@ -3952,11 +4475,77 @@ function mpNachricht(m){
   else if(m.t === "fehler"){ alertMsg(m.text); }
   else if(m.t === "start"){ mpStartEmpfangen(m); }
   else if(m.t === "sync"){ mpSyncEmpfangen(m); }
-  else if(m.t === "weg"){ toast("⚠️ Ein Mitspieler hat die Verbindung verloren."); }
+  else if(m.t === "weg"){
+    MP.getrennt = MP.getrennt || {};
+    if(MP.zuordnung){
+      for(const [idx, cid] of Object.entries(MP.zuordnung))
+        if(cid === m.id && !G.spieler[+idx].ki) MP.getrennt[+idx] = true;
+    }
+    toast("⚠️ Ein Mitspieler hat die Verbindung verloren." + (MP.host?" Ihr könnt sein Reich der KI übergeben.":""));
+    if(G.screen === "warten" || G.screen === "lobby") render();
+  }
+  else if(m.t === "chat"){
+    MP.chat = (MP.chat || []).concat({ name: m.name, text: m.text }).slice(-30);
+    if(G.screen === "lobby" || G.screen === "warten") render();
+    else toast(`💬 <b>${m.name}:</b> ${m.text}`, 5000);
+  }
+}
+function chatSenden(){
+  const feld = $("#chatText");
+  if(!MP || !MP.ws || !feld) return;
+  const text = feld.value.trim().substring(0, 200);
+  if(!text) return;
+  MP.chat = (MP.chat || []).concat({ name: MP.name, text }).slice(-30);
+  try{ MP.ws.send(JSON.stringify({ t:"chat", name: MP.name, text })); }catch(e){}
+  feld.value = "";
+  render();
+  setTimeout(()=>{ const f=$("#chatText"); if(f) f.focus(); }, 50);
+}
+function chatBox(){
+  if(!MP) return "";
+  const zeilen = (MP.chat || []).map(c=>`<p class="small" style="padding:1px 0"><b>${c.name}:</b> ${c.text}</p>`).join("");
+  return `
+    <div class="card" style="max-width:640px;margin:14px auto 0">
+      <h3>💬 Feldpost</h3>
+      <div class="battlelog" style="max-height:130px">${zeilen || '<p class="muted small">Noch keine Nachrichten.</p>'}</div>
+      <div class="rowflex" style="margin-top:8px">
+        <input type="text" id="chatText" maxlength="200" placeholder="Nachricht …" style="flex:1;min-width:120px"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();chatSenden();}">
+        <button class="btn-sm" onclick="chatSenden()">Senden</button>
+      </div>
+    </div>`;
+}
+function kiUebernehmen(idx){
+  const p = G.spieler[idx];
+  if(!p || p.ki) return;
+  p.ki = true;
+  p.kiTyp = "baumeister";
+  if(MP){ MP.zuordnung[idx] = null; if(MP.getrennt) delete MP.getrennt[idx]; }
+  toast(`🤖 ${titelName(p)} ${p.name} wird fortan von der KI regiert.`);
+  const pend = G._pend;
+  if(pend && pend.fuer === idx){
+    G._pend = null;
+    if(pend.typ === "diplo"){
+      const kr = G._kr;
+      kr.wahl[kr.fragen[kr.frageIdx]] = kiDiploWahl(p, kr);
+      kr.frageIdx++;
+      diploWeiter();
+    } else if(pend.typ === "aufD"){
+      G._kr.aufD = kiAufstellung();
+      if(mpMein(G._kr.a)) schlachtStarten(); else mpPend("schlacht", G._kr.a);
+    } else if(pend.typ === "schlacht" || pend.typ === "schlachtplan" || pend.typ === "kriegAbbruch"){
+      G.spieler[G._kr.a].kriegGefuehrt = true;
+      naechsterSpieler();
+    }
+  } else if(G.aktiv === idx){
+    G.aktiv = idx - 1;
+    naechsterSpieler();
+  } else { mpSync(); render(); }
 }
 function mpStart(){
   if(!MP || !MP.host) return;
   const m = { t:"start", tempo:+$("#mpTempo").value, diff:+$("#mpDiff").value,
+              szenario: $("#mpSzenario").value,
               kis: clamp(+($("#mpKis").value||0), 0, 9-MP.roster.length), roster: MP.roster };
   MP.ws.send(JSON.stringify(m));
   mpStartEmpfangen(m);
@@ -3970,7 +4559,7 @@ function mpStartEmpfangen(m){
     const i = namen.length;
     namen.push(NAMEN[i%NAMEN.length]); w.push(i%2===1); kis.push(true); MP.zuordnung[i]=null;
   }
-  starteSpiel(namen.length, namen, w, m.tempo, kis, {vergleich:true, tutorial:true, diff:m.diff});
+  starteSpiel(namen.length, namen, w, m.tempo, kis, {vergleich:true, tutorial:true, diff:m.diff, szenario:m.szenario||"frei"});
   G._pend = null;
   /* Intro läuft auf allen Geräten; der Weiter-Knopf routet dann über mpRoute() */
 }
@@ -4093,6 +4682,7 @@ try{
   }
 }catch(e){}
 
+try{ $("#lautMusik").value = LAUT.musik; $("#lautFx").value = LAUT.fx; }catch(e){}
 render();
 </script>
 </body>
