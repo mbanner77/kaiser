@@ -1,6 +1,11 @@
 # GAP-Analyse: Kaiser-Neuimplementierung vs. Original (C64, 1984)
 
-Stand: Juli 2026 · Bezugsversion: `kaiser.html` (moderne UI)
+Stand: Juli 2026 · Bezugsversion: `kaiser.html` (moderne UI, Ausbaustufe 3)
+
+> **Update Ausbaustufe 3:** Alle in dieser Analyse identifizierten Lücken sind
+> umgesetzt (Status in den Tabellen aktualisiert). Wo das Original nicht exakt
+> dokumentiert ist oder Joystick-Bedienung zeitgemäß ersetzt wurde, ist die
+> Umsetzung als „interpretiert" gekennzeichnet.
 
 Diese Analyse vergleicht die Neuimplementierung mit dem dokumentierten Funktionsumfang
 des C64-Originals. Quellen: C64-Wiki (Hauptartikel und Rombach-Spielbericht),
@@ -18,11 +23,11 @@ Legende: ✅ vorhanden · ⚠️ abweichend umgesetzt · ❌ fehlt
 |---|---|---|---|---|
 | Rundenzyklus = 1 Regierungsjahr | ja | ja | ✅ | — |
 | Phase 1: Kornausgabe & Korn-/Landhandel | ja | ja | ✅ | — |
-| Phase 2: **Zwischenbilanz** direkt nach dem Handel (Geburten, Sterbefälle, Zu-/Abwanderung, Einnahmen/Ausgaben) | ja, eigene Phase mitten in der Runde | Werte werden erst in der Jahresbilanz am Rundenende gezeigt | ⚠️ | P2 |
+| Phase 2: **Zwischenbilanz** direkt nach dem Handel (Geburten, Sterbefälle, Zu-/Abwanderung, Einnahmen/Ausgaben) | ja, eigene Phase mitten in der Runde | eigene Zwischenbilanz-Phase nach dem Handel; Bevölkerungsereignisse (Pest, Siedler) erscheinen dort | ✅ | erledigt |
 | Phase 3: Steuern & Justiz | ja | ja | ✅ | — |
 | Phase 4: Landkarte | ja | ja (kombiniert mit Bauphase) | ✅ | — |
 | Phase 5: Aktionen (Bauen, Krieg) | ja | ja | ✅ | — |
-| „Ende des Zuges"-Menü mit Speicheroption | ja (F1) | Export/Import als Datei; Schnellspeichern im Browser, wo verfügbar | ⚠️ | P2 |
+| „Ende des Zuges"-Menü mit Speicheroption | ja (F1) | Export/Import als Datei; automatischer Schnellspeicher nach jedem Zug, jeder Schlacht und jedem Jahresabschluss | ✅ | erledigt |
 
 ## 2. Spieler & Partie
 
@@ -31,7 +36,7 @@ Legende: ✅ vorhanden · ⚠️ abweichend umgesetzt · ❌ fehlt
 | Mehrspieler-Hotseat | bis zu **9** Spieler | bis zu 9 Spieler | ✅ (mit moderner UI nachgezogen) | — |
 | Anrede/Geschlecht je Spieler (Titel-Formen) | ja | ja | ✅ | — |
 | Starttitel „Herr/Dame" vor Baron | ja | ja (vorher „Bürger", korrigiert) | ✅ | — |
-| Spielstand speichern/laden | ja (Diskette, F1; Autosave bei bestimmten Ereignissen) | Datei-Export/-Import (JSON); Browser-Schnellspeicher wo verfügbar; kein Autosave bei Ereignissen | ⚠️ | P2 |
+| Spielstand speichern/laden | ja (Diskette, F1; Autosave bei bestimmten Ereignissen) | Datei-Export/-Import (JSON); Browser-Schnellspeicher; Autosave nach Zug, Schlacht und Jahresabschluss | ✅ | erledigt |
 | Startwerte 15.000 Taler / 10.000 ha | ja | ja (zzgl. 400 Fuder Korn, 2.500 Untertanen als kalibrierte Annahme — Originalwerte nicht dokumentiert) | ⚠️ | P3 |
 
 ## 3. Wirtschaft & Handel
@@ -42,8 +47,8 @@ Legende: ✅ vorhanden · ⚠️ abweichend umgesetzt · ❌ fehlt
 | Landpreis-Spanne 16–70 Taler/ha | ja | ja | ✅ | — |
 | 10 % Provision auf **alle** Verkäufe | ja (Korn **und** Land) | jetzt auf Korn- und Landverkäufe | ✅ (korrigiert) | — |
 | Land-/Kornspekulation als Einnahmequelle | ja, zentral | ja | ✅ | — |
-| Ernteertrag wetterabhängig | ja | Zufallsertrag + Ereignisse (Dürre/Rekordernte); kein explizites Saison-/Wettermodell | ⚠️ | P3 |
-| Zielkonflikt „Bebauung frisst Ackerland" | ja („wer zubaut, produziert kein Getreide") | abgeschwächt: Bauplätze sind an Landbesitz gekoppelt (1/1.000 ha), reduzieren aber nicht direkt die Anbaufläche | ⚠️ | P2 |
+| Ernteertrag wetterabhängig | ja | gewichtetes Wettermodell mit 6 Lagen (Dürre bis Prachtjahr), sichtbar in der Jahresbilanz | ✅ | erledigt |
+| Zielkonflikt „Bebauung frisst Ackerland" | ja („wer zubaut, produziert kein Getreide") | Gebäude, Palast und Dom verringern die Anbaufläche direkt; Anbaufläche wird im Status und auf der Karte ausgewiesen | ✅ | erledigt |
 
 ## 4. Steuern & Justiz
 
@@ -73,7 +78,7 @@ Legende: ✅ vorhanden · ⚠️ abweichend umgesetzt · ❌ fehlt
 | Stadt = 5 Märkte + 3 Mühlen | ja | ja | ✅ | — |
 | Palast als Voraussetzung für König | ja (16 Teile à 5.000 T lt. C64-Wiki; 8 Teile lt. Rombach) | ja (16 Teile à 5.000 T) | ✅ | — |
 | Kathedrale als Voraussetzung für Kaiser | ja (14 Teile à 9.000 T lt. C64-Wiki; 10 à 8.000 lt. Rombach) | ja (14 Teile à 9.000 T) | ✅ | — |
-| Palast/Kathedrale wachsen **grafisch** Stück für Stück | ja | Fortschrittsbalken + Kartenkacheln; kein detailliertes Gebäudebild | ⚠️ | P3 |
+| Palast/Kathedrale wachsen **grafisch** Stück für Stück | ja | SVG-Monumente wachsen Teil für Teil (inkl. Dach/Turmkreuz bei Vollendung) | ✅ | erledigt |
 
 ## 7. Beförderungen & Sieg
 
@@ -83,7 +88,7 @@ Legende: ✅ vorhanden · ⚠️ abweichend umgesetzt · ❌ fehlt
 | Beförderung nur bei positivem Kontostand | ja | ja | ✅ | — |
 | Höhere Titel verlangen Bevölkerung, Städte, Bauwerke | ja (exakte Werte nicht dokumentiert) | ja (kalibrierte Schwellen) | ⚠️ | P3 |
 | Kaiser: Kathedrale + 100.000 Taler + 25.000 ha + **mind. 5 Städte** | ja | jetzt inkl. 5-Städte-Bedingung | ✅ (korrigiert) | — |
-| Beförderungszeremonie mit Musik | ja (SID-Fanfaren, Krönungsmusik) | Zeremonie-Bildschirm, ohne Musik | ⚠️ | P3 |
+| Beförderungszeremonie mit Musik | ja (SID-Fanfaren, Krönungsmusik) | Zeremonie mit Konfetti-Animation und eigener Web-Audio-Fanfare; Krönung mit erweiterter Melodie | ✅ | erledigt |
 
 ## 8. Krieg & Diplomatie
 
@@ -91,10 +96,10 @@ Legende: ✅ vorhanden · ⚠️ abweichend umgesetzt · ❌ fehlt
 |---|---|---|---|---|
 | Krieg ab Baron | ja | ja | ✅ | — |
 | Einheiten: Infanterie, Kavallerie, Artillerie, Miliz (aus Märkten) | ja | ja | ✅ | — |
-| **Diplomatie-Phase:** andere Spieler entscheiden über Unterstützung des Angreifers/Verteidigers, Durchmarschrecht oder Neutralität; Unterstützer verleihen ihre Truppen | ja | fehlt komplett — Krieg ist reines 1-gegen-1 | ❌ | **P1** |
-| Nur **angrenzende** Reiche direkt angreifbar (sonst Durchmarschrecht nötig) | ja | fehlt (jeder kann jeden angreifen) | ❌ | P2 |
-| Interaktive Schlacht: Truppen mit Fadenkreuz platzieren, Simulation mit sichtbaren Verlusten | ja | Sofortauflösung per Kampfwert + Zufall | ❌ | P2 |
-| Stehendes Heer mit laufenden Kosten, Armeekosten steigen mit Rang | ja | Truppen sind Einmal-Söldner pro Feldzug | ❌ | P2 |
+| **Diplomatie-Phase:** andere Spieler entscheiden über Unterstützung des Angreifers/Verteidigers, Durchmarschrecht oder Neutralität; Unterstützer verleihen ihre Truppen | ja | vor jeder Schlacht wird jeder übrige Regent am Gerät befragt (Angreifer/Verteidiger unterstützen, neutral, Durchmarsch gewähren/verweigern); Unterstützer schicken ihr stehendes Heer, die Miliz bleibt daheim; Verluste treffen auch Verbündete | ✅ | erledigt |
+| Nur **angrenzende** Reiche direkt angreifbar (sonst Durchmarschrecht nötig) | ja | Sitzreihenfolge = Nachbarschaftskreis; Feldzüge gegen Nicht-Nachbarn brauchen Durchmarschrechte aller Reiche auf dem Weg, sonst bricht der Feldzug ab | ✅ | erledigt |
+| Interaktive Schlacht: Truppen mit Fadenkreuz platzieren, Simulation mit sichtbaren Verlusten | ja (Joystick) | animierte Rundenschlacht: 6 Gefechte mit Live-Einheitenzählern, Kampfkraftbalken, Gefechtsprotokoll, Trommeln/Schlachtenlärm, überspringbar; Joystick-Platzierung bewusst zeitgemäß ersetzt | ✅ interpretiert | erledigt |
+| Stehendes Heer mit laufenden Kosten, Armeekosten steigen mit Rang | ja | stehendes Heer (Infanterie/Kavallerie/Artillerie) mit jährlichem Sold, +10 % je Titelstufe; bei leerer Kasse desertieren Söldner; Heer auflösbar | ✅ | erledigt |
 | Kriegsfolgen: Landgewinn/Tribut | ja | ja (15 % Landraub bzw. 20 % Tribut) | ⚠️ (Originalwerte unbekannt) | P3 |
 
 ## 9. Zeit, Leben & Tod
@@ -110,28 +115,27 @@ Legende: ✅ vorhanden · ⚠️ abweichend umgesetzt · ❌ fehlt
 | Funktion | Original | Neuimplementierung | Status | Priorität |
 |---|---|---|---|---|
 | Landkarte mit Gebäuden, Städten, Vermögen, Volksstimmung | ja | ja (Kachelkarte + Statuskarten) | ✅ | — |
-| SID-Musik (Fanfaren, Krönung) & Soundeffekte | ja | fehlt komplett | ❌ | P2 |
+| SID-Musik (Fanfaren, Krönung) & Soundeffekte | ja | eigene Web-Audio-Klänge: Fanfare, Krönungsmelodie, Münzklang, Trommeln, Schlachtenlärm, Totenglocke; abschaltbar (🔊/🔇) | ✅ interpretiert | erledigt |
 | Joystick-Menüsteuerung | ja | Maus/Touch (zeitgemäß ersetzt) | ⚠️ gewollt | — |
-| Tastatur-Schnellbedienung | teilweise | fehlt (nur Maus/Touch) | ❌ | P3 |
+| Tastatur-Schnellbedienung | teilweise | Enter löst stets die Hauptaktion aus; Maus/Touch vollständig | ✅ | erledigt |
 | Retro-Textmodus-Optik | ja | bewusst durch moderne Oberfläche ersetzt (Nutzerentscheidung) | ⚠️ gewollt | — |
 
-## 11. Priorisierte Umsetzungs-Roadmap
+## 11. Umsetzungsstand
 
-**P1 — spielentscheidend, als Nächstes umsetzen:**
-Kriegs-Diplomatie (Unterstützung/Neutralität/Truppenverleih der Mitspieler).
-
-**P2 — deutlicher Authentizitäts-Gewinn:**
-Zwischenbilanz als eigene Phase nach dem Handel · stehendes Heer mit Unterhalt und
-rangabhängigen Kosten · Adjazenz/Durchmarschrecht · interaktivere Schlachtdarstellung ·
-Autosave bei Ereignissen · Bebauung konkurriert direkt mit Anbaufläche · Soundkulisse
-(Web Audio: Fanfare, Krönung, Schlacht).
-
-**P3 — Feinschliff:**
-Saison-/Wettermodell für Ernten · grafisch wachsender Palast/Dom · Tastaturbedienung ·
-Feinkalibrierung aller Formeln an Original-Verhalten (sofern durch Vergleichsspiele auf
-Emulator ermittelbar) · Zeremonien-Ausbau.
-
-**Bereits im Zuge dieser Analyse geschlossen:**
+**Ausbaustufe 2 (moderne UI):**
 bis zu 9 Spieler · Starttitel „Herr/Dame" · 10 % Provision auch auf Landverkäufe ·
 Einkommensteuer bis 99 % · Kaiser-Bedingung „mindestens 5 Städte" ·
 Spielstand-Export/-Import (Datei) + Browser-Schnellspeicher.
+
+**Ausbaustufe 3 (alle verbleibenden Gaps):**
+Kriegs-Diplomatie mit Truppenverleih · Nachbarschaftskreis mit Durchmarschrecht ·
+animierte Schlachten mit Gefechtsprotokoll · stehendes Heer mit rangabhängigem Sold
+und Desertion · Zwischenbilanz als eigene Phase · Bebauung konkurriert mit
+Anbaufläche · Wettermodell für die Ernte · Web-Audio-Soundkulisse (abschaltbar) ·
+grafisch wachsende SVG-Monumente · Konfetti-Zeremonien · Tastatur (Enter) ·
+Autosave nach Zug, Schlacht und Jahresabschluss.
+
+**Verbleibende bewusste Abweichungen:**
+Maus/Touch statt Joystick · moderne Oberfläche statt Textmodus (Nutzerentscheidung) ·
+alle nicht dokumentierten Original-Formeln sind eigenständig kalibriert (eine exakte
+Angleichung wäre nur durch Vergleichsspiele auf dem Emulator möglich).
