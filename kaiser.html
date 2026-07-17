@@ -641,11 +641,27 @@ function diploFertig(){
     zeige("kriegAbbruch");
     return;
   }
-  if(G.spieler[kr.d].ki){ kr.taktikD = TAKTIK_D[ri(0,2)].k; schlachtStarten(); }
-  else zeige("taktikDef");
+  G._aufW = [2,2,2,2,2];
+  zeige("aufstellungA");
 }
-function taktikDefWahl(k){
-  G._kr.taktikD = k;
+function aufstellungGewicht(i, v){
+  G._aufW[i] = +v;
+  const feld = document.getElementById("aufVorschau");
+  if(feld && G._aufE) zeichneAufstellung("aufVorschau", G._aufE, G._aufW, G._aufFarbe, G._aufRechts);
+  const lbl = document.getElementById("gw"+i);
+  if(lbl) lbl.textContent = v;
+}
+function aufstellungPreset(k){
+  G._aufW = [...AUFSTELLUNGEN[k].g];
+  render();
+}
+function aufstellungAFertig(){
+  G._kr.aufA = [...G._aufW];
+  if(G.spieler[G._kr.d].ki){ G._kr.aufD = kiAufstellung(); schlachtStarten(); }
+  else { G._aufW = [2,2,2,2,2]; zeige("aufstellungD"); }
+}
+function aufstellungDFertig(){
+  G._kr.aufD = [...G._aufW];
   schlachtStarten();
 }
 
@@ -667,91 +683,167 @@ function seiteBauen(besitzerIdx, unterstuetzer, verteidigt){
 const seiteStaerke = s =>
   s.inf + s.kav*2.5 + s.art*4 + s.miliz*0.8 + s.aufgebot*0.5;
 
-/* Taktiken: Angreifer wählt offen, Verteidiger gibt geheime Order */
-const TAKTIK_A = [
-  { k:"sturm",    n:"Sturmangriff",           d:"Alles nach vorn — stark in der offenen Feldschlacht, verlustreich gegen Wälle und Fallen." },
-  { k:"umfass",   n:"Umfassung",              d:"Die Flanken umgehen — hebelt Verschanzungen aus, anfällig für Hinterhalte." },
-  { k:"beschuss", n:"Belagerung & Beschuss",  d:"Die Artillerie wirken lassen — zermürbt Verschanzte, schwach im offenen Feld." }
+/* ============================================================
+   Schlacht nach Original-Vorbild: Truppen werden vor der Schlacht
+   auf fünf Abschnitte aufgestellt, dann rücken die Linien vor —
+   Fernkampf der Artillerie, Nahkampf am Berührungspunkt,
+   Durchbrüche in die Nachbarabschnitte, Moral und Flucht.
+   ============================================================ */
+const LANES = 5;
+const LANE_NAMEN = ["Linker Flügel","Halblinks","Zentrum","Halbrechts","Rechter Flügel"];
+const AUFSTELLUNGEN = [
+  { n:"Breite Linie",       g:[2,2,2,2,2] },
+  { n:"Massiertes Zentrum", g:[1,2,4,2,1] },
+  { n:"Schwerpunkt links",  g:[4,3,2,1,1] },
+  { n:"Schwerpunkt rechts", g:[1,1,2,3,4] },
+  { n:"Doppelflanke",       g:[3,1,1,1,3] }
 ];
-const TAKTIK_D = [
-  { k:"feld",       n:"Offene Feldschlacht", d:"Dem Feind mutig entgegentreten." },
-  { k:"wall",       n:"Verschanzen",         d:"Hinter Wällen und Gräben ausharren." },
-  { k:"hinterhalt", n:"Hinterhalt",          d:"Den Feind in die Falle locken — riskant, aber verheerend gegen Stürmende." }
-];
-const TAKTIK_MOD = {
-  sturm:    { feld:+0.12, wall:-0.15, hinterhalt:-0.25 },
-  umfass:   { feld: 0.00, wall:+0.15, hinterhalt:-0.10 },
-  beschuss: { feld:-0.10, wall:+0.20, hinterhalt:+0.10 }
-};
-const PHASEN_NAMEN = { art:"💣 Artillerie-Duell", kav:"🐎 Kavallerie-Attacke", inf:"⚔️ Nahkampf" };
-const phaseBei = t => t<=2 ? "art" : t<=4 ? "kav" : "inf";
-function effStaerke(S, phase, mod){
-  const m = phase==="art" ? {i:.35,k:.35,a:2.2,mi:.3,v:.25}
-        : phase==="kav" ? {i:.7, k:1.8,a:.8, mi:.6,v:.4}
-        :                 {i:1,  k:1,  a:1,  mi:1, v:1};
-  return (S.inf*m.i + S.kav*2.5*m.k + S.art*4*m.a + S.miliz*0.8*m.mi + S.aufgebot*0.5*m.v) * mod;
+function verteileEinheiten(einheiten, gewichte){
+  const summe = gewichte.reduce((a,b)=>a+b,0) || 1;
+  const lanes = Array.from({length:LANES}, ()=>({inf:0,kav:0,art:0,miliz:0,auf:0}));
+  for(const typ of ["inf","kav","art","miliz","auf"]){
+    const gesamt = einheiten[typ]||0;
+    const roh = gewichte.map(g => gesamt*g/summe);
+    const basis = roh.map(Math.floor);
+    let vergeben = basis.reduce((a,b)=>a+b,0);
+    const reste = roh.map((r,i)=>({i, r:r-basis[i]})).sort((a,b)=>b.r-a.r);
+    for(let k=0; vergeben<gesamt; k++,vergeben++) basis[reste[k%LANES].i]++;
+    basis.forEach((n,i)=>lanes[i][typ]=n);
+  }
+  return lanes;
 }
-
+const laneGroesse = u => u.inf+u.kav+u.art+u.miliz+u.auf;
+const laneNahkampf = u => u.inf + u.kav*2.5 + u.art*0.4 + u.miliz*0.8 + u.auf*0.5;
+function laneVerlust(u, anzahl){
+  let g = laneGroesse(u);
+  if(g<=0 || anzahl<=0) return 0;
+  const echt = Math.min(g, Math.round(anzahl));
+  for(const typ of ["inf","kav","art","miliz","auf"]){
+    const teil = Math.round(echt * (u[typ]/g));
+    u[typ] = Math.max(0, u[typ]-teil);
+  }
+  /* Rundungsreste beim größten Posten abziehen */
+  let diff = g - echt - laneGroesse(u);
+  while(diff !== 0){
+    const typ = ["inf","miliz","auf","kav","art"].find(k=>u[k]>0 || diff>0 && u[k]>=0);
+    if(diff < 0){ u[typ]++; diff++; } else if(u[typ]>0){ u[typ]--; diff--; } else break;
+  }
+  return echt;
+}
 function schlachtStarten(){
   const kr = G._kr;
   const helferA = kr.fragen.filter(i=>kr.wahl[i]==="atk");
   const helferD = kr.fragen.filter(i=>kr.wahl[i]==="def");
   const A = seiteBauen(kr.a, helferA, false);
   const D = seiteBauen(kr.d, helferD, true);
-  const kopie = S => ({inf:S.inf,kav:S.kav,art:S.art,miliz:S.miliz,aufgebot:S.aufgebot});
-  const mod = TAKTIK_MOD[kr.taktikA][kr.taktikD] ?? 0;
+  const eA = { inf:A.inf, kav:A.kav, art:A.art, miliz:A.miliz, auf:0 };
+  const eD = { inf:D.inf, kav:D.kav, art:D.art, miliz:D.miliz, auf:D.aufgebot };
+  const lanesA = verteileEinheiten(eA, kr.aufA || [2,2,2,2,2]);
+  const lanesD = verteileEinheiten(eD, kr.aufD || [2,2,2,2,2]);
   G._s = {
-    A, D, helferA, helferD,
-    start:{ A:kopie(A), D:kopie(D) },
-    modA: 1 + mod,
-    strA0: Math.max(1,seiteStaerke(A)), strD0: Math.max(1,seiteStaerke(D)*1.25),
+    poolsA:A.pools, poolsD:D.pools, helferA, helferD,
+    lanes: Array.from({length:LANES}, (_,i)=>({ A:lanesA[i], D:lanesD[i], dist:100 })),
+    start:{ A:{...eA}, D:{...eD} },
+    startG:{ A:Math.max(1,laneGroesse(eA)), D:Math.max(1,laneGroesse(eD)) },
     moralA:100, moralD:100, routA:false, routD:false,
-    tick:0, maxTicks:8, log:[], fertig:false, sieger:null, iv:null, boom:0
+    tick:0, maxTicks:40, log:[], partikel:[], fertig:false, sieger:null, iv:null, still:false
   };
   cur().kriegGefuehrt = true;
   sTrommel();
   zeige("schlacht");
-  G._s.iv = setInterval(schlachtTick, 950);
+  G._s.iv = setInterval(schlachtTick, 600);
 }
-function schaden(seite, anteil){
-  const q = 1 - anteil;
-  for(const k of ["inf","kav","art"]){ seite[k] = Math.floor(seite[k]*q); }
-  seite.miliz = Math.floor(seite.miliz*q);
-  seite.aufgebot = Math.floor(seite.aufgebot*q);
-  for(const p of seite.pools){ p.inf=Math.floor(p.inf*q); p.kav=Math.floor(p.kav*q); p.art=Math.floor(p.art*q); }
-}
+const sRest = (s,seite) => s.lanes.reduce((a,l)=>a+laneGroesse(l[seite]),0);
+const sRestTyp = (s,seite,typ) => s.lanes.reduce((a,l)=>a+l[seite][typ],0);
 function einTick(s, leise){
   s.tick++;
-  const phase = phaseBei(s.tick);
-  const strA = effStaerke(s.A, phase, s.modA) * rf(0.85,1.15);
-  const strD = effStaerke(s.D, phase, 1) * 1.25 * rf(0.85,1.15);
-  const dmgD = strA/(strA+strD) * 0.17;
-  const dmgA = strD/(strA+strD) * 0.17;
-  const vorherA = s.A.inf+s.A.kav+s.A.art+s.A.miliz;
-  const vorherD = s.D.inf+s.D.kav+s.D.art+s.D.miliz+s.D.aufgebot;
-  schaden(s.A, dmgA); schaden(s.D, dmgD);
-  const gefA = vorherA - (s.A.inf+s.A.kav+s.A.art+s.A.miliz);
-  const gefD = vorherD - (s.D.inf+s.D.kav+s.D.art+s.D.miliz+s.D.aufgebot);
-  s.moralA = Math.max(0, s.moralA - dmgA*170*rf(0.8,1.2));
-  s.moralD = Math.max(0, s.moralD - dmgD*170*rf(0.8,1.2));
-  /* Partikel: Explosionen und Rauch an der Front */
-  s.partikel = s.partikel || [];
   const jetzt = performance.now();
-  const anz = phase==="art" ? 8 : phase==="kav" ? 5 : 6;
-  for(let i=0;i<anz;i++)
-    s.partikel.push({ rx:0.5+rf(-0.06,0.06), ry:rf(0.42,0.9), born:jetzt+rf(0,500), typ:"boom" });
-  for(let i=0;i<3;i++)
-    s.partikel.push({ rx:0.5+rf(-0.08,0.08), ry:rf(0.35,0.7), born:jetzt+rf(0,600), typ:"rauch" });
-  if(s.partikel.length>90) s.partikel.splice(0, s.partikel.length-90);
-  s.log.unshift(`${PHASEN_NAMEN[phase]} — Gefecht ${s.tick}: Angreifer verliert ${fmt(gefA)}, Verteidiger ${fmt(gefD)} Mann.`);
-  if(!leise) sSchlag();
-  /* Flucht? */
-  if(s.moralA < 32 || s.moralD < 32 || s.tick >= s.maxTicks){
-    s.routA = s.moralA < 32; s.routD = s.moralD < 32;
-    if(s.routA && !s.routD){ s.sieger = "D"; schaden(s.A, 0.08); s.log.unshift("Die Moral der Angreifer bricht — das Heer flieht vom Feld!"); }
-    else if(s.routD && !s.routA){ s.sieger = "A"; schaden(s.D, 0.08); s.log.unshift("Die Verteidiger werfen die Waffen fort und fliehen!"); }
-    else s.sieger = effStaerke(s.A,"inf",s.modA) > effStaerke(s.D,"inf",1)*1.25 ? "A" : "D";
+  let gefA = 0, gefD = 0;
+  s.lanes.forEach((lane,i)=>{
+    const a = lane.A, d = lane.D;
+    const gA = laneGroesse(a), gD = laneGroesse(d);
+    if(gA===0 && gD===0) return;
+    const ry = 0.30 + (i+0.5)*0.135;
+    if(lane.dist > 0 && gA > 0 && gD > 0){
+      /* Vormarsch — Kavallerie beschleunigt den Abschnitt */
+      lane.dist = Math.max(0, lane.dist - (9 + (a.kav/Math.max(1,gA))*16));
+      /* Artillerie-Fernkampf beider Seiten */
+      const feuerA = a.art * rf(0.7,1.3);
+      const feuerD = d.art * rf(0.7,1.3) * 1.15;   /* eingeschossene Verteidiger */
+      gefD += laneVerlust(d, feuerA*0.30);
+      gefA += laneVerlust(a, feuerD*0.30);
+      if(!leise){
+        if(a.art>0) s.partikel.push({ typ:"kugel", von:"A", lane:i, born:jetzt+rf(0,250) });
+        if(d.art>0) s.partikel.push({ typ:"kugel", von:"D", lane:i, born:jetzt+rf(0,250) });
+      }
+    } else if(gA > 0 && gD > 0){
+      /* Nahkampf im Abschnitt */
+      const stA = laneNahkampf(a) * rf(0.85,1.15);
+      const stD = laneNahkampf(d) * 1.15 * rf(0.85,1.15);
+      gefD += laneVerlust(d, gD * stA/(stA+stD) * 0.15);
+      gefA += laneVerlust(a, gA * stD/(stA+stD) * 0.15);
+      if(!leise){
+        s.partikel.push({ typ:"staub", lane:i, born:jetzt });
+        if(Math.random()<0.5) s.partikel.push({ typ:"boom", rx:0.5+rf(-0.03,0.03), ry, born:jetzt });
+      }
+    }
+    /* Durchbruch: Sieger eines leeren Abschnitts verstärkt die Nachbarn */
+    for(const [mein,gegner] of [["A","D"],["D","A"]]){
+      if(laneGroesse(lane[gegner])===0 && laneGroesse(lane[mein])>4 && !lane["durch"+mein]){
+        lane["durch"+mein] = true;
+        const nachbarn = [i-1,i+1].filter(k=>k>=0 && k<LANES);
+        for(const typ of ["inf","kav","miliz","auf"]){
+          const abgabe = Math.floor(lane[mein][typ]*0.3);
+          lane[mein][typ] -= abgabe*nachbarn.length;
+          for(const k of nachbarn) s.lanes[k][mein][typ] += abgabe;
+        }
+        s.log.unshift(`⚡ Durchbruch im Abschnitt „${LANE_NAMEN[i]}" — ${mein==="A"?"die Angreifer":"die Verteidiger"} fallen den Nachbarn in die Flanke!`);
+      }
+    }
+  });
+  /* Moral aus Gesamtverlusten und gebrochenen Abschnitten */
+  const lossA = 1 - sRest(s,"A")/s.startG.A;
+  const lossD = 1 - sRest(s,"D")/s.startG.D;
+  const leerA = s.lanes.filter(l=>laneGroesse(l.A)===0).length;
+  const leerD = s.lanes.filter(l=>laneGroesse(l.D)===0).length;
+  s.moralA = clamp(100 - lossA*150 - leerA*7 + rf(-2,2), 0, 100);
+  s.moralD = clamp(100 - lossD*140 - leerD*7 + rf(-2,2), 0, 100);
+  if(gefA+gefD > 0 && (s.tick%2===0 || gefA+gefD>20))
+    s.log.unshift(`Gefecht ${s.tick}: Angreifer verliert ${fmt(gefA)}, Verteidiger ${fmt(gefD)} Mann.`);
+  if(s.log.length>14) s.log.length = 14;
+  if(!leise && s.tick%2===0) sSchlag();
+  if(s.partikel.length>70) s.partikel.splice(0, s.partikel.length-70);
+  /* Ende: Flucht, Vernichtung oder Erschöpfung */
+  const endeA = sRest(s,"A")===0, endeD = sRest(s,"D")===0;
+  if(s.moralA < 30 || s.moralD < 30 || endeA || endeD || s.tick >= s.maxTicks){
+    s.routA = s.moralA < 30 || endeA;
+    s.routD = s.moralD < 30 || endeD;
+    if(s.routA && !s.routD){
+      s.sieger = "D";
+      s.lanes.forEach(l=>laneVerlust(l.A, laneGroesse(l.A)*0.08));
+      s.log.unshift("Die Moral der Angreifer bricht — das Heer flieht vom Feld!");
+    } else if(s.routD && !s.routA){
+      s.sieger = "A";
+      s.lanes.forEach(l=>laneVerlust(l.D, laneGroesse(l.D)*0.08));
+      s.log.unshift("Die Verteidiger werfen die Waffen fort und fliehen!");
+    } else {
+      const kA = s.lanes.reduce((x,l)=>x+laneNahkampf(l.A),0);
+      const kD = s.lanes.reduce((x,l)=>x+laneNahkampf(l.D),0)*1.15;
+      s.sieger = kA > kD ? "A" : "D";
+      s.log.unshift("Erschöpft trennen sich die Heere — der Feldherr mit der stärkeren Linie behält das Feld.");
+    }
     s.fertig = true;
+  }
+}
+/* Verluste anteilig in die stehenden Heere der Besitzer zurückschreiben */
+function verlusteZurueck(s){
+  for(const [seite, pools] of [["A",s.poolsA],["D",s.poolsD]]){
+    for(const typ of ["inf","kav","art"]){
+      const q = s.start[seite][typ] > 0 ? sRestTyp(s,seite,typ)/s.start[seite][typ] : 1;
+      for(const pool of pools) pool[typ] = Math.floor(pool[typ]*q);
+    }
+    for(const pool of pools) Object.assign(G.spieler[pool.idx].heer,
+      { inf:pool.inf, kav:pool.kav, art:pool.art });
   }
 }
 function schlachtTick(){
@@ -1345,101 +1437,179 @@ function angreifenAus(i){ G._zielVorwahl = i; zeige("kriegPlan"); }
 /* Schlachtfeld-Canvas: Truppen als Formationen, Partikel an der Front */
 function zeichneFeld(t=0){
   const c = $("#feld"), s = G._s;
-  if(!c || !s) return;
+  if(!c || !s || !s.lanes) return;
   const ctx = c.getContext("2d");
   const W = c.width, H = c.height;
   ctx.clearRect(0,0,W,H);
-  /* Gelände: Hügel und Bodenlinien */
+  /* Gelände */
   const brng = mulberry(777);
   ctx.fillStyle = "rgba(255,255,255,.03)";
   for(let h=0;h<4;h++){
     const hx = brng()*W, hw = 90+brng()*160;
-    ctx.beginPath(); ctx.ellipse(hx, H*0.38, hw, 16+brng()*10, 0, Math.PI, 0); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(hx, H*0.24, hw, 14+brng()*8, 0, Math.PI, 0); ctx.fill();
   }
-  for(let b=0;b<6;b++) malBaum(ctx, brng()*W, H*(0.3+brng()*0.08), 4+brng()*3);
+  for(let b=0;b<6;b++) malBaum(ctx, brng()*W, H*(0.17+brng()*0.06), 4+brng()*3);
+  /* Abschnittslinien */
+  const oben = H*0.27, laneH = (H-oben-10)/LANES;
   ctx.strokeStyle = "rgba(255,255,255,.05)";
-  for(let y=H*0.35;y<H;y+=18){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-  const prog = Math.min(1, s.tick/4);
-  const frontA = W*0.12 + prog*W*0.30, frontD = W*0.88 - prog*W*0.30;
-  const skala = Math.max(1, Math.ceil((seiteGroesse(s.A)+seiteGroesse(s.D))/380));
-  const malSeite = (S, farbe, hell, vonX, richt) => {
-    const einheiten = [
-      {n:Math.ceil(S.inf/skala),    f:farbe, r:2.6},
-      {n:Math.ceil(S.miliz/skala),  f:hell,  r:2.2},
-      {n:Math.ceil((S.aufgebot||0)/skala), f:hell, r:2.0},
-      {n:Math.ceil(S.kav/skala),    f:farbe, r:3.6},
-    ];
-    let col = 0;
-    for(const e of einheiten){
-      for(let i=0;i<e.n;i++){
-        const reihe = i % 12, spalte = Math.floor(i/12);
-        const x = vonX - richt*(col*9 + spalte*8) + rf(-1.5,1.5);
-        const y = H*0.42 + reihe*13 + rf(-2,2);
-        ctx.beginPath(); ctx.arc(x, y, e.r, 0, 7); ctx.fillStyle = e.f; ctx.fill();
-      }
-      col += Math.ceil(e.n/12) + 1;
-    }
-    /* Artillerie als Quadrate hinten */
-    const artN = Math.min(14, Math.ceil(S.art/Math.max(1,skala/3)));
-    for(let i=0;i<artN;i++){
-      const x = vonX - richt*(col*9 + 30 + (i%3)*12);
-      const y = H*0.45 + Math.floor(i/3)*20;
-      ctx.fillStyle = farbe;
-      ctx.fillRect(x-4, y-4, 8, 8);
-    }
-  };
+  for(let i=0;i<=LANES;i++){
+    ctx.beginPath(); ctx.moveTo(0,oben+i*laneH); ctx.lineTo(W,oben+i*laneH); ctx.stroke();
+  }
+  ctx.font = "10px sans-serif"; ctx.textAlign = "left"; ctx.fillStyle = "rgba(219,226,238,.4)";
+  for(let i=0;i<LANES;i++) ctx.fillText(LANE_NAMEN[i], 8, oben+i*laneH+12);
+
   const fA = G._kr ? G.spieler[G._kr.a].farbe : "#5fb8d4";
   const fD = G._kr ? G.spieler[G._kr.d].farbe : "#d9973f";
-  malSeite(s.A, fA, fA+"88", frontA, 1);
-  malSeite(s.D, fD, fD+"88", frontD, -1);
-  /* Feldbanner beider Heere (wehen) */
+  const basisA = W*0.13, basisD = W*0.87, spann = W*0.34;
+  const skala = Math.max(1, Math.ceil((s.startG.A+s.startG.D)/560));
+
+  /* Truppenblöcke je Abschnitt */
+  s.lanes.forEach((lane,i)=>{
+    const y0 = oben + i*laneH + 6;
+    const frontA = basisA + (100-lane.dist)/100*spann;
+    const frontD = basisD - (100-lane.dist)/100*spann;
+    const malBlock = (u, farbe, front, richt) => {
+      const reihen = Math.max(2, Math.floor((laneH-10)/9));
+      let n = 0;
+      const dot = (anz, radius, fill) => {
+        for(let k=0;k<anz;k++){
+          const reihe = n % reihen, spalte = Math.floor(n/reihen);
+          const x = front - richt*(spalte*7) + rf(-1,1);
+          const y = y0 + reihe*9 + rf(-1.5,1.5);
+          ctx.beginPath(); ctx.arc(x, y, radius, 0, 7); ctx.fillStyle = fill; ctx.fill();
+          n++;
+        }
+      };
+      dot(Math.ceil(u.inf/skala), 2.5, farbe);
+      dot(Math.ceil(u.miliz/skala), 2.1, farbe+"99");
+      dot(Math.ceil(u.auf/skala), 1.9, farbe+"77");
+      dot(Math.ceil(u.kav/skala), 3.4, farbe);
+      /* Artillerie als Quadrate an der Basis */
+      const artN = Math.min(6, u.art>0 ? Math.max(1, Math.ceil(u.art/Math.max(1,skala))) : 0);
+      for(let k=0;k<artN;k++){
+        const x = (richt>0 ? basisA-26 : basisD+18) + (k%2)*(richt>0?-10:10);
+        const y = y0 + 4 + Math.floor(k/2)*11;
+        ctx.fillStyle = farbe;
+        ctx.fillRect(x, y, 7, 7);
+      }
+    };
+    if(laneGroesse(lane.A)>0) malBlock(lane.A, fA, frontA, 1);
+    if(laneGroesse(lane.D)>0) malBlock(lane.D, fD, frontD, -1);
+    /* geschlagener Abschnitt */
+    if(laneGroesse(lane.A)===0 && laneGroesse(lane.D)===0){
+      ctx.fillStyle = "rgba(219,226,238,.18)"; ctx.font = "11px sans-serif"; ctx.textAlign="center";
+      ctx.fillText("— verwaist —", W/2, y0+laneH/2);
+    }
+  });
+
+  /* Feldbanner */
   const banner = (bx, farbe, ph) => {
     ctx.strokeStyle = "#5a4a30"; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(bx, H*0.40); ctx.lineTo(bx, H*0.40-34); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bx, oben-4); ctx.lineTo(bx, oben-34); ctx.stroke();
     ctx.fillStyle = farbe;
     const wf = Math.sin(t/240 + ph)*3;
-    ctx.beginPath(); ctx.moveTo(bx, H*0.40-34);
-    ctx.quadraticCurveTo(bx+10, H*0.40-32+wf, bx+20, H*0.40-29+wf);
-    ctx.quadraticCurveTo(bx+10, H*0.40-26+wf*0.5, bx, H*0.40-22);
+    ctx.beginPath(); ctx.moveTo(bx, oben-34);
+    ctx.quadraticCurveTo(bx+10, oben-32+wf, bx+20, oben-29+wf);
+    ctx.quadraticCurveTo(bx+10, oben-26+wf*0.5, bx, oben-22);
     ctx.closePath(); ctx.fill();
   };
-  banner(W*0.06, fA, 0); banner(W*0.94-20, fD, 2);
-  /* Partikel: Kanonenblitze und Rauch */
+  banner(W*0.05, fA, 0); banner(W*0.95-20, fD, 2);
+
+  /* Partikel: Kanonenkugeln (Flugbahn), Explosionen, Nahkampfstaub */
   const jetzt = performance.now();
   for(const pk of (s.partikel||[])){
     const alter = jetzt - pk.born;
     if(alter < 0) continue;
-    const x = pk.rx*W, y = pk.ry*H;
-    if(pk.typ==="boom" && alter < 750){
+    if(pk.typ==="kugel" && alter < 900){
+      const q = alter/900;
+      const lane = s.lanes[pk.lane];
+      const y0 = oben + pk.lane*laneH + laneH/2;
+      const dist = lane ? lane.dist : 50;
+      const zielA = basisA + (100-dist)/100*spann, zielD = basisD - (100-dist)/100*spann;
+      const von = pk.von==="A" ? basisA-20 : basisD+20;
+      const nach = pk.von==="A" ? zielD : zielA;
+      const x = von + (nach-von)*q;
+      const y = y0 - Math.sin(q*Math.PI)*laneH*1.4;
+      ctx.fillStyle = "#20242c";
+      ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 7); ctx.fill();
+      if(q>0.93){
+        ctx.fillStyle = "rgba(255,220,130,.8)";
+        ctx.beginPath(); ctx.arc(nach, y0, 6, 0, 7); ctx.fill();
+      }
+    } else if(pk.typ==="boom" && alter < 750){
       const q = alter/750, r = 3 + q*11;
+      const x = pk.rx*W, y = pk.ry*H;
       const grad = ctx.createRadialGradient(x,y,0,x,y,r);
       grad.addColorStop(0,`rgba(255,230,140,${0.95*(1-q)})`);
       grad.addColorStop(0.5,`rgba(230,120,60,${0.7*(1-q)})`);
       grad.addColorStop(1,"rgba(230,120,60,0)");
       ctx.fillStyle = grad;
       ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
-    } else if(pk.typ==="rauch" && alter < 1900){
-      const q = alter/1900;
-      ctx.fillStyle = `rgba(150,150,155,${0.22*(1-q)})`;
-      ctx.beginPath(); ctx.arc(x + q*14, y - q*36, 6+q*16, 0, 7); ctx.fill();
+    } else if(pk.typ==="staub" && alter < 1300){
+      const q = alter/1300;
+      const lane = s.lanes[pk.lane];
+      const y0 = oben + pk.lane*laneH + laneH/2;
+      const xm = basisA + (100-(lane?lane.dist:0))/100*spann + 8;
+      ctx.fillStyle = `rgba(170,160,140,${0.25*(1-q)})`;
+      for(let k=0;k<3;k++){
+        ctx.beginPath(); ctx.arc(xm+rf(-10,10), y0 - q*16 + rf(-6,6), 5+q*10, 0, 7); ctx.fill();
+      }
     }
   }
   if(s.partikel) s.partikel = s.partikel.filter(pk => jetzt - pk.born < 1900);
-  /* Fluchtpfeile */
+  /* Weisse Flagge */
   if(s.fertig){
     ctx.font = "22px sans-serif"; ctx.textAlign = "center";
-    if(s.sieger==="A"){ ctx.fillText("🏳️", frontD+40, H*0.35); }
-    else { ctx.fillText("🏳️", frontA-40, H*0.35); }
+    ctx.fillText("🏳️", s.sieger==="A" ? W*0.8 : W*0.2, H*0.16);
   }
 }
-const seiteGroesse = S => S.inf+S.kav+S.art+S.miliz+(S.aufgebot||0);
+/* Vorschau der eigenen Aufstellung (Platzierungs-Bildschirm) */
+function zeichneAufstellung(cid, einheiten, gewichte, farbe, rechts){
+  const c = document.getElementById(cid);
+  if(!c) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = "#1c2b1e"; ctx.fillRect(0,0,W,H);
+  const laneH = (H-12)/LANES;
+  const lanes = verteileEinheiten(einheiten, gewichte);
+  ctx.strokeStyle = "rgba(255,255,255,.06)";
+  for(let i=0;i<=LANES;i++){ ctx.beginPath(); ctx.moveTo(0,6+i*laneH); ctx.lineTo(W,6+i*laneH); ctx.stroke(); }
+  lanes.forEach((u,i)=>{
+    const y0 = 10 + i*laneH;
+    const reihen = Math.max(2, Math.floor((laneH-8)/8));
+    let n = 0;
+    const basis = rechts ? W-24 : 24, richt = rechts ? -1 : 1;
+    const dot = (anz, radius, fill) => {
+      for(let k=0;k<anz;k++){
+        const reihe = n % reihen, spalte = Math.floor(n/reihen);
+        ctx.beginPath();
+        ctx.arc(basis + richt*(spalte*7), y0 + reihe*8, radius, 0, 7);
+        ctx.fillStyle = fill; ctx.fill();
+        n++;
+      }
+    };
+    const skala = Math.max(1, Math.ceil(laneGroesse(einheiten)/420));
+    dot(Math.ceil(u.inf/skala), 2.4, farbe);
+    dot(Math.ceil(u.miliz/skala), 2.0, farbe+"99");
+    dot(Math.ceil(u.auf/skala), 1.8, farbe+"77");
+    dot(Math.ceil(u.kav/skala), 3.2, farbe);
+    for(let k=0;k<Math.min(5, u.art>0?Math.max(1,Math.ceil(u.art/skala)):0);k++){
+      ctx.fillStyle = farbe;
+      ctx.fillRect(rechts ? W-12 : 4, y0 + k*10, 6, 6);
+    }
+    ctx.fillStyle = "rgba(219,226,238,.55)"; ctx.font = "10px sans-serif";
+    ctx.textAlign = rechts ? "left" : "right";
+    ctx.fillText(`${fmt(laneGroesse(u))}`, rechts ? 6 : W-6, y0+laneH-8);
+  });
+}
+
 
 function schlachtAbschliessen(){
   const s = G._s, kr = G._kr;
   const ang = G.spieler[kr.a], ver = G.spieler[kr.d];
-  /* Verluste in die stehenden Heere zurückschreiben (Leihtruppen kehren dezimiert heim) */
-  for(const pool of s.A.pools) Object.assign(G.spieler[pool.idx].heer, {inf:pool.inf,kav:pool.kav,art:pool.art});
-  for(const pool of s.D.pools) Object.assign(G.spieler[pool.idx].heer, {inf:pool.inf,kav:pool.kav,art:pool.art});
+  /* Verluste anteilig in die stehenden Heere zurückschreiben (Leihtruppen kehren dezimiert heim) */
+  verlusteZurueck(s);
   if(s.sieger === "A"){
     const beute = Math.min(Math.round(ver.land*0.15), Math.max(0,freiLand(ver)));
     ver.land -= beute; ang.land += beute;
@@ -1471,9 +1641,10 @@ function kiDiploWahl(p, kr){
   if(aufWeg) return Math.random() < 0.7 ? "frei" : "sperr";
   return "frei";
 }
+const kiAufstellung = () => AUFSTELLUNGEN[ri(0,AUFSTELLUNGEN.length-1)].g;
 function kiSchlacht(a, d){
   const kr = { a, d, weg: wegZwischen(a,d), fragen: [], wahl: {},
-    taktikA: TAKTIK_A[ri(0,2)].k, taktikD: TAKTIK_D[ri(0,2)].k };
+    aufA: kiAufstellung(), aufD: kiAufstellung() };
   /* übrige KI-Regenten entscheiden, Menschen bleiben bei KI-Kriegen neutral */
   kr.fragen = lebende().map(x=>x.i).filter(i=>i!==a && i!==d);
   for(const i of kr.fragen){
@@ -1485,12 +1656,17 @@ function kiSchlacht(a, d){
   const helferD = kr.fragen.filter(i=>kr.wahl[i]==="def");
   const A = seiteBauen(a, helferA, false);
   const D = seiteBauen(d, helferD, true);
-  const kopie = S => ({inf:S.inf,kav:S.kav,art:S.art,miliz:S.miliz,aufgebot:S.aufgebot});
-  const mod = TAKTIK_MOD[kr.taktikA][kr.taktikD] ?? 0;
-  const s = { A, D, helferA, helferD, start:{A:kopie(A),D:kopie(D)}, modA:1+mod,
-    strA0:Math.max(1,seiteStaerke(A)), strD0:Math.max(1,seiteStaerke(D)*1.25),
+  const eA = { inf:A.inf, kav:A.kav, art:A.art, miliz:A.miliz, auf:0 };
+  const eD = { inf:D.inf, kav:D.kav, art:D.art, miliz:D.miliz, auf:D.aufgebot };
+  const lanesA = verteileEinheiten(eA, kr.aufA);
+  const lanesD = verteileEinheiten(eD, kr.aufD);
+  const s = {
+    poolsA:A.pools, poolsD:D.pools, helferA, helferD,
+    lanes: Array.from({length:LANES}, (_,i)=>({ A:lanesA[i], D:lanesD[i], dist:100 })),
+    start:{ A:{...eA}, D:{...eD} },
+    startG:{ A:Math.max(1,laneGroesse(eA)), D:Math.max(1,laneGroesse(eD)) },
     moralA:100, moralD:100, routA:false, routD:false,
-    tick:0, maxTicks:8, log:[], fertig:false, sieger:null, still:true };
+    tick:0, maxTicks:40, log:[], partikel:[], fertig:false, sieger:null, still:true };
   G._kr = kr; G._s = s;
   while(!s.fertig) einTick(s, true);
   schlachtAbschliessen();
@@ -2217,17 +2393,9 @@ const SCREENS = {
         <p class="muted small" style="margin-top:8px">Vor der Schlacht werden die übrigen Regenten
         befragt: Sie können Euch oder den Verteidiger mit ihrem Heer unterstützen (die Miliz bleibt
         stets daheim) oder neutral bleiben. Liegt das Ziel nicht an Eurer Grenze, braucht Ihr
-        Durchmarschrechte aller Reiche auf dem Weg. Der Verteidiger hat Heimvorteil, ruft das
-        Volksaufgebot und gibt seinen Truppen eine geheime Order.</p>
-      </div>
-      <div class="card">
-        <h3>Eure Taktik</h3>
-        <div class="taktik">
-          ${TAKTIK_A.map(t=>`
-            <div class="opt ${(G._taktikA||'sturm')===t.k?'sel':''}" onclick="G._taktikA='${t.k}';render()">
-              <b>${t.n}</b><span>${t.d}</span>
-            </div>`).join("")}
-        </div>
+        Durchmarschrechte aller Reiche auf dem Weg. Danach stellt Ihr Eure Truppen auf dem
+        Schlachtfeld auf — der Verteidiger stellt geheim dagegen, hat Heimvorteil und ruft
+        das Volksaufgebot.</p>
       </div>
       <button class="btn-danger btn-lg" onclick="kriegVorbereiten(+$('#ziel').value)">Zu den Waffen!</button>
       <button class="btn-lg" onclick="zeige('bauen')">Doch kein Krieg</button>`;
@@ -2275,72 +2443,109 @@ const SCREENS = {
       <button class="btn-primary btn-lg" onclick="zeige('bauen')">Weiter</button>`;
   },
 
-  taktikDef(){
+  aufstellungA(){
     const kr = G._kr;
-    const ver = G.spieler[kr.d], ang = G.spieler[kr.a];
-    const tA = TAKTIK_A.find(t=>t.k===kr.taktikA);
+    const p = G.spieler[kr.a];
+    const helferA = kr.fragen.filter(i=>kr.wahl[i]==="atk");
+    const A = seiteBauen(kr.a, helferA, false);
+    G._aufE = { inf:A.inf, kav:A.kav, art:A.art, miliz:A.miliz, auf:0 };
+    G._aufFarbe = p.farbe; G._aufRechts = false;
+    return SCREENS._aufstellung(p, G.spieler[kr.d],
+      `Stellt Eure ${fmt(A.inf+A.kav+A.art+A.miliz)} Mann auf den fünf Abschnitten auf.
+       Die Artillerie feuert aus der Tiefe, Kavallerie stürmt schneller vor.
+       Der Verteidiger kennt Eure Aufstellung nicht — und Ihr nicht seine.`,
+      "aufstellungAFertig()", "Aufstellung befehlen");
+  },
+
+  aufstellungD(){
+    const kr = G._kr;
+    const p = G.spieler[kr.d];
+    const helferD = kr.fragen.filter(i=>kr.wahl[i]==="def");
+    const D = seiteBauen(kr.d, helferD, true);
+    G._aufE = { inf:D.inf, kav:D.kav, art:D.art, miliz:D.miliz, auf:D.aufgebot };
+    G._aufFarbe = p.farbe; G._aufRechts = true;
+    return SCREENS._aufstellung(p, G.spieler[kr.a],
+      `Geheime Aufstellung! ${titelName(G.spieler[kr.a])} ${G.spieler[kr.a].name} rückt gegen
+       Euch vor — der Angreifer möge wegsehen. Verteilt Eure ${fmt(laneGroesse(G._aufE))} Mann
+       (samt Miliz und Volksaufgebot) auf die fünf Abschnitte.`,
+      "aufstellungDFertig()", "Stellung beziehen — zur Schlacht!");
+  },
+
+  /* gemeinsames Aufstellungs-Formular */
+  _aufstellung(p, gegner, text, fertigFn, knopf){
+    const zeilen = LANE_NAMEN.map((n,i)=>`
+      <div class="sliderrow">
+        <span>${n}</span>
+        <input type="range" min="0" max="4" step="1" value="${G._aufW[i]}"
+          oninput="aufstellungGewicht(${i}, this.value)">
+        <span class="v" id="gw${i}">${G._aufW[i]}</span>
+      </div>`).join("");
+    const presets = AUFSTELLUNGEN.map((a,k)=>
+      `<button class="btn-sm" onclick="aufstellungPreset(${k})">${a.n}</button>`).join("");
+    setTimeout(()=>zeichneAufstellung("aufVorschau", G._aufE, G._aufW, G._aufFarbe, G._aufRechts), 30);
     return `
-      <div class="hero" style="padding-top:26px">
-        <span class="crown">🛡️</span>
-        <h2 style="font-size:24px">Geheime Order, ${titelName(ver)} ${ver.name}!</h2>
-        <p style="margin:10px auto;max-width:560px">${titelName(ang)} ${ang.name} rückt mit
-        <b>${tA?tA.n.toLowerCase():"unbekannter Taktik"}</b> gegen Euer Reich vor.
-        Wie stellt Ihr Eure Truppen auf?</p>
-        <div class="taktik" style="max-width:680px;margin:16px auto">
-          ${TAKTIK_D.map(t=>`
-            <div class="opt" onclick="taktikDefWahl('${t.k}')">
-              <b>${t.n}</b><span>${t.d}</span>
-            </div>`).join("")}
+      <h2>🗡️ Aufstellung — ${titelName(p)} ${p.name} gegen ${titelName(gegner)} ${gegner.name}</h2>
+      <div class="card"><p class="small">${text}</p></div>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Gewichtung der Abschnitte</h3>
+          ${zeilen}
+          <div style="margin-top:6px">${presets}</div>
         </div>
-        <p class="muted small">Danach beginnt die Schlacht — Trommelwirbel!</p>
-      </div>`;
+        <div class="card">
+          <h3>Vorschau Eurer Schlachtordnung</h3>
+          <canvas id="aufVorschau" width="440" height="330" style="width:100%;border-radius:10px;border:1px solid var(--border)"></canvas>
+          <p class="muted small">⚔️ Infanterie · große Punkte Kavallerie · blasse Punkte Miliz/Aufgebot · Quadrate Artillerie</p>
+        </div>
+      </div>
+      <button class="btn-danger btn-lg" onclick="${fertigFn}">${knopf}</button>`;
   },
 
   schlacht(){
     const s = G._s, kr = G._kr;
     const ang = G.spieler[kr.a], ver = G.spieler[kr.d];
-    const pctA = clamp(seiteStaerke(s.A)/s.strA0*100,0,100);
-    const pctD = clamp(seiteStaerke(s.D)*1.25/s.strD0*100,0,100);
-    const phase = s.tick===0 ? null : phaseBei(Math.min(s.tick,s.maxTicks));
-    const seite = (S,t,helfer,moral) => `
+    const restA = sRest(s,"A"), restD = sRest(s,"D");
+    const pctA = clamp(restA/s.startG.A*100,0,100);
+    const pctD = clamp(restD/s.startG.D*100,0,100);
+    const seite = (key, t, helfer, moral) => `
       <div class="armee ${s.tick>0 && !s.fertig ? 'shake':''}">
         <h4>${t}</h4>
-        <div class="u"><span>⚔️ Infanterie</span><b>${fmt(S.inf)}</b></div>
-        <div class="u"><span>🐎 Kavallerie</span><b>${fmt(S.kav)}</b></div>
-        <div class="u"><span>💣 Artillerie</span><b>${fmt(S.art)}</b></div>
-        <div class="u"><span>🛡️ Miliz</span><b>${fmt(S.miliz)}</b></div>
-        ${S.aufgebot?`<div class="u"><span>🔥 Volksaufgebot</span><b>${fmt(S.aufgebot)}</b></div>`:""}
+        <div class="u"><span>⚔️ Infanterie</span><b>${fmt(sRestTyp(s,key,"inf"))}</b></div>
+        <div class="u"><span>🐎 Kavallerie</span><b>${fmt(sRestTyp(s,key,"kav"))}</b></div>
+        <div class="u"><span>💣 Artillerie</span><b>${fmt(sRestTyp(s,key,"art"))}</b></div>
+        <div class="u"><span>🛡️ Miliz</span><b>${fmt(sRestTyp(s,key,"miliz"))}</b></div>
+        ${s.start[key].auf?`<div class="u"><span>🔥 Volksaufgebot</span><b>${fmt(sRestTyp(s,key,"auf"))}</b></div>`:""}
         <div class="u muted small"><span>Moral</span><span>${Math.round(moral)} %</span></div>
         <div class="moral"><div style="width:${moral}%;background:${moral>60?'var(--green)':moral>32?'var(--gold)':'var(--red)'}"></div></div>
         ${helfer.length?`<p class="muted small" style="margin-top:6px">Verbündete: ${helfer.map(i=>G.spieler[i].name).join(", ")}</p>`:""}
       </div>`;
-    const verlust = (st,jetzt) => fmt(seiteGroesse(st)-seiteGroesse(jetzt));
     return `
       <h2>⚔️ Schlacht um ${ver.name}s Land</h2>
-      ${phase?`<span class="phasebadge">${PHASEN_NAMEN[phase]} · Gefecht ${Math.min(s.tick,s.maxTicks)}/${s.maxTicks}</span>`:""}
-      <canvas id="feld" width="900" height="240"></canvas>
+      <span class="phasebadge">Gefecht ${Math.min(s.tick,s.maxTicks)}/${s.maxTicks} · fünf Abschnitte</span>
+      <canvas id="feld" width="900" height="330"></canvas>
       <div class="battlefield">
         <div>
-          ${seite(s.A, `Angreifer: ${ang.name} (${TAKTIK_A.find(t=>t.k===kr.taktikA)?.n||""})`, s.helferA, s.moralA)}
+          ${seite("A", `Angreifer: ${ang.name}`, s.helferA, s.moralA)}
           <div class="strbar a"><div style="width:${pctA}%"></div></div>
-          <p class="muted small center">Kampfkraft ${Math.round(pctA)} %</p>
+          <p class="muted small center">Truppenstärke ${Math.round(pctA)} %</p>
         </div>
         <div class="vs">⚔️</div>
         <div>
-          ${seite(s.D, `Verteidiger: ${ver.name} (${TAKTIK_D.find(t=>t.k===kr.taktikD)?.n||""})`, s.helferD, s.moralD)}
+          ${seite("D", `Verteidiger: ${ver.name}`, s.helferD, s.moralD)}
           <div class="strbar d"><div style="width:${pctD}%"></div></div>
-          <p class="muted small center">Kampfkraft ${Math.round(pctD)} %</p>
+          <p class="muted small center">Truppenstärke ${Math.round(pctD)} %</p>
         </div>
       </div>
-      <div class="card battlelog">${s.log.map(l=>`<p>${l}</p>`).join("")||'<p class="muted">Die Heere rücken vor …</p>'}</div>
+      <div class="card battlelog">${s.log.map(l=>`<p>${l}</p>`).join("")||'<p class="muted">Die Linien rücken vor …</p>'}</div>
       ${s.fertig
         ? `<div class="card" style="border-color:${s.sieger==='A'?'var(--green)':'var(--red)'}">
              <p class="${s.sieger==='A'?'green':'red'}" style="font-size:17px;font-weight:700">${s.ergebnis}</p>
              <table style="margin-top:10px">
-               <tr><th></th><th class="r">Angreifer gefallen</th><th class="r">Verteidiger gefallen</th></tr>
-               <tr><td>Verluste gesamt</td>
-                   <td class="r red">${verlust(s.start.A,s.A)}</td>
-                   <td class="r red">${verlust(s.start.D,s.D)}</td></tr>
+               <tr><th></th><th class="r">Angreifer</th><th class="r">Verteidiger</th></tr>
+               <tr><td>Ausgerückt</td><td class="r">${fmt(s.startG.A)}</td><td class="r">${fmt(s.startG.D)}</td></tr>
+               <tr><td>Gefallen</td>
+                   <td class="r red">${fmt(s.startG.A-restA)}</td>
+                   <td class="r red">${fmt(s.startG.D-restD)}</td></tr>
              </table>
            </div>
            <button class="btn-primary btn-lg" onclick="zeige('bauen')">Weiter</button>`
@@ -2506,9 +2711,10 @@ const SCREENS = {
           <h3>Krieg & Diplomatie</h3>
           <p class="small">Ab Baron dürft Ihr Krieg führen. Unterhaltet ein stehendes Heer
           (der Sold steigt mit dem Rang). Die Sitzreihenfolge ist der Nachbarschaftskreis —
-          Nicht-Nachbarn erreicht Ihr nur mit Durchmarschrechten. Vor der Schlacht wählen
-          beide Seiten eine Taktik (Schere-Stein-Papier-Prinzip), Mitspieler können Truppen
-          leihen. Sinkt die Moral einer Seite unter ein Drittel, flieht ihr Heer.</p>
+          Nicht-Nachbarn erreicht Ihr nur mit Durchmarschrechten. Vor der Schlacht stellen
+          beide Seiten ihre Truppen geheim auf fünf Abschnitten auf: Artillerie feuert aus
+          der Tiefe, Kavallerie stürmt schneller, leere Abschnitte laden zum Flankendurchbruch
+          ein. Mitspieler können Truppen leihen. Sinkt die Moral unter 30 %, flieht das Heer.</p>
         </div>
       </div>
       <button class="btn-primary btn-lg" onclick="hilfeZu()">Zurück zum Spiel</button>`;
