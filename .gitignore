@@ -6,3 +6,4 @@ test*.mjs
 shots.mjs
 *.zip
 shots*.mjs
+!icon-*.png

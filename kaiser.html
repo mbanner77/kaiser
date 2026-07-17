@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kaiser — Wirtschaftssimulation</title>
+<meta name="description" content="Kaiser — Wirtschaftssimulation im 18. Jahrhundert. Steige vom einfachen Herrn zum Kaiser auf: Korn, Land, Steuern, Städte, Diplomatie und Schlachten. 1-9 Spieler, Solo gegen KI-Regenten.">
+<meta name="theme-color" content="#0e1117">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230e1117'/%3E%3Cpath d='M12 44 L16 22 L26 34 L32 16 L38 34 L48 22 L52 44 Z' fill='%23e0b458'/%3E%3Crect x='12' y='46' width='40' height='6' rx='2' fill='%23c79a3d'/%3E%3C/svg%3E">
 <style>
   :root{
     --bg:#0e1117; --panel:#161c26; --panel2:#1d2532; --border:#2a3446;
@@ -182,6 +186,17 @@
     background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;
     animation:shine 4.5s linear infinite;}
   @keyframes shine{to{background-position:-200% center;}}
+  /* --- Toasts & Berater --- */
+  #toasts{position:fixed;right:16px;bottom:16px;z-index:120;display:flex;flex-direction:column;gap:8px;}
+  .toast{background:var(--panel2);border:1px solid var(--gold);border-radius:12px;
+    padding:11px 16px;box-shadow:0 8px 30px rgba(0,0,0,.55);max-width:330px;
+    animation:toastIn .3s ease;font-size:14px;line-height:1.45;}
+  @keyframes toastIn{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+  .tut{border-color:var(--cyan) !important;background:rgba(95,184,212,.06);}
+  .erfolg-k{display:flex;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--border);
+    border-radius:12px;background:var(--panel);}
+  .erfolg-k.zu{opacity:.35;filter:grayscale(.7);}
+  .erfolg-k .ei{font-size:26px;}
   @media (max-width:640px){ .hero h1{font-size:32px;} .sliderrow{grid-template-columns:120px 1fr 52px;} .battlefield{grid-template-columns:1fr;} .vs{padding:4px;} }
 </style>
 </head>
@@ -193,14 +208,16 @@
   <span class="chip" id="hTimer" style="display:none"></span>
   <span class="spacer"></span>
   <button class="btn-sm" onclick="hilfeAuf()">❓</button>
+  <button class="btn-sm" id="btnMusik" onclick="toggleMusik()" title="Hintergrundmusik">🎼</button>
   <button class="btn-sm" id="btnMute" onclick="toggleMute()">🔊</button>
   <button class="btn-sm" id="btnExport" style="display:none" onclick="exportSpielstand()">💾 Speichern</button>
   <button class="btn-sm" onclick="$('#importFile').click()">📂 Laden</button>
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v1.0 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
+<div id="toasts"></div>
 <script>
 "use strict";
 /* ============================================================
@@ -319,6 +336,74 @@ const sGlocke   = () => [660,587,523].forEach((f,i)=>beep(f,.6,i*.5,"sine",.12))
 const sNieder   = () => [330,294,262,196].forEach((f,i)=>beep(f,.25,i*.15,"sawtooth",.08));
 document.addEventListener("click", e => { if(e.target.closest("button")) sKlick(); }, true);
 
+/* Sanfte generative Hintergrundmusik (Laute am Hofe) */
+let musikAn = false, musikIv = null, musikStep = 0;
+function toggleMusik(){
+  musikAn = !musikAn;
+  $("#btnMusik").textContent = musikAn ? "🎵" : "🎼";
+  if(musikAn) starteMusik(); else clearInterval(musikIv);
+}
+function starteMusik(){
+  clearInterval(musikIv);
+  const skala = [196,220,247,294,330,392,440];
+  let pos = 3;
+  musikIv = setInterval(()=>{
+    if(muted || !musikAn) return;
+    pos = clamp(pos + ri(-2,2), 0, skala.length-1);
+    if(Math.random() < 0.8) beep(skala[pos], .55, 0, "triangle", .026);
+    if(musikStep % 8 === 0)  beep(98,  1.3, 0, "sine", .035);
+    if(musikStep % 16 === 8) beep(147, 1.3, 0, "sine", .03);
+    musikStep++;
+  }, 350);
+}
+
+/* ---------- Toasts & Erfolge ---------- */
+function toast(html, ms=4500){
+  const d = document.createElement("div");
+  d.className = "toast"; d.innerHTML = html;
+  $("#toasts").appendChild(d);
+  setTimeout(()=>{ d.style.opacity="0"; d.style.transition="opacity .4s"; setTimeout(()=>d.remove(),400); }, ms);
+}
+const ERFOLGE = [
+  { id:"baron",     n:"Aufsteiger",          d:"Zum ersten Mal befördert.",                 i:"🎖️" },
+  { id:"stadt",     n:"Stadtgründer",        d:"Die erste Stadt vollendet.",                i:"🏘️" },
+  { id:"palast",    n:"Palastherr",          d:"Den Palast vollendet.",                     i:"🏛️" },
+  { id:"dom",       n:"Dombaumeister",       d:"Die Kathedrale vollendet.",                 i:"⛪" },
+  { id:"krieg",     n:"Kriegsherr",          d:"Eine Schlacht gewonnen.",                   i:"⚔️" },
+  { id:"buendnis",  n:"Bündnisschmied",      d:"Mit Verbündeten eine Schlacht gewonnen.",   i:"🤝" },
+  { id:"land",      n:"Großgrundbesitzer",   d:"25.000 Hektar Land besessen.",              i:"🌍" },
+  { id:"volk",      n:"Liebling des Volkes", d:"Eine Volksstimmung von 90 erreicht.",       i:"❤️" },
+  { id:"spekulant", n:"Kornspekulant",       d:"Korn für über 300 Taler je Fuder verkauft.",i:"📈" },
+  { id:"kaiser",    n:"Die Krone",           d:"Zum Kaiser gekrönt.",                       i:"👑" }
+];
+let _erfolge = null;
+function erfolge(){
+  if(_erfolge) return _erfolge;
+  _erfolge = new Set();
+  try{ JSON.parse(window.localStorage.getItem("kaiser_erfolge")||"[]").forEach(x=>_erfolge.add(x)); }catch(e){}
+  return _erfolge;
+}
+function erfolg(id){
+  const p = cur();
+  if(p && p.ki) return;
+  if(erfolge().has(id)) return;
+  erfolge().add(id);
+  try{ window.localStorage.setItem("kaiser_erfolge", JSON.stringify([..._erfolge])); }catch(e){}
+  const e = ERFOLGE.find(x=>x.id===id);
+  if(e){ toast(`${e.i} <b>Erfolg freigeschaltet: ${e.n}</b><br><span class="small muted">${e.d}</span>`); sMuenze(); }
+}
+
+/* ---------- Berater-Tipps (Tutorial) ---------- */
+const TIPPS = {
+  status:  "Hier seht Ihr Euer Reich auf einen Blick. Behaltet die nächste Beförderung im Auge — sie ist Euer Wegweiser. Und zögert nicht zu lange: Über 90 Sekunden pro Zug kosten Lebenszeit!",
+  korn:    "Gebt Eurem Volk stets etwas mehr als das nötige Korn — etwa +25 bis +50 % — dann wächst die Bevölkerung durch Zuzug und gute Stimmung. Zu wenig Korn bedeutet Hungertote.",
+  handel:  "Kauft Korn und Land, wenn die Preise niedrig sind, und verkauft bei Höchstständen — Spekulation ist Eure wichtigste Einnahmequelle! Der Kursverlauf zeigt, wo Ihr steht.",
+  zwbilanz:"Die Zwischenbilanz zeigt, wie Euer Volk auf Kornausgabe, Steuern und Justiz reagiert hat. Wandern die Leute ab, senkt die Steuern oder gebt mehr Korn.",
+  steuern: "Moderate Steuern (Summe unter ~45 %) halten das Volk bei Laune. Die Justiz auf 'fair' zu stellen kostet nichts und beruhigt die Gemüter.",
+  bauen:   "Erst Märkte und Mühlen (im Verhältnis 5:3 zur Stadt), dann Land zukaufen, später Palast und Kathedrale. Aber Vorsicht: Jedes Bauwerk verringert die Anbaufläche."
+};
+function tippZu(k){ G.tipps = G.tipps||{}; G.tipps[k] = 1; render(); }
+
 /* ---------- Konfetti ---------- */
 function konfetti(n=70){
   const farben = ["#e0b458","#4cc38a","#5fb8d4","#e5636f","#e8e6df","#d9973f"];
@@ -373,7 +458,7 @@ function zwischenbilanz(p){
   const noetig = noetigKorn(p);
   const f = noetig>0 ? p.ausgabe/noetig : 1;
 
-  const ev = Math.random();
+  const ev = Math.random() / diffFaktor();
   if(ev < 0.05 && p.pop > 1200){
     const opfer = Math.round(p.pop * rf(0.12,0.28));
     p.pop -= opfer;
@@ -393,6 +478,7 @@ function zwischenbilanz(p){
   r.verhungert = f < 1 ? Math.round(p.pop * (1-f) * 0.5) : 0;
   r.migration  = Math.round(p.pop * 0.05 * (p.stimmung-50)/100 * g);
   p.pop = Math.max(50, p.pop + r.geburten - r.tote - r.verhungert + r.migration);
+  if(p.stimmung >= 90) erfolg("volk");
   r.f = f;
   p.zb = r;
 }
@@ -412,7 +498,7 @@ function jahresschluss(p){
   p.korn += r.ernte;
 
   /* Wirtschafts-Ereignisse */
-  const ev = Math.random();
+  const ev = Math.random() / diffFaktor();
   if(ev < 0.07){
     const verlust = Math.round(p.korn * rf(0.2,0.4));
     p.korn -= verlust;
@@ -451,7 +537,11 @@ function jahresschluss(p){
 function pruefeBefoerderung(p){
   if(p.titel >= 8) return false;
   const b = BEDINGUNGEN[p.titel+1];
-  if(p.geld > 0 && b.ok(p)){ p.titel++; return true; }
+  if(p.geld > 0 && b.ok(p)){
+    p.titel++;
+    if(!p.ki){ erfolg("baron"); if(p.titel===8) erfolg("kaiser"); }
+    return true;
+  }
   return false;
 }
 
@@ -917,7 +1007,10 @@ function schlachtAbschliessen(){
     ver.stimmung = clamp(ver.stimmung-10,5,100);
     ang.stimmung = clamp(ang.stimmung-5,5,100);
     s.ergebnis = `Sieg! Eure Truppen erobern ${fmt(beute)} ha von ${ver.name}. ${fmt(gefallene)} Feinde fallen.`;
-    if(!s.still) setTimeout(sFanfare, 300);
+    if(!s.still){
+      setTimeout(sFanfare, 300);
+      if(kr.a === G.aktiv && !ang.ki){ erfolg("krieg"); if(s.helferA.length) erfolg("buendnis"); }
+    }
   } else {
     const tribut = Math.round(Math.max(0,ang.geld)*0.2);
     ang.geld -= tribut; ver.geld += tribut;
@@ -1027,12 +1120,13 @@ function kiZug(p){
   jahresschluss(p);
   const r = p.report;
   for(const e of r.ereignisse) bericht.push(e.t.toLowerCase().replace(/!.*$/,""));
+  const titelVorher = titelName(p);
   if(pruefeBefoerderung(p)){
     bericht.push(`wird zu${p.w?"r":"m"} ${titelName(p)} erhoben!`);
     if(p.titel===8){ G.sieger = p; }
   }
   G._kiBerichte = (G._kiBerichte||[]).concat(
-    `${p.wappen} ${titelName(p)} ${p.name} ` + (bericht.length? bericht.join(", ") : "regiert still sein Reich") + ".");
+    `${p.wappen} ${titelVorher} ${p.name} ` + (bericht.length? bericht.join(", ") : "regiert still sein Reich") + ".");
   G._kiBerichte = G._kiBerichte.slice(-12);
 }
 
@@ -1041,13 +1135,15 @@ function storageOK(){
   try{ const t="__kaiser_t"; window.localStorage.setItem(t,"1"); window.localStorage.removeItem(t); return true; }
   catch(e){ return false; }
 }
-function spielstand(){ return JSON.stringify({v:5, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler, opt:G.opt||{vergleich:true}}); }
+function spielstand(){ return JSON.stringify({v:6, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler, opt:G.opt||{vergleich:true}, diff:G.diff||2, tipps:G.tipps||{}}); }
 function ladeSpielstand(json){
   const d = JSON.parse(json);
   if(!d || !Array.isArray(d.spieler) || !d.spieler.length) throw new Error("ungültig");
   G.jahr = d.jahr; G.tempo = d.tempo; G.aktiv = clamp(d.aktiv||0,0,d.spieler.length-1);
   G.spieler = d.spieler;
   G.opt = d.opt || { vergleich:true };
+  G.diff = d.diff || 2;
+  G.tipps = d.tipps || {};
   G._kiBerichte = [];
   G.spieler.forEach((p,i)=>{
     if(!p.heer) p.heer = {inf:0,kav:0,art:0};
@@ -1095,15 +1191,21 @@ function hatQuicksave(){
 }
 
 /* ---------- Ablauf ---------- */
-function starteSpiel(anzahl, namen, geschlechter, tempo, kis, vergleich){
+function starteSpiel(anzahl, namen, geschlechter, tempo, kis, opts){
+  opts = opts || {};
   G.tempo = tempo; G.spieler = [];
-  G.opt = { vergleich: vergleich!==false };
+  G.opt = { vergleich: opts.vergleich!==false, tutorial: opts.tutorial!==false };
+  G.diff = opts.diff || 2;
+  G.tipps = {};
   for(let i=0;i<anzahl;i++)
     G.spieler.push(neuerSpieler(namen[i]||("Spieler "+(i+1)), geschlechter[i], i, kis && kis[i]));
+  if(G.diff===1) for(const p of G.spieler){ p.geld = 25000; p.korn = 600; }
+  if(G.diff===3) for(const p of G.spieler){ p.geld = 10000; p.korn = 300; }
   G.jahr = 1700; G.aktiv = 0; G.sieger = null; G._kiBerichte = [];
   if(cur().ki){ G.aktiv = -1; naechsterSpieler(); }
   else zeige("handoff");
 }
+const diffFaktor = () => G.diff===1 ? 0.6 : G.diff===3 ? 1.35 : 1;
 function beginneZug(){
   const p = cur();
   let kp = p.kornPreis + (110 - p.kornPreis)*0.2 + rf(-45,45);
@@ -1205,6 +1307,14 @@ function render(){
   const el = $("#screen");
   if(G.screen !== "schlacht"){ el.style.animation = "none"; void el.offsetWidth; el.style.animation = ""; }
   el.innerHTML = R ? R() : "<p>Unbekannter Bildschirm.</p>";
+  /* Berater-Tipp der Phase einblenden */
+  if(TIPPS[G.screen] && G.spieler.length && G.opt && G.opt.tutorial !== false
+     && !(G.tipps && G.tipps[G.screen]) && !cur().ki){
+    const h2 = el.querySelector("h2");
+    if(h2) h2.insertAdjacentHTML("afterend",
+      `<div class="card tut">💡 <b>Berater:</b> ${TIPPS[G.screen]}
+       <div><button class="btn-sm" onclick="tippZu('${G.screen}')">Verstanden</button></div></div>`);
+  }
   if(G.screen === "schlacht") zeichneFeld();
   else window.scrollTo(0,0);
   if(G.screen === "bauen") zeichneKarte(cur(), "karte");
@@ -1296,7 +1406,23 @@ const SCREENS = {
       <button class="btn-primary btn-lg" onclick="zeige('setup')">Neues Spiel</button>
       ${hatQuicksave()?`<button class="btn-lg" onclick="quickload()">Fortsetzen</button>`:""}
       <button class="btn-lg" onclick="$('#importFile').click()">Spielstand laden</button>
+      <button class="btn-lg" onclick="zeige('erfolge')">🏅 Erfolge (${erfolge().size}/${ERFOLGE.length})</button>
     </div>`;
+  },
+
+  erfolge(){
+    const karten = ERFOLGE.map(e=>{
+      const offen = erfolge().has(e.id);
+      return `<div class="erfolg-k ${offen?'':'zu'}">
+        <span class="ei">${offen?e.i:"🔒"}</span>
+        <div><b>${e.n}</b><br><span class="muted small">${e.d}</span></div>
+      </div>`;
+    }).join("");
+    return `
+      <h2>🏅 Erfolge — ${erfolge().size} von ${ERFOLGE.length}</h2>
+      <div class="grid g2">${karten}</div>
+      <p class="muted small">Erfolge gelten für menschliche Regenten und bleiben auf diesem Gerät erhalten.</p>
+      <button class="btn-primary btn-lg" onclick="zeige(G.spieler.length?'handoff':'title')">Zurück</button>`;
   },
 
   setup(){
@@ -1328,18 +1454,30 @@ const SCREENS = {
           brauchen Durchmarschrechte.</p>
         </div>
         <div class="card">
-          <h3>Spiellänge</h3>
+          <h3>Partie</h3>
           <div class="rowflex">
             <select id="tempo" style="width:100%">
               <option value="1">Original — Leben bis ca. 1760–1768 (lange Partie)</option>
               <option value="1.8" selected>Kurzspiel — schnelleres Wachstum, Leben bis ca. 1739–1746</option>
             </select>
           </div>
-          <p class="muted small" style="margin-top:10px">Jeder beginnt im Jahr 1700 mit
-          15.000 Talern, 10.000 Hektar Land, 400 Fuder Korn und 2.500 Untertanen.</p>
-          <div class="rowflex" style="margin-top:12px">
+          <div class="rowflex">
+            <select id="diff" style="width:100%">
+              <option value="1">Leicht — mehr Startkapital, mildere Schicksalsschläge</option>
+              <option value="2" selected>Normal — wie es sich gehört</option>
+              <option value="3">Schwer — karge Kassen, launisches Schicksal, aggressive KI</option>
+            </select>
+          </div>
+          <p class="muted small" style="margin-top:8px">Start im Jahr 1700 mit
+          15.000 Talern, 10.000 Hektar Land, 400 Fuder Korn und 2.500 Untertanen
+          (leicht: 25.000 T / schwer: 10.000 T).</p>
+          <div class="rowflex" style="margin-top:10px">
             <label class="small"><input type="checkbox" id="optVergleich" checked>
-            Reichsvergleich bei der Zugübergabe anzeigen</label>
+            Reichsvergleich bei der Zugübergabe</label>
+          </div>
+          <div class="rowflex">
+            <label class="small"><input type="checkbox" id="optTutorial" checked>
+            Berater-Tipps anzeigen (Tutorial)</label>
           </div>
           <p class="muted small">Computer-Regenten regieren ihre Reiche selbstständig —
           ideal für Solo-Partien gegen die Krone.</p>
@@ -1874,6 +2012,8 @@ const SCREENS = {
         <td class="r">${fmt(p.pop)}</td><td class="r">${fmt(p.land)}</td>
         <td class="r">${fmt(p.geld)}</td><td class="r">${fmt(score(p))}</td>
       </tr>`).join("");
+    const charts = sortiert.filter(p=>(p.chronik||[]).length>=3).map(p=>`
+      <div class="card"><h3>${p.wappen} ${titelName(p)} ${p.name}</h3>${chronikChart(p)}</div>`).join("");
     return `
       <h2>Schlusswertung Anno ${G.jahr}</h2>
       <div class="card">
@@ -1882,7 +2022,9 @@ const SCREENS = {
           ${rows}
         </table>
       </div>
-      <button class="btn-primary btn-lg" onclick="G.spieler=[];zeige('title')">Neues Spiel</button>`;
+      ${charts?`<h3 style="margin:14px 0 8px">Die Regierungsjahre im Rückblick</h3><div class="grid g2">${charts}</div>`:""}
+      <button class="btn-primary btn-lg" onclick="G.spieler=[];zeige('title')">Neues Spiel</button>
+      <button class="btn-lg" onclick="zeige('erfolge')">🏅 Erfolge</button>`;
   }
 };
 
@@ -1906,7 +2048,11 @@ function setupStart(){
     kis.push($("#pki"+i).value==="1");
   }
   if(kis.every(k=>k)){ alertMsg("Mindestens ein Reich braucht einen menschlichen Regenten."); return; }
-  starteSpiel(n, namen, w, +$("#tempo").value, kis, $("#optVergleich").checked);
+  starteSpiel(n, namen, w, +$("#tempo").value, kis, {
+    vergleich: $("#optVergleich").checked,
+    tutorial:  $("#optTutorial").checked,
+    diff: +$("#diff").value
+  });
 }
 function kornAusgeben(){
   const p = cur();
@@ -1930,6 +2076,7 @@ function handelKorn(dir){
     const m = clamp(Math.floor(+$("#kverk").value||0),0,p.korn);
     if(m<=0) return;
     p.korn -= m; p.geld += Math.round(m*p.kornPreis*0.9); sMuenze();
+    if(p.kornPreis >= 300) erfolg("spekulant");
   }
   render();
 }
@@ -1941,6 +2088,7 @@ function handelLand(dir){
     if(m<=0) return;
     if(kosten>p.geld){ $("#hmsg").textContent="Zu wenig Taler!"; return; }
     p.geld -= kosten; p.land += m; sMuenze();
+    if(p.land >= 25000) erfolg("land");
   } else {
     const m = clamp(Math.floor(+$("#lverk").value||0),0,freiLand(p));
     if(m<=0) return;
@@ -1971,6 +2119,9 @@ function baue(was){
   if(was==="muehle" && p.geld>=KOSTEN.muehle && platz){ p.geld-=KOSTEN.muehle; p.muehlen++; platziereGebaeude(p,"k"); }
   if(was==="palast" && p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast){ p.geld-=KOSTEN.palastTeil; p.palast++; p._neu="palast"; }
   if(was==="dom"    && p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom){ p.geld-=KOSTEN.domTeil; p.dom++; p._neu="dom"; }
+  if(staedte(p)>=1) erfolg("stadt");
+  if(p.palast>=PALAST_TEILE) erfolg("palast");
+  if(p.dom>=DOM_TEILE) erfolg("dom");
   sMuenze();
   render();
 }
@@ -2011,6 +2162,13 @@ document.addEventListener("keydown", e => {
   const b = $("#screen .btn-primary");
   if(b && !b.disabled){ e.preventDefault(); b.click(); }
 });
+
+/* PWA: Service Worker registrieren (nur wenn über HTTP(S) ausgeliefert) */
+try{
+  if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  }
+}catch(e){}
 
 render();
 </script>

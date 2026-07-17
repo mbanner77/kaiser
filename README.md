@@ -52,3 +52,18 @@ MIT
   eigener Wirtschafts-, Bau- und Kriegsentscheidungen und automatischer Diplomatie
 - **Übergabe-Berichte**: „Derweil in den anderen Reichen …" fasst die KI-Züge zusammen
 - Option: Reichsvergleich bei der Zugübergabe ein-/ausblenden
+
+## Version 1.0 — Release-Features
+
+- **Berater-Tutorial**: kontextbezogene Tipps in jeder Phase (abschaltbar)
+- **10 Erfolge** mit Freischalt-Toasts, dauerhaft im Browser gespeichert
+- **3 Schwierigkeitsgrade** (Startkapital, Schicksalsschläge, KI-Aggressivität)
+- **Hintergrundmusik**: generative Lauten-Klänge (🎼 im Kopfbereich, Web Audio)
+- **Schlusswertung mit Rückblick**: Chronik-Graphen aller Regenten
+- **PWA**: installierbar als App (Manifest, Icons, Service Worker) — auf Render
+  gehostet offline spielbar
+
+## Deployment
+
+Render (Blueprint `render.yaml`, statische Site) — jeder Push auf `main` deployt
+automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App installieren").

@@ -5,7 +5,7 @@ services:
     name: kaiser
     runtime: static
     # Eine einzige HTML-Datei — als index.html veroeffentlichen:
-    buildCommand: mkdir -p public && cp kaiser.html public/index.html
+    buildCommand: mkdir -p public && cp kaiser.html public/index.html && cp manifest.webmanifest sw.js icon-192.png icon-512.png public/
     staticPublishPath: public
     headers:
       - path: /*
