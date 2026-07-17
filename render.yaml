@@ -4,7 +4,6 @@ services:
   - type: web
     name: kaiser
     runtime: static
-    plan: free
     # Eine einzige HTML-Datei — als index.html veroeffentlichen:
     buildCommand: mkdir -p public && cp kaiser.html public/index.html
     staticPublishPath: public
