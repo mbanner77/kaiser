@@ -250,7 +250,20 @@
   }
   .anno-pop{animation:annoPop .9s cubic-bezier(.2,1.4,.4,1) both;}
   @keyframes annoPop{from{opacity:0;transform:scale(1.7);letter-spacing:14px;}to{opacity:1;transform:scale(1);}}
-  @media (max-width:640px){ .hero h1{font-size:32px;} .sliderrow{grid-template-columns:120px 1fr 52px;} .battlefield{grid-template-columns:1fr;} .vs{padding:4px;} }
+  @media (max-width:640px){
+    .hero h1{font-size:32px;}
+    .sliderrow{grid-template-columns:110px 1fr 46px;gap:8px;}
+    .battlefield{grid-template-columns:1fr;} .vs{padding:4px;}
+    main{padding:14px 12px 50px;}
+    .stats{grid-template-columns:repeat(2,1fr);gap:9px;}
+    .stat{padding:11px 12px;} .stat .val{font-size:16px;}
+    header{padding:10px 12px;gap:7px;}
+    .chip{padding:4px 9px;font-size:12px;}
+    .btn-lg{width:100%;margin-right:0;}
+    td,th{font-size:13px;padding:6px 4px;}
+    .card{padding:14px 14px;}
+    h2{font-size:18px;}
+  }
 </style>
 </head>
 <body>
@@ -274,7 +287,7 @@
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser v1.4 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v1.5 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <script>
@@ -449,6 +462,40 @@ const sKlirren  = () => { rausch(.09,0,.10); beep(415+ri(-30,60),.06,0,"square",
 const sSchlag   = () => { rausch(.12,0,.1,true); beep(140,.12,0,"sawtooth",.07); };
 const sGlocke   = () => [660,587,523].forEach((f,i)=>{ beep(f,1.2,i*.55,"sine",.13,true); beep(f*2.76,.5,i*.55,"sine",.04,true); });
 const sNieder   = () => [330,294,262,196].forEach((f,i)=>beep(f,.3,i*.16,"sawtooth",.07,true));
+const sSchlachtSieg = () => {
+  sTrommel();
+  [[523,.55],[659,.72],[784,.9]].forEach(([f,d])=>{ beep(f,.4,d,"sawtooth",.08,true); beep(f/2,.4,d,"triangle",.06,true); });
+};
+/* Vogelzwitschern: kurze Glissandi */
+function sVogel(){
+  if(muted) return;
+  try{
+    const ac = audioCtx();
+    const n = ri(2,4);
+    for(let i=0;i<n;i++){
+      const t = ac.currentTime + i*rf(0.09,0.16);
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = "sine";
+      const f0 = rf(2100,3300), f1 = f0 * rf(0.75,1.35);
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(f1, t+0.08);
+      o.connect(g); g.connect(_master);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.018, t+0.015);
+      g.gain.exponentialRampToValueAtTime(0.001, t+0.09);
+      o.start(t); o.stop(t+0.12);
+    }
+  }catch(e){}
+}
+const sWind = () => rausch(2.2, 0, 0.028, true);
+/* Ambiente-Bett auf den Karten-Bildschirmen */
+setInterval(()=>{
+  if(muted || document.hidden) return;
+  if(!["status","bauen","welt","korn","handel"].includes(G.screen)) return;
+  const r = Math.random();
+  if(r < 0.38) sVogel();
+  else if(r < 0.5) sWind();
+}, 2600);
 document.addEventListener("click", e => { if(e.target.closest("button")) sKlick(); }, true);
 
 /* Sanfte generative Hintergrundmusik (Laute am Hofe) */
@@ -857,6 +904,8 @@ function einTick(s, leise){
       if(!leise){
         s.partikel.push({ typ:"staub", lane:i, born:jetzt });
         if(Math.random()<0.5) s.partikel.push({ typ:"boom", rx:0.5+rf(-0.03,0.03), ry, born:jetzt });
+        for(let k=0;k<2;k++)
+          s.partikel.push({ typ:"gefallen", lane:i, off:rf(-0.05,0.05), seite:Math.random()<0.5?"A":"D", born:jetzt+rf(0,400) });
       }
     }
     /* Durchbruch: Sieger eines leeren Abschnitts verstärkt die Nachbarn */
@@ -1661,6 +1710,15 @@ function zeichneFeld(t=0){
       grad.addColorStop(1,"rgba(230,120,60,0)");
       ctx.fillStyle = grad;
       ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
+    } else if(pk.typ==="gefallen" && alter < 4200){
+      const q = alter/4200;
+      const lane = s.lanes[pk.lane];
+      const y0 = oben + pk.lane*laneH + laneH*0.5;
+      const xm = basisA + (100-(lane?lane.dist:0))/100*spann + (pk.seite==="A"?-14:14) + pk.off*W;
+      ctx.strokeStyle = `rgba(150,150,158,${0.5*(1-q)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(xm-4, y0+6); ctx.lineTo(xm+4, y0+6);
+      ctx.moveTo(xm, y0+2); ctx.lineTo(xm, y0+9); ctx.stroke();
     } else if(pk.typ==="staub" && alter < 1300){
       const q = alter/1300;
       const lane = s.lanes[pk.lane];
@@ -1672,7 +1730,7 @@ function zeichneFeld(t=0){
       }
     }
   }
-  if(s.partikel) s.partikel = s.partikel.filter(pk => jetzt - pk.born < 1900);
+  if(s.partikel) s.partikel = s.partikel.filter(pk => jetzt - pk.born < (pk.typ==="gefallen" ? 4200 : 1900));
   /* Weisse Flagge */
   if(s.fertig){
     ctx.font = "22px sans-serif"; ctx.textAlign = "center";
@@ -1735,7 +1793,7 @@ function schlachtAbschliessen(){
     ang.stimmung = clamp(ang.stimmung-5,5,100);
     s.ergebnis = `Sieg! Eure Truppen erobern ${fmt(beute)} ha von ${ver.name}. ${fmt(gefallene)} Feinde fallen.`;
     if(!s.still){
-      setTimeout(sFanfare, 300);
+      setTimeout(sSchlachtSieg, 300);
       if(kr.a === G.aktiv && !ang.ki){ erfolg("krieg"); if(s.helferA.length) erfolg("buendnis"); }
     }
   } else {
@@ -1937,7 +1995,7 @@ function starteSpiel(anzahl, namen, geschlechter, tempo, kis, opts){
   if(G.diff===3) for(const p of G.spieler){ p.geld = 10000; p.korn = 300; }
   G.jahr = 1700; G.aktiv = 0; G.sieger = null; G._kiBerichte = [];
   if(cur().ki){ G.aktiv = -1; naechsterSpieler(); }
-  else zeige("handoff");
+  else zeige("intro");
 }
 const diffFaktor = () => G.diff===1 ? 0.6 : G.diff===3 ? 1.35 : 1;
 function beginneZug(){
@@ -2224,6 +2282,29 @@ const SCREENS = {
       </div>
       <button class="btn-primary btn-lg" onclick="setupStart()">Los geht's</button>
       <button class="btn-lg" onclick="zeige('title')">Zurück</button>`;
+  },
+
+  intro(){
+    const p = cur();
+    setTimeout(sFanfare, 400);
+    const reihen = G.spieler.map((s,i)=>`
+      <div class="zer" style="animation-delay:${1.1+i*0.18}s;display:flex;align-items:center;gap:10px;justify-content:center">
+        <span class="dot" style="background:${s.farbe}"></span>
+        <span>${s.wappen} ${s.name}${s.ki?' <span class="muted small">(Computer)</span>':""}</span>
+      </div>`).join("");
+    return `
+      <div class="hero" style="padding-top:44px">
+        <div class="zer z1"><span class="schild pulse" style="width:96px;height:110px;font-size:48px;box-shadow:inset 0 0 34px ${p.farbe}66, 0 10px 34px rgba(0,0,0,.5)">${p.wappen}</span></div>
+        <h1 class="zer z2" style="font-size:38px;margin-top:16px">Anno 1700</h1>
+        <p class="zer z3" style="font-size:17px;margin:10px 0;max-width:560px;margin-inline:auto">
+          Das alte Reich sucht einen neuen Kaiser. ${G.spieler.length>1?"Diese Regenten treten an:":"Ein Regent tritt an:"}</p>
+        <div class="zer z3" style="margin:8px 0 4px">${reihen}</div>
+        <p class="muted small zer z4" style="margin-top:10px">Wer zuerst Kathedrale, fünf Städte, 25.000 Hektar und
+        100.000 Taler vereint, trägt die Krone — doch die Lebenszeit verrinnt.</p>
+        <div class="zer z5" style="margin-top:22px">
+          <button class="btn-primary btn-lg" onclick="zeige('handoff')">Der Aufstieg beginnt</button>
+        </div>
+      </div>`;
   },
 
   handoff(){
