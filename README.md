@@ -67,3 +67,17 @@ MIT
 
 Render (Blueprint `render.yaml`, statische Site) — jeder Push auf `main` deployt
 automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App installieren").
+
+## Version 2.0 — Online-Mehrspieler
+
+- **Über das Internet spielen**: Raum eröffnen, 6-stelligen Code teilen, Mitspieler
+  treten von ihren eigenen Geräten bei (bis zu 9, plus KI-Regenten)
+- Rundenbasierte Synchronisation über einen kleinen WebSocket-Relay-Server
+  (`server.js`, zweiter Render-Service `kaiser-mp` im Blueprint)
+- Kriegs-Interaktionen werden an das richtige Gerät geroutet: Diplomatie-Anfragen,
+  geheime Verteidiger-Aufstellung, Schlachtbericht
+- Wartebildschirm mit Live-Reichsvergleich, Verbindungsverlust-Hinweise
+- Außerdem: Einheiten-Sprites im Schlachtfeld (Reiter, Pikeniere, Kanonen) mit
+  Truppenzahlen je Abschnitt, Plünderung nach Eindringtiefe (Gebäude-, Korn- und
+  Monumentschäden), Vergleichs-Chart in der Schlusswertung, Gamepad-Steuerung,
+  Phasen-Übergangsblenden, Blitz-Spielmodus

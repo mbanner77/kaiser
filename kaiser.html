@@ -195,6 +195,8 @@
     box-shadow:0 6px 22px rgba(0,0,0,.45);}
   .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:baseline;}
   .kiber{border-left:3px solid var(--cyan);}
+  .blink{animation:blinkA 1.6s ease-in-out infinite;}
+  @keyframes blinkA{0%,100%{opacity:.45;}50%{opacity:1;}}
   /* --- Schlachtfeld-Canvas --- */
   #feld{width:100%;height:auto;display:block;border-radius:12px;border:1px solid var(--border);
     background:linear-gradient(180deg,#1c2637 0%,#2a3a2a 45%,#22301f 100%);margin-bottom:12px;}
@@ -248,6 +250,11 @@
     60%{opacity:1;transform:translateX(-50%) translateY(6px) rotate(4deg);}
     to{opacity:1;transform:translateX(-50%) translateY(0) rotate(0);}
   }
+  #wipe{position:fixed;inset:0;pointer-events:none;z-index:90;opacity:0;
+    background:linear-gradient(105deg,transparent 30%,rgba(224,180,88,.10) 46%,rgba(224,180,88,.22) 50%,rgba(224,180,88,.10) 54%,transparent 70%);
+    transform:translateX(-110%);}
+  #wipe.an{animation:wipeAn .45s ease;}
+  @keyframes wipeAn{from{opacity:1;transform:translateX(-110%);}to{opacity:1;transform:translateX(110%);}}
   .anno-pop{animation:annoPop .9s cubic-bezier(.2,1.4,.4,1) both;}
   @keyframes annoPop{from{opacity:0;transform:scale(1.7);letter-spacing:14px;}to{opacity:1;transform:scale(1);}}
   @media (max-width:640px){
@@ -288,9 +295,10 @@
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser v1.7 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v2.0 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
+<div id="wipe"></div>
 <script>
 "use strict";
 /* ============================================================
@@ -343,7 +351,7 @@ function neuerSpieler(name,w,idx,ki){
     titel:0, stimmung:60,
     kornPreis:ri(70,120), landPreis:ri(16,70),
     kornHist:[], snap:null, delta:null,
-    todesJahr: (G.tempo>1 ? ri(1739,1746) : ri(1760,1768)) + Math.random(),
+    todesJahr: (G.tempo>=2.5 ? ri(1721,1726) : G.tempo>1 ? ri(1739,1746) : ri(1760,1768)) + Math.random(),
     tot:false,
     ausgabe:0, kriegGefuehrt:false,
     turnStart:0, report:null, zb:null
@@ -748,15 +756,23 @@ function kriegVorbereiten(zielIdx){
     else kr.fragen.push(i);
   }
   G._kr = kr;
-  if(kr.fragen.length) zeige("diplomatie");
-  else diploFertig();
+  diploWeiter();
+}
+function diploWeiter(){
+  const kr = G._kr;
+  if(kr.frageIdx < kr.fragen.length){
+    const f = kr.fragen[kr.frageIdx];
+    if(mpMein(f)) zeige("diplomatie");
+    else mpPend("diplo", f);
+    return;
+  }
+  diploFertig();
 }
 function diploWahl(wahl){
   const kr = G._kr;
   kr.wahl[kr.fragen[kr.frageIdx]] = wahl;
   kr.frageIdx++;
-  if(kr.frageIdx < kr.fragen.length){ zeige("diplomatie"); return; }
-  diploFertig();
+  diploWeiter();
 }
 function diploFertig(){
   const kr = G._kr;
@@ -764,12 +780,13 @@ function diploFertig(){
   const blockiert = kr.weg.some(i => !["atk","frei"].includes(kr.wahl[i]));
   if(blockiert){
     kr.abgebrochen = true;
-    cur().kriegGefuehrt = true;
-    zeige("kriegAbbruch");
+    G.spieler[kr.a].kriegGefuehrt = true;
+    if(mpMein(kr.a)) zeige("kriegAbbruch");
+    else mpPend("kriegAbbruch", kr.a);
     return;
   }
-  G._aufW = [2,2,2,2,2];
-  zeige("aufstellungA");
+  if(mpMein(kr.a)){ G._aufW = [2,2,2,2,2]; zeige("aufstellungA"); }
+  else mpPend("schlachtplan", kr.a);
 }
 function aufstellungGewicht(i, v){
   G._aufW[i] = +v;
@@ -785,11 +802,13 @@ function aufstellungPreset(k){
 function aufstellungAFertig(){
   G._kr.aufA = [...G._aufW];
   if(G.spieler[G._kr.d].ki){ G._kr.aufD = kiAufstellung(); schlachtStarten(); }
-  else { G._aufW = [2,2,2,2,2]; zeige("aufstellungD"); }
+  else if(mpMein(G._kr.d)){ G._aufW = [2,2,2,2,2]; zeige("aufstellungD"); }
+  else mpPend("aufD", G._kr.d);
 }
 function aufstellungDFertig(){
   G._kr.aufD = [...G._aufW];
-  schlachtStarten();
+  if(mpMein(G._kr.a)) schlachtStarten();
+  else mpPend("schlacht", G._kr.a);
 }
 
 /* ---------- Schlacht (animiert) ---------- */
@@ -1742,6 +1761,68 @@ function weltAuf(){ G._vorWelt = G.screen; zeige("welt"); }
 function weltZu(){ zeige(G._vorWelt || "status"); }
 function angreifenAus(i){ G._zielVorwahl = i; zeige("kriegPlan"); }
 
+/* ---------- Einheiten-Sprites (Schlachtfeld & Aufstellungs-Vorschau) ---------- */
+function malSoldat(ctx, x, y, farbe, richt, pike=true){
+  ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineWidth = 1.4; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(x, y-4.5, 1.7, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x, y-2.8); ctx.lineTo(x, y+1.6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, y+1.6); ctx.lineTo(x-1.8, y+5);
+  ctx.moveTo(x, y+1.6); ctx.lineTo(x+1.8, y+5); ctx.stroke();
+  if(pike){ ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(x+richt*2, y+2); ctx.lineTo(x+richt*5, y-8); ctx.stroke(); }
+}
+function malReiter(ctx, x, y, farbe, richt){
+  ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineWidth = 1.5; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.ellipse(x, y+1, 5.2, 2.7, 0, 0, 7); ctx.fill();          /* Pferdeleib */
+  ctx.beginPath(); ctx.moveTo(x+richt*4, y);                                     /* Hals & Kopf */
+  ctx.lineTo(x+richt*6.6, y-3.6); ctx.lineTo(x+richt*8.4, y-2.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x-3, y+3); ctx.lineTo(x-3.4, y+6.4);               /* Beine */
+  ctx.moveTo(x+3, y+3); ctx.lineTo(x+3.4, y+6.4); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x-richt*0.6, y-5, 1.6, 0, 7); ctx.fill();             /* Reiter */
+  ctx.beginPath(); ctx.moveTo(x-richt*0.6, y-3.4); ctx.lineTo(x-richt*0.6, y-0.5); ctx.stroke();
+  ctx.lineWidth = 1.1;
+  ctx.beginPath(); ctx.moveTo(x+richt*1, y-2.5); ctx.lineTo(x+richt*7, y-7); ctx.stroke(); /* Lanze */
+}
+function malKanone(ctx, x, y, farbe, richt){
+  ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineCap = "round";
+  ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.moveTo(x-richt*1.5, y+1.5); ctx.lineTo(x+richt*6.5, y-3); ctx.stroke(); /* Rohr */
+  ctx.lineWidth = 1.3;
+  ctx.beginPath(); ctx.arc(x, y+3.4, 3.1, 0, 7); ctx.stroke();                    /* Rad */
+  ctx.beginPath(); ctx.moveTo(x, y+3.4); ctx.lineTo(x-richt*5.5, y+6.5); ctx.stroke(); /* Lafette */
+}
+function malAufgebot(ctx, x, y, farbe, richt){
+  ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineWidth = 1.3; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(x, y-4, 1.5, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x, y-2.5); ctx.lineTo(x, y+1.5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, y+1.5); ctx.lineTo(x-1.6, y+4.6);
+  ctx.moveTo(x, y+1.5); ctx.lineTo(x+1.6, y+4.6); ctx.stroke();
+  /* Heugabel */
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x+richt*2, y+2.5); ctx.lineTo(x+richt*3.6, y-6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+richt*2.6, y-6.5); ctx.lineTo(x+richt*4.6, y-5.5); ctx.stroke();
+}
+/* Ein Trupp Sprites eines Typs in Reihen zeichnen; gibt die Blocktiefe zurück */
+function malTrupp(ctx, typ, anzahl, maxSprites, front, richt, y0, laneH, farbe){
+  if(anzahl <= 0) return 0;
+  const sprites = clamp(Math.ceil(anzahl/Math.max(1,Math.round(anzahl/maxSprites))), 1, maxSprites);
+  const abst = typ==="kav" ? 13 : typ==="art" ? 13 : 7.5;
+  const reihenH = typ==="kav" ? 14 : 11;
+  const reihen = Math.max(1, Math.floor((laneH-12)/reihenH));
+  let tiefe = 0;
+  for(let i=0;i<sprites;i++){
+    const reihe = i % reihen, spalte = Math.floor(i/reihen);
+    const x = front - richt*(spalte*abst);
+    const y = y0 + 8 + reihe*reihenH;
+    if(typ==="inf") malSoldat(ctx, x, y, farbe, richt, true);
+    else if(typ==="miliz") malSoldat(ctx, x, y, farbe, richt, false);
+    else if(typ==="auf") malAufgebot(ctx, x, y, farbe, richt);
+    else if(typ==="kav") malReiter(ctx, x, y, farbe, richt);
+    else malKanone(ctx, x, y, farbe, richt);
+    tiefe = Math.max(tiefe, spalte*abst + abst);
+  }
+  return tiefe;
+}
+
 /* Schlachtfeld-Canvas: Truppen als Formationen, Partikel an der Front */
 function zeichneFeld(t=0){
   const c = $("#feld"), s = G._s;
@@ -1771,52 +1852,426 @@ function zeichneFeld(t=0){
   const basisA = W*0.13, basisD = W*0.87, spann = W*0.34;
   const skala = Math.max(1, Math.ceil((s.startG.A+s.startG.D)/560));
 
-  /* Truppenblöcke je Abschnitt */
+  /* Truppen als Einheiten-Sprites je Abschnitt */
   s.lanes.forEach((lane,i)=>{
-    const y0 = oben + i*laneH + 6;
+    const y0 = oben + i*laneH + 2;
     const frontA = basisA + (100-lane.dist)/100*spann;
     const frontD = basisD - (100-lane.dist)/100*spann;
-    const malBlock = (u, farbe, front, richt) => {
-      const reihen = Math.max(2, Math.floor((laneH-10)/9));
-      let n = 0;
-      const dot = (anz, radius, fill) => {
-        for(let k=0;k<anz;k++){
-          const reihe = n % reihen, spalte = Math.floor(n/reihen);
-          const x = front - richt*(spalte*7) + rf(-1,1);
-          const y = y0 + reihe*9 + rf(-1.5,1.5);
-          ctx.beginPath(); ctx.arc(x, y, radius, 0, 7); ctx.fillStyle = fill; ctx.fill();
-          n++;
-        }
-      };
-      dot(Math.ceil(u.inf/skala), 2.5, farbe);
-      dot(Math.ceil(u.miliz/skala), 2.1, farbe+"99");
-      dot(Math.ceil(u.auf/skala), 1.9, farbe+"77");
-      /* Kavallerie mit Bewegungs-Streifen während des Vormarschs */
-      const kavN = Math.ceil(u.kav/skala);
-      if(kavN>0 && lane.dist>0 && !s.fertig){
-        ctx.strokeStyle = farbe+"55"; ctx.lineWidth = 2;
-        for(let k=0;k<Math.min(kavN,10);k++){
-          const reihe = (n+k) % reihen, spalte = Math.floor((n+k)/reihen);
-          const x = front - richt*(spalte*7), y = y0 + reihe*9;
-          ctx.beginPath(); ctx.moveTo(x - richt*11, y); ctx.lineTo(x - richt*3, y); ctx.stroke();
-        }
-      }
-      dot(kavN, 3.4, farbe);
-      /* Artillerie als Quadrate an der Basis */
-      const artN = Math.min(6, u.art>0 ? Math.max(1, Math.ceil(u.art/Math.max(1,skala))) : 0);
-      for(let k=0;k<artN;k++){
-        const x = (richt>0 ? basisA-26 : basisD+18) + (k%2)*(richt>0?-10:10);
-        const y = y0 + 4 + Math.floor(k/2)*11;
-        ctx.fillStyle = farbe;
-        ctx.fillRect(x, y, 7, 7);
-      }
+    const malSeite2 = (u, farbe, front, richt) => {
+      let x = front;
+      x -= richt * malTrupp(ctx, "inf",   u.inf,   10, x, richt, y0, laneH, farbe);
+      x -= richt * malTrupp(ctx, "miliz", u.miliz,  7, x, richt, y0, laneH, farbe+"99");
+      x -= richt * malTrupp(ctx, "auf",   u.auf,    5, x, richt, y0, laneH, farbe+"77");
+      malTrupp(ctx, "kav", u.kav, 5, x, richt, y0, laneH, farbe);
+      /* Artillerie an der Basis */
+      malTrupp(ctx, "art", u.art, 3, richt>0 ? basisA-34 : basisD+34, richt, y0, laneH, farbe);
     };
-    if(laneGroesse(lane.A)>0) malBlock(lane.A, fA, frontA, 1);
-    if(laneGroesse(lane.D)>0) malBlock(lane.D, fD, frontD, -1);
-    /* geschlagener Abschnitt */
+    if(laneGroesse(lane.A)>0) malSeite2(lane.A, fA, frontA, 1);
+    if(laneGroesse(lane.D)>0) malSeite2(lane.D, fD, frontD, -1);
+    /* Truppenzahlen an den Rändern */
+    ctx.font = "600 11px sans-serif";
+    ctx.fillStyle = fA; ctx.textAlign = "left";
+    ctx.fillText(fmt(laneGroesse(lane.A)), 8, y0 + laneH - 8);
+    ctx.fillStyle = fD; ctx.textAlign = "right";
+    ctx.fillText(fmt(laneGroesse(lane.D)), W-8, y0 + laneH - 8);
     if(laneGroesse(lane.A)===0 && laneGroesse(lane.D)===0){
       ctx.fillStyle = "rgba(219,226,238,.18)"; ctx.font = "11px sans-serif"; ctx.textAlign="center";
       ctx.fillText("— verwaist —", W/2, y0+laneH/2);
+    } else if(laneGroesse(lane.D)===0 && laneGroesse(lane.A)>0){
+      ctx.fillStyle = "rgba(224,180,88,.5)"; ctx.font = "600 10px sans-serif"; ctx.textAlign="center";
+      ctx.fillText("⚡ Durchbruch", W*0.72, y0+12);
+    }
+  });
+
+  /* Feldbanner */
+  const banner = (bx, farbe, ph) => {
+    ctx.strokeStyle = "#5a4a30"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(bx, oben-4); ctx.lineTo(bx, oben-34); ctx.stroke();
+    ctx.fillStyle = farbe;
+    const wf = Math.sin(t/240 + ph)*3;
+    ctx.beginPath(); ctx.moveTo(bx, oben-34);
+    ctx.quadraticCurveTo(bx+10, oben-32+wf, bx+20, oben-29+wf);
+    ctx.quadraticCurveTo(bx+10, oben-26+wf*0.5, bx, oben-22);
+    ctx.closePath(); ctx.fill();
+  };
+  banner(W*0.05, fA, 0); banner(W*0.95-20, fD, 2);
+
+  /* Partikel: Kanonenkugeln (Flugbahn), Explosionen, Nahkampfstaub */
+  const jetzt = performance.now();
+  for(const pk of (s.partikel||[])){
+    const alter = jetzt - pk.born;
+    if(alter < 0) continue;
+    if(pk.typ==="kugel" && alter < 900){
+      const q = alter/900;
+      /* Mündungsfeuer beim Abschuss */
+      if(q < 0.14){
+        const mx = pk.von==="A" ? basisA-16 : basisD+16;
+        const my = oben + pk.lane*laneH + laneH/2;
+        ctx.fillStyle = `rgba(255,225,140,${0.9*(1-q/0.14)})`;
+        ctx.beginPath(); ctx.arc(mx, my, 5+q*30, 0, 7); ctx.fill();
+      }
+      const lane = s.lanes[pk.lane];
+      const y0 = oben + pk.lane*laneH + laneH/2;
+      const dist = lane ? lane.dist : 50;
+      const zielA = basisA + (100-dist)/100*spann, zielD = basisD - (100-dist)/100*spann;
+      const von = pk.von==="A" ? basisA-20 : basisD+20;
+      const nach = pk.von==="A" ? zielD : zielA;
+      const x = von + (nach-von)*q;
+      const y = y0 - Math.sin(q*Math.PI)*laneH*1.4;
+      ctx.fillStyle = "#20242c";
+      ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 7); ctx.fill();
+      if(q>0.93){
+        ctx.fillStyle = "rgba(255,220,130,.8)";
+        ctx.beginPath(); ctx.arc(nach, y0, 6, 0, 7); ctx.fill();
+      }
+    } else if(pk.typ==="boom" && alter < 750){
+      const q = alter/750, r = 3 + q*11;
+      const x = pk.rx*W, y = pk.ry*H;
+      const grad = ctx.createRadialGradient(x,y,0,x,y,r);
+      grad.addColorStop(0,`rgba(255,230,140,${0.95*(1-q)})`);
+      grad.addColorStop(0.5,`rgba(230,120,60,${0.7*(1-q)})`);
+      grad.addColorStop(1,"rgba(230,120,60,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
+    } else if(pk.typ==="gefallen" && alter < 4200){
+      const q = alter/4200;
+      const lane = s.lanes[pk.lane];
+      const y0 = oben + pk.lane*laneH + laneH*0.5;
+      const xm = basisA + (100-(lane?lane.dist:0))/100*spann + (pk.seite==="A"?-14:14) + pk.off*W;
+      ctx.strokeStyle = `rgba(150,150,158,${0.5*(1-q)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(xm-4, y0+6); ctx.lineTo(xm+4, y0+6);
+      ctx.moveTo(xm, y0+2); ctx.lineTo(xm, y0+9); ctx.stroke();
+    } else if(pk.typ==="staub" && alter < 1300){
+      const q = alter/1300;
+      const lane = s.lanes[pk.lane];
+      const y0 = oben + pk.lane*laneH + laneH/2;
+      const xm = basisA + (100-(lane?lane.dist:0))/100*spann + 8;
+      ctx.fillStyle = `rgba(170,160,140,${0.25*(1-q)})`;
+      for(let k=0;k<3;k++){
+        ctx.beginPath(); ctx.arc(xm+rf(-10,10), y0 - q*16 + rf(-6,6), 5+q*10, 0, 7); ctx.fill();
+      }
+    }
+  }
+  if(s.partikel) s.partikel = s.partikel.filter(pk => jetzt - pk.born < (pk.typ==="gefallen" ? 4200 : 1900));
+  /* Weisse Flagge */
+  if(s.fertig && !s.replayAktiv){
+    ctx.font = "22px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("🏳️", s.sieger==="A" ? W*0.8 : W*0.2, H*0.16);
+  }
+  if(s.replayAktiv){
+    ctx.fillStyle = "rgba(13,17,23,.72)"; ctx.fillRect(10, 10, 158, 24);
+    ctx.fillStyle = "#e0b458"; ctx.font = "600 13px sans-serif"; ctx.textAlign = "left";
+    ctx.fillText("🎞️ Zeitraffer läuft …", 18, 27);
+  }
+}
+/* Vorschau der eigenen Aufstellung (Platzierungs-Bildschirm) */
+function zeichneAufstellung(cid, einheiten, gewichte, farbe, rechts){
+  const c = document.getElementById(cid);
+  if(!c) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = "#1c2b1e"; ctx.fillRect(0,0,W,H);
+  const laneH = (H-12)/LANES;
+  const lanes = verteileEinheiten(einheiten, gewichte);
+  ctx.strokeStyle = "rgba(255,255,255,.06)";
+  for(let i=0;i<=LANES;i++){ ctx.beginPath(); ctx.moveTo(0,6+i*laneH); ctx.lineTo(W,6+i*laneH); ctx.stroke(); }
+  const richt = rechts ? -1 : 1;
+  const basis = rechts ? W-70 : 70;
+  lanes.forEach((u,i)=>{
+    const y0 = 6 + i*laneH;
+    let x = basis;
+    x -= richt * malTrupp(ctx, "inf",   u.inf,   8, x, richt, y0, laneH, farbe);
+    x -= richt * malTrupp(ctx, "miliz", u.miliz, 6, x, richt, y0, laneH, farbe+"99");
+    x -= richt * malTrupp(ctx, "auf",   u.auf,   4, x, richt, y0, laneH, farbe+"77");
+    malTrupp(ctx, "kav", u.kav, 4, x, richt, y0, laneH, farbe);
+    malTrupp(ctx, "art", u.art, 2, rechts ? W-16 : 16, richt, y0, laneH, farbe);
+    ctx.fillStyle = "rgba(219,226,238,.75)"; ctx.font = "600 11px sans-serif";
+    ctx.textAlign = rechts ? "left" : "right";
+    ctx.fillText(`${LANE_NAMEN[i]} · ${fmt(laneGroesse(u))}`, rechts ? 6 : W-6, y0+laneH-6);
+  });
+}
+
+/* ---------- Gesamtkarte/* ---------- Gesamtkarte: alle Reiche im Nachbarschaftskreis ---------- */
+function zeichneWelt(t=0){
+  const c = document.getElementById("welt");
+  if(!c) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = "#111b26"; ctx.fillRect(0,0,W,H);
+  const wr = mulberry(999);
+  ctx.fillStyle = "rgba(46,70,56,.16)";
+  for(let i=0;i<30;i++){ ctx.beginPath(); ctx.arc(wr()*W, wr()*H, wr()*30+8, 0, 7); ctx.fill(); }
+  const n = G.spieler.length;
+  const cx = W/2, cy = H/2 + 4, ex = W*0.36, ey = H*0.32;
+  const pos = G.spieler.map((_,i)=>{
+    const a = -Math.PI/2 + i/n*6.2832;
+    return [cx + Math.cos(a)*ex*(n>1?1:0), cy + Math.sin(a)*ey*(n>1?1:0)];
+  });
+  /* Handelswege zwischen lebenden Nachbarn */
+  const leb = lebende().map(x=>x.i);
+  if(leb.length > 1){
+    ctx.strokeStyle = "rgba(209,187,138,.25)"; ctx.lineWidth = 2; ctx.setLineDash([5,7]);
+    const paare = leb.length===2 ? [[leb[0],leb[1]]] : leb.map((a,k)=>[a, leb[(k+1)%leb.length]]);
+    for(const [a,b] of paare){
+      ctx.beginPath(); ctx.moveTo(pos[a][0], pos[a][1]);
+      ctx.quadraticCurveTo(cx, cy, pos[b][0], pos[b][1]); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+  /* Reiche */
+  G.spieler.forEach((p,i)=>{
+    const [px,py] = pos[i];
+    const rrW = 24 + 34*Math.sqrt(Math.min(p.land,50000)/50000);
+    const rngB = mulberry(i*97+5);
+    ctx.save();
+    if(p.tot) ctx.globalAlpha = 0.45;
+    const bl = [];
+    for(let k=0;k<10;k++){
+      const a = k/10*6.2832;
+      bl.push([px+Math.cos(a)*rrW*(0.8+rngB()*0.35)*1.25, py+Math.sin(a)*rrW*(0.8+rngB()*0.35)*0.8]);
+    }
+    ctx.beginPath();
+    ctx.moveTo((bl[0][0]+bl[9][0])/2,(bl[0][1]+bl[9][1])/2);
+    for(let k=0;k<10;k++){
+      const nx = bl[(k+1)%10];
+      ctx.quadraticCurveTo(bl[k][0], bl[k][1], (bl[k][0]+nx[0])/2, (bl[k][1]+nx[1])/2);
+    }
+    ctx.closePath();
+    ctx.fillStyle = p.tot ? "#39404a" : saison().g2;
+    ctx.fill();
+    ctx.strokeStyle = p.farbe; ctx.lineWidth = 2; ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]);
+    if(i===G.aktiv && !p.tot){
+      ctx.strokeStyle = "rgba(224,180,88,"+(0.55+Math.sin(t/300)*0.3)+")"; ctx.lineWidth = 3; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(px, py, rrW*1.35, 0, 7); ctx.stroke();
+    }
+    ctx.font = `${Math.round(rrW*0.62)}px sans-serif`; ctx.textAlign = "center";
+    ctx.fillText(p.wappen, px, py + rrW*0.2);
+    ctx.font = "600 13px sans-serif"; ctx.fillStyle = "#dbe2ee";
+    ctx.fillText(`${titelName(p)} ${p.name}${p.tot?" †":""}`, px, py + rrW*0.85 + 16);
+    ctx.font = "11px sans-serif"; ctx.fillStyle = "#8b96a8";
+    ctx.fillText(`${fmt(p.land)} ha · ${fmt(p.pop)} Einw.`, px, py + rrW*0.85 + 30);
+    ctx.restore();
+  });
+  ctx.fillStyle = "rgba(13,17,23,.78)";
+  ctx.fillRect(10, H-32, 250, 24);
+  ctx.strokeStyle = "#2a3446"; ctx.strokeRect(10, H-32, 250, 24);
+  ctx.fillStyle = "#dbe2ee"; ctx.font = "600 12px sans-serif"; ctx.textAlign = "left";
+  ctx.fillText(`Die bekannte Welt · Anno ${G.jahr} · ${saison().n}`, 18, H-15);
+}
+/* Animierte Wetterszene für die Jahresbilanz */
+function zeichneWetter(t=0){
+  const c = document.getElementById("wetterBild");
+  const p = cur();
+  if(!c || !p || !p.report) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  const f = p.report.wetter.f;
+  const art = f<=0.6 ? "duerre" : f<=0.85 ? "regen" : f<1.12 ? "wechsel" : f<1.3 ? "gut" : "pracht";
+  ctx.clearRect(0,0,W,H);
+  const himmel = ctx.createLinearGradient(0,0,0,H);
+  if(art==="duerre"){ himmel.addColorStop(0,"#7a5c30"); himmel.addColorStop(1,"#8a6a38"); }
+  else if(art==="regen"){ himmel.addColorStop(0,"#28313f"); himmel.addColorStop(1,"#39434f"); }
+  else if(art==="wechsel"){ himmel.addColorStop(0,"#3a4456"); himmel.addColorStop(1,"#55607a"); }
+  else { himmel.addColorStop(0,"#3d4a68"); himmel.addColorStop(1,"#7a6a48"); }
+  ctx.fillStyle = himmel; ctx.fillRect(0,0,W,H);
+  /* Hügelkamm */
+  ctx.fillStyle = art==="duerre" ? "#5c4a26" : "#22301f";
+  ctx.beginPath(); ctx.moveTo(0,H);
+  ctx.quadraticCurveTo(W*0.3, H-26, W*0.55, H-14);
+  ctx.quadraticCurveTo(W*0.8, H-4, W, H-18);
+  ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+  if(art==="duerre"){
+    /* gleißende Sonne mit Hitzeflimmern */
+    const sx = W*0.78, sy = H*0.35;
+    const grad = ctx.createRadialGradient(sx,sy,2,sx,sy,34);
+    grad.addColorStop(0,"#fff0c0"); grad.addColorStop(0.6,"#e8c05a"); grad.addColorStop(1,"rgba(232,192,90,0)");
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(sx,sy,34,0,7); ctx.fill();
+    ctx.strokeStyle = "rgba(255,240,200,.25)"; ctx.lineWidth = 1.5;
+    for(let i=0;i<8;i++){
+      const x0 = W*0.08 + i*W*0.11;
+      ctx.beginPath();
+      for(let y=H-16; y>H*0.45; y-=6)
+        ctx.lineTo(x0 + Math.sin(y/9 + t/160 + i)*3.5, y);
+      ctx.stroke();
+    }
+  } else if(art==="regen" || art==="wechsel"){
+    /* Wolkenbänke */
+    ctx.fillStyle = "rgba(210,214,224,.16)";
+    for(let i=0;i<5;i++){
+      const wx = ((t/(60+i*18) + i*220) % (W+240)) - 120;
+      for(let b=0;b<4;b++){ ctx.beginPath(); ctx.arc(wx+b*30, 22+i*7+(b%2)*6, 18+(b%3)*7, 0, 7); ctx.fill(); }
+    }
+    if(art==="regen"){
+      ctx.strokeStyle = "rgba(170,200,230,.45)"; ctx.lineWidth = 1.3;
+      for(let i=0;i<46;i++){
+        const seed = ((i*61)%97)/97;
+        const rx2 = (seed*W + t/(2.2+seed)) % W;
+        const ry2 = (t/(3+seed*2) + i*37) % H;
+        ctx.beginPath(); ctx.moveTo(rx2, ry2); ctx.lineTo(rx2-3, ry2+11); ctx.stroke();
+      }
+      /* Blitz alle paar Sekunden */
+      const blitzPhase = (t % 4200);
+      if(blitzPhase < 160){
+        ctx.fillStyle = `rgba(255,255,240,${0.35*(1-blitzPhase/160)})`;
+        ctx.fillRect(0,0,W,H);
+        const bx = W*0.3 + (Math.floor(t/4200)%3)*W*0.2;
+        ctx.strokeStyle = "#fff8d0"; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(bx, 6);
+        ctx.lineTo(bx-8, H*0.35); ctx.lineTo(bx+4, H*0.4); ctx.lineTo(bx-6, H*0.75);
+        ctx.stroke();
+      }
+    }
+  } else {
+    /* goldene Strahlen und Sonne */
+    const sx = W*0.72, sy = H*0.4;
+    ctx.save(); ctx.translate(sx,sy); ctx.rotate(t/9000);
+    ctx.fillStyle = art==="pracht" ? "rgba(255,220,120,.10)" : "rgba(230,205,140,.07)";
+    for(let i=0;i<10;i++){ ctx.rotate(Math.PI/5); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(190,-18); ctx.lineTo(190,18); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+    const grad = ctx.createRadialGradient(sx,sy,3,sx,sy,30);
+    grad.addColorStop(0,"#fff3cf"); grad.addColorStop(0.6,"#e0b458"); grad.addColorStop(1,"rgba(224,180,88,0)");
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(sx,sy,30,0,7); ctx.fill();
+    if(art==="pracht"){
+      ctx.strokeStyle = "rgba(200,205,220,.5)"; ctx.lineWidth = 1.5;
+      for(let i=0;i<2;i++){
+        const vx = ((t/(26+i*9) + i*300) % (W+60)) - 30;
+        const vy = 26 + i*16 + Math.sin(t/400+i)*5;
+        ctx.beginPath(); ctx.moveTo(vx-5,vy); ctx.quadraticCurveTo(vx-1.5,vy-3.5,vx,vy);
+        ctx.quadraticCurveTo(vx+1.5,vy-3.5,vx+5,vy); ctx.stroke();
+      }
+    }
+  }
+  /* Textzeile */
+  ctx.fillStyle = "rgba(13,17,23,.72)"; ctx.fillRect(10, H-28, 300, 20);
+  ctx.fillStyle = "#dbe2ee"; ctx.font = "600 12px sans-serif"; ctx.textAlign = "left";
+  ctx.fillText(`${p.report.wetter.ico} ${p.report.wetter.t}`, 16, H-14);
+}
+function weltAuf(){ G._vorWelt = G.screen; zeige("welt"); }
+function weltZu(){ zeige(G._vorWelt || "status"); }
+function angreifenAus(i){ G._zielVorwahl = i; zeige("kriegPlan"); }
+
+/* ---------- Einheiten-Sprites (Schlachtfeld & Aufstellungs-Vorschau) ---------- */
+function malSoldat(ctx, x, y, farbe, richt, pike=true){
+  ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineWidth = 1.4; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(x, y-4.5, 1.7, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x, y-2.8); ctx.lineTo(x, y+1.6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, y+1.6); ctx.lineTo(x-1.8, y+5);
+  ctx.moveTo(x, y+1.6); ctx.lineTo(x+1.8, y+5); ctx.stroke();
+  if(pike){ ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(x+richt*2, y+2); ctx.lineTo(x+richt*5, y-8); ctx.stroke(); }
+}
+function malReiter(ctx, x, y, farbe, richt){
+  ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineWidth = 1.5; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.ellipse(x, y+1, 5.2, 2.7, 0, 0, 7); ctx.fill();          /* Pferdeleib */
+  ctx.beginPath(); ctx.moveTo(x+richt*4, y);                                     /* Hals & Kopf */
+  ctx.lineTo(x+richt*6.6, y-3.6); ctx.lineTo(x+richt*8.4, y-2.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x-3, y+3); ctx.lineTo(x-3.4, y+6.4);               /* Beine */
+  ctx.moveTo(x+3, y+3); ctx.lineTo(x+3.4, y+6.4); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x-richt*0.6, y-5, 1.6, 0, 7); ctx.fill();             /* Reiter */
+  ctx.beginPath(); ctx.moveTo(x-richt*0.6, y-3.4); ctx.lineTo(x-richt*0.6, y-0.5); ctx.stroke();
+  ctx.lineWidth = 1.1;
+  ctx.beginPath(); ctx.moveTo(x+richt*1, y-2.5); ctx.lineTo(x+richt*7, y-7); ctx.stroke(); /* Lanze */
+}
+function malKanone(ctx, x, y, farbe, richt){
+  ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineCap = "round";
+  ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.moveTo(x-richt*1.5, y+1.5); ctx.lineTo(x+richt*6.5, y-3); ctx.stroke(); /* Rohr */
+  ctx.lineWidth = 1.3;
+  ctx.beginPath(); ctx.arc(x, y+3.4, 3.1, 0, 7); ctx.stroke();                    /* Rad */
+  ctx.beginPath(); ctx.moveTo(x, y+3.4); ctx.lineTo(x-richt*5.5, y+6.5); ctx.stroke(); /* Lafette */
+}
+function malAufgebot(ctx, x, y, farbe, richt){
+  ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineWidth = 1.3; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(x, y-4, 1.5, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x, y-2.5); ctx.lineTo(x, y+1.5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, y+1.5); ctx.lineTo(x-1.6, y+4.6);
+  ctx.moveTo(x, y+1.5); ctx.lineTo(x+1.6, y+4.6); ctx.stroke();
+  /* Heugabel */
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x+richt*2, y+2.5); ctx.lineTo(x+richt*3.6, y-6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+richt*2.6, y-6.5); ctx.lineTo(x+richt*4.6, y-5.5); ctx.stroke();
+}
+/* Ein Trupp Sprites eines Typs in Reihen zeichnen; gibt die Blocktiefe zurück */
+function malTrupp(ctx, typ, anzahl, maxSprites, front, richt, y0, laneH, farbe){
+  if(anzahl <= 0) return 0;
+  const sprites = clamp(Math.ceil(anzahl/Math.max(1,Math.round(anzahl/maxSprites))), 1, maxSprites);
+  const abst = typ==="kav" ? 13 : typ==="art" ? 13 : 7.5;
+  const reihenH = typ==="kav" ? 14 : 11;
+  const reihen = Math.max(1, Math.floor((laneH-12)/reihenH));
+  let tiefe = 0;
+  for(let i=0;i<sprites;i++){
+    const reihe = i % reihen, spalte = Math.floor(i/reihen);
+    const x = front - richt*(spalte*abst);
+    const y = y0 + 8 + reihe*reihenH;
+    if(typ==="inf") malSoldat(ctx, x, y, farbe, richt, true);
+    else if(typ==="miliz") malSoldat(ctx, x, y, farbe, richt, false);
+    else if(typ==="auf") malAufgebot(ctx, x, y, farbe, richt);
+    else if(typ==="kav") malReiter(ctx, x, y, farbe, richt);
+    else malKanone(ctx, x, y, farbe, richt);
+    tiefe = Math.max(tiefe, spalte*abst + abst);
+  }
+  return tiefe;
+}
+
+/* Schlachtfeld-Canvas: Truppen als Formationen, Partikel an der Front */
+function zeichneFeld(t=0){
+  const c = $("#feld"), s = G._s;
+  if(!c || !s || !s.lanes) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
+  /* Gelände */
+  const brng = mulberry(777);
+  ctx.fillStyle = "rgba(255,255,255,.03)";
+  for(let h=0;h<4;h++){
+    const hx = brng()*W, hw = 90+brng()*160;
+    ctx.beginPath(); ctx.ellipse(hx, H*0.24, hw, 14+brng()*8, 0, Math.PI, 0); ctx.fill();
+  }
+  for(let b=0;b<6;b++) malBaum(ctx, brng()*W, H*(0.17+brng()*0.06), 4+brng()*3);
+  /* Abschnittslinien */
+  const oben = H*0.27, laneH = (H-oben-10)/LANES;
+  ctx.strokeStyle = "rgba(255,255,255,.05)";
+  for(let i=0;i<=LANES;i++){
+    ctx.beginPath(); ctx.moveTo(0,oben+i*laneH); ctx.lineTo(W,oben+i*laneH); ctx.stroke();
+  }
+  ctx.font = "10px sans-serif"; ctx.textAlign = "left"; ctx.fillStyle = "rgba(219,226,238,.4)";
+  for(let i=0;i<LANES;i++) ctx.fillText(LANE_NAMEN[i], 8, oben+i*laneH+12);
+
+  const fA = G._kr ? G.spieler[G._kr.a].farbe : "#5fb8d4";
+  const fD = G._kr ? G.spieler[G._kr.d].farbe : "#d9973f";
+  const basisA = W*0.13, basisD = W*0.87, spann = W*0.34;
+  const skala = Math.max(1, Math.ceil((s.startG.A+s.startG.D)/560));
+
+  /* Truppen als Einheiten-Sprites je Abschnitt */
+  s.lanes.forEach((lane,i)=>{
+    const y0 = oben + i*laneH + 2;
+    const frontA = basisA + (100-lane.dist)/100*spann;
+    const frontD = basisD - (100-lane.dist)/100*spann;
+    const malSeite2 = (u, farbe, front, richt) => {
+      let x = front;
+      x -= richt * malTrupp(ctx, "inf",   u.inf,   10, x, richt, y0, laneH, farbe);
+      x -= richt * malTrupp(ctx, "miliz", u.miliz,  7, x, richt, y0, laneH, farbe+"99");
+      x -= richt * malTrupp(ctx, "auf",   u.auf,    5, x, richt, y0, laneH, farbe+"77");
+      malTrupp(ctx, "kav", u.kav, 5, x, richt, y0, laneH, farbe);
+      /* Artillerie an der Basis */
+      malTrupp(ctx, "art", u.art, 3, richt>0 ? basisA-34 : basisD+34, richt, y0, laneH, farbe);
+    };
+    if(laneGroesse(lane.A)>0) malSeite2(lane.A, fA, frontA, 1);
+    if(laneGroesse(lane.D)>0) malSeite2(lane.D, fD, frontD, -1);
+    /* Truppenzahlen an den Rändern */
+    ctx.font = "600 11px sans-serif";
+    ctx.fillStyle = fA; ctx.textAlign = "left";
+    ctx.fillText(fmt(laneGroesse(lane.A)), 8, y0 + laneH - 8);
+    ctx.fillStyle = fD; ctx.textAlign = "right";
+    ctx.fillText(fmt(laneGroesse(lane.D)), W-8, y0 + laneH - 8);
+    if(laneGroesse(lane.A)===0 && laneGroesse(lane.D)===0){
+      ctx.fillStyle = "rgba(219,226,238,.18)"; ctx.font = "11px sans-serif"; ctx.textAlign="center";
+      ctx.fillText("— verwaist —", W/2, y0+laneH/2);
+    } else if(laneGroesse(lane.D)===0 && laneGroesse(lane.A)>0){
+      ctx.fillStyle = "rgba(224,180,88,.5)"; ctx.font = "600 10px sans-serif"; ctx.textAlign="center";
+      ctx.fillText("⚡ Durchbruch", W*0.72, y0+12);
     }
   });
 
@@ -1950,12 +2405,44 @@ function schlachtAbschliessen(){
   /* Verluste anteilig in die stehenden Heere zurückschreiben (Leihtruppen kehren dezimiert heim) */
   verlusteZurueck(s);
   if(s.sieger === "A"){
-    const beute = Math.min(Math.round(ver.land*0.15), Math.max(0,freiLand(ver)));
+    /* Eindringtiefe: geräumte Abschnitte — oder Überrennen nach der Flucht */
+    const geraeumt = s.lanes.filter(l => laneGroesse(l.D) === 0).length;
+    const verlustquote = 1 - sRest(s,"D")/s.startG.D;
+    const tiefe = clamp(Math.max(geraeumt,
+      s.routD ? Math.round(verlustquote*5) + 1 : Math.round(verlustquote*3)), 0, 5);
+    const beute = Math.min(Math.round(ver.land*(0.10 + tiefe*0.02)), Math.max(0,freiLand(ver)));
     ver.land -= beute; ang.land += beute;
     const gefallene = Math.round(ver.pop*0.03);
     ver.pop -= gefallene;
     ver.stimmung = clamp(ver.stimmung-10,5,100);
     ang.stimmung = clamp(ang.stimmung-5,5,100);
+    /* Plünderung: je tiefer der Durchbruch, desto mehr Schäden im Hinterland */
+    const schaeden = [];
+    for(let i=0;i<tiefe;i++){
+      if(Math.random() < 0.5 && (ver.maerkte>0 || ver.muehlen>0)){
+        if(ver.maerkte>0 && (ver.muehlen===0 || Math.random()<0.5)){
+          ver.maerkte--; entferneGebaeude(ver,"m"); schaeden.push("ein Markt");
+        } else if(ver.muehlen>0){
+          ver.muehlen--; entferneGebaeude(ver,"k"); schaeden.push("eine Mühle");
+        }
+      }
+    }
+    if(tiefe >= 3){
+      if(ver.palast>0 && Math.random()<0.5){
+        const d = ri(1, Math.min(3, ver.palast)); ver.palast -= d;
+        schaeden.push(`${d} Palast-Teil${d>1?"e":""}`);
+      }
+      if(ver.dom>0 && Math.random()<0.4){
+        const d = ri(1, Math.min(2, ver.dom)); ver.dom -= d;
+        schaeden.push(`${d} Dom-Teil${d>1?"e":""}`);
+      }
+    }
+    const kornBeute = tiefe>0 ? Math.min(ver.korn, Math.round(ver.korn * 0.04 * tiefe)) : 0;
+    ver.korn -= kornBeute; ang.korn += kornBeute;
+    s.tiefe = tiefe;
+    s.plünder = schaeden.length || kornBeute
+      ? `Eindringtiefe ${tiefe}/5 — geplündert: ${[...schaeden, kornBeute?fmt(kornBeute)+" Fuder Korn":null].filter(Boolean).join(", ")}.`
+      : (tiefe>0 ? `Eindringtiefe ${tiefe}/5 — die Plünderer fanden wenig.` : "");
     s.ergebnis = `Sieg! Eure Truppen erobern ${fmt(beute)} ha von ${ver.name}. ${fmt(gefallene)} Feinde fallen.`;
     if(!s.still){
       setTimeout(sSchlachtSieg, 300);
@@ -1969,6 +2456,7 @@ function schlachtAbschliessen(){
     if(!s.still) setTimeout(sNieder, 300);
   }
   quicksave();
+  mpSync();
 }
 
 /* ---------- KI-Regenten ---------- */
@@ -2069,7 +2557,7 @@ function kiZug(p){
       const di = G.spieler.indexOf(ziel);
       const s = kiSchlacht(idx, di);
       if(s) bericht.push(s.sieger==="A"
-        ? `führt siegreich Krieg gegen ${ziel.name}`
+        ? `führt siegreich Krieg gegen ${ziel.name}` + (s.tiefe>=2 ? ` und plündert das Hinterland` : "")
         : `verliert einen Feldzug gegen ${ziel.name}`);
     }
   }
@@ -2192,29 +2680,42 @@ function naechsterSpieler(){
     if(p.tot) continue;
     if(G.jahr >= p.todesJahr){
       p.tot = true;
+      mpSync();
       if(p.ki){ G._kiBerichte = (G._kiBerichte||[]).concat(`🕯️ ${titelName(p)} ${p.name} ist Anno ${G.jahr} verstorben.`); continue; }
-      sGlocke(); zeige("tod"); return;
+      if(mpMein(G.aktiv)){ sGlocke(); zeige("tod"); } else zeige("warten");
+      return;
     }
     if(p.ki){
       kiZug(p);
-      if(G.sieger && G.sieger.ki){ zeige("sieg"); return; }
+      if(G.sieger && G.sieger.ki){ mpSync(); zeige("sieg"); return; }
       continue;
     }
-    zeige("handoff"); return;
+    mpSync();
+    if(mpMein(G.aktiv)) zeige("handoff"); else zeige("warten");
+    return;
   }
+  mpSync();
   zeige("ende");
 }
 const alleTot = () => G.spieler.every(p=>p.tot);
 
 /* ---------- Anzeige ---------- */
 let timerIv = null;
-function zeige(s){ G.screen = s; render(); }
+const PHASEN_WIPE = ["status","korn","handel","zwbilanz","steuern","bauen","bilanz"];
+function zeige(s){
+  if(PHASEN_WIPE.includes(G.screen) && PHASEN_WIPE.includes(s) && G.screen !== s){
+    const w = $("#wipe");
+    if(w){ w.classList.remove("an"); void w.offsetWidth; w.classList.add("an");
+           setTimeout(()=>w.classList.remove("an"), 500); }
+  }
+  G.screen = s; render();
+}
 
 function kopf(){
   const inSpiel = G.spieler.length>0;
   $("#hJahr").style.display = inSpiel ? "" : "none";
   $("#btnExport").style.display = inSpiel ? "" : "none";
-  if(inSpiel) $("#hJahr").innerHTML = `Anno <b>${G.jahr}</b>`;
+  if(inSpiel) $("#hJahr").innerHTML = `Anno <b>${G.jahr}</b>${MP&&MP.aktiv?' · 🌐':''}`;
   const turnScreens = ["status","korn","handel","zwbilanz","steuern","bauen","kriegPlan","diplomatie","schlacht","kriegErgebnis","kriegAbbruch"];
   const p = inSpiel ? cur() : null;
   $("#hSpieler").style.display = (inSpiel && p && !p.tot && turnScreens.concat(["bilanz"]).includes(G.screen)) ? "" : "none";
@@ -2342,6 +2843,30 @@ function chronikChart(p){
       <span style="margin-left:12px">· ${c[0].j}–${letzt.j}, je auf eigenen Bereich skaliert</span>
     </p>`;
 }
+/* Vergleichskurven aller Reiche (Untertanen) */
+function vergleichsChart(){
+  const teilnehmer = G.spieler.filter(p=>(p.chronik||[]).length>=2);
+  if(teilnehmer.length < 2) return "";
+  const max = Math.max(1, ...teilnehmer.flatMap(p=>p.chronik.map(e=>e.pop)));
+  const j0 = Math.min(...teilnehmer.map(p=>p.chronik[0].j));
+  const j1 = Math.max(...teilnehmer.map(p=>p.chronik[p.chronik.length-1].j));
+  const w = 640, h = 160;
+  const linien = teilnehmer.map(p=>{
+    const pts = p.chronik.map(e=>
+      `${((e.j-j0)/Math.max(1,j1-j0)*w).toFixed(1)},${(h-10-(e.pop/max)*(h-24)).toFixed(1)}`);
+    return `<polyline points="${pts.join(" ")}" fill="none" stroke="${p.farbe}" stroke-width="2.4" stroke-linejoin="round" opacity=".92"/>`;
+  }).join("");
+  const legende = teilnehmer.map(p=>
+    `<span style="margin-right:14px"><span class="dot" style="background:${p.farbe}"></span>${p.wappen} ${p.name}</span>`).join("");
+  return `<div class="card">
+    <h3>Untertanen im Vergleich · ${j0}–${j1}</h3>
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block">
+      <line x1="0" y1="${h-10}" x2="${w}" y2="${h-10}" stroke="#2a3446"/>
+      ${linien}
+    </svg>
+    <p class="muted small" style="margin-top:6px">${legende} · Spitze: ${fmt(max)} Untertanen</p>
+  </div>`;
+}
 function deltaBadge(v, einheit=""){
   if(v===undefined || v===null || v===0 || !isFinite(v)) return "";
   return v>0 ? `<span class="up">▲ ${fmt(v)}${einheit}</span>` : `<span class="down">▼ ${fmt(Math.abs(v))}${einheit}</span>`;
@@ -2374,6 +2899,7 @@ const SCREENS = {
     <div class="center">
       <button class="btn-primary btn-lg" onclick="zeige('setup')">Neues Spiel</button>
       ${hatQuicksave()?`<button class="btn-lg" onclick="quickload()">Fortsetzen</button>`:""}
+      <button class="btn-lg" onclick="zeige('online')">🌐 Online spielen</button>
       <button class="btn-lg" onclick="$('#importFile').click()">Spielstand laden</button>
       <button class="btn-lg" onclick="zeige('erfolge')">🏅 Erfolge (${erfolge().size}/${ERFOLGE.length})</button>
     </div>`;
@@ -2428,6 +2954,7 @@ const SCREENS = {
             <select id="tempo" style="width:100%">
               <option value="1">Original — Leben bis ca. 1760–1768 (lange Partie)</option>
               <option value="1.8" selected>Kurzspiel — schnelleres Wachstum, Leben bis ca. 1739–1746</option>
+              <option value="2.6">Blitz — für einen Abend: rasantes Wachstum, Leben bis ca. 1721–1726</option>
             </select>
           </div>
           <div class="rowflex">
@@ -2474,9 +3001,97 @@ const SCREENS = {
         <p class="muted small zer z4" style="margin-top:10px">Wer zuerst Kathedrale, fünf Städte, 25.000 Hektar und
         100.000 Taler vereint, trägt die Krone — doch die Lebenszeit verrinnt.</p>
         <div class="zer z5" style="margin-top:22px">
-          <button class="btn-primary btn-lg" onclick="zeige('handoff')">Der Aufstieg beginnt</button>
+          <button class="btn-primary btn-lg" onclick="MP&&MP.aktiv?mpRoute():zeige('handoff')">Der Aufstieg beginnt</button>
         </div>
       </div>`;
+  },
+
+  online(){
+    return `
+      <h2>🌐 Online spielen</h2>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Euer Name</h3>
+          <input type="text" id="mpName" maxlength="14" value="${(MP&&MP.name)||"" }" placeholder="Regentenname">
+          <p class="muted small" style="margin-top:10px">Alle Mitspieler brauchen nur diese Seite
+          und den Raum-Code — gespielt wird reihum, jeder an seinem Gerät.</p>
+        </div>
+        <div class="card">
+          <h3>Raum</h3>
+          <div class="rowflex"><button class="btn-primary" onclick="mpHost()">Raum eröffnen</button></div>
+          <div class="rowflex" style="margin-top:10px">
+            <input type="text" id="mpCode" maxlength="6" placeholder="CODE" style="width:110px;text-transform:uppercase">
+            <button onclick="mpBeitritt()">Beitreten</button>
+          </div>
+          <details style="margin-top:10px"><summary class="muted small">Eigener Server</summary>
+            <input type="text" id="mpUrl" placeholder="${MP_STANDARD}" style="width:100%;margin-top:6px">
+          </details>
+          <p class="muted small" style="margin-top:8px">Hinweis: Der Gratis-Server schläft bei
+          Inaktivität — der erste Verbindungsaufbau kann bis zu einer Minute dauern.</p>
+        </div>
+      </div>
+      <button class="btn-lg" onclick="zeige('title')">Zurück</button>`;
+  },
+
+  lobby(){
+    const zeilen = (MP.roster||[]).map((r,i)=>`
+      <tr><td>${WAPPEN[i%WAPPEN.length]} ${r.name}</td>
+      <td class="r muted small">${r.host?"Gastgeber":"bereit"}${r.id===MP.id?" · Ihr":""}</td></tr>`).join("");
+    return `
+      <h2>🌐 Lobby — Raum <span class="gold">${MP.code}</span></h2>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Angetreten (${(MP.roster||[]).length}/9)</h3>
+          <table>${zeilen}</table>
+          <p class="muted small" style="margin-top:8px">Gebt den Code <b class="gold">${MP.code}</b>
+          an Eure Mitspieler weiter. Die Reihenfolge hier ist die Sitzordnung (= Nachbarschaft).</p>
+        </div>
+        <div class="card">
+          <h3>Partie</h3>
+          ${MP.host ? `
+            <div class="rowflex"><select id="mpTempo" style="width:100%">
+              <option value="1">Original — lange Partie</option>
+              <option value="1.8" selected>Kurzspiel</option>
+              <option value="2.6">Blitz — für einen Abend</option>
+            </select></div>
+            <div class="rowflex"><select id="mpDiff" style="width:100%">
+              <option value="1">Leicht</option><option value="2" selected>Normal</option><option value="3">Schwer</option>
+            </select></div>
+            <div class="rowflex">KI-Regenten dazu:
+              <input type="number" id="mpKis" min="0" max="7" value="0" style="width:70px">
+            </div>
+            <button class="btn-primary btn-lg" onclick="mpStart()" ${(MP.roster||[]).length<1?'disabled':''}>Partie starten</button>`
+          : `<p class="muted">Der Gastgeber wählt die Regeln und startet die Partie …</p>`}
+        </div>
+      </div>
+      <button onclick="mpVerlassen()">Lobby verlassen</button>`;
+  },
+
+  warten(){
+    const pend = G._pend;
+    const wer = pend ? G.spieler[pend.fuer] : cur();
+    const was = pend
+      ? (pend.typ==="diplo" ? "entscheidet über eine Kriegs-Botschaft"
+        : pend.typ==="aufD" ? "stellt heimlich die Verteidigung auf"
+        : pend.typ==="schlacht" || pend.typ==="schlachtplan" ? "führt eine Schlacht"
+        : "ist am Zug")
+      : "ist am Zug";
+    const rang = [...G.spieler].sort((a,b)=>score(b)-score(a));
+    const zeilen = rang.map(s=>`
+      <tr><td><span class="dot" style="background:${s.farbe}"></span>${s.wappen} ${titelName(s)} ${s.name}${s.tot?" †":""}</td>
+      <td class="r">${fmt(s.land)} ha</td><td class="r">${fmt(s.pop)}</td><td class="r">${staedte(s)}</td></tr>`).join("");
+    return `
+      <div class="hero" style="padding-bottom:16px">
+        <span class="schild" style="box-shadow:inset 0 0 26px ${wer?wer.farbe:'#888'}66">${wer?wer.wappen:"⏳"}</span>
+        <h1 style="font-size:28px;margin-top:12px">Anno ${G.jahr}</h1>
+        <p style="font-size:17px;margin:12px 0 4px"><b class="gold">${wer?titelName(wer)+" "+wer.name:"…"}</b> ${was} …</p>
+        <p class="muted small blink">Bitte warten — Euer Zug kommt.</p>
+      </div>
+      <div class="card" style="max-width:640px;margin:0 auto">
+        <h3>Die Reiche im Vergleich</h3>
+        <table><tr><th>Regent</th><th class="r">Land</th><th class="r">Untertanen</th><th class="r">Städte</th></tr>${zeilen}</table>
+      </div>
+      <div class="center" style="margin-top:10px"><button class="btn-sm" onclick="mpVerlassen()">Partie verlassen</button></div>`;
   },
 
   handoff(){
@@ -2891,7 +3506,7 @@ const SCREENS = {
     return `
       <h2>⚔️ Schlacht um ${ver.name}s Land</h2>
       <span class="phasebadge">Gefecht ${Math.min(s.tick,s.maxTicks)}/${s.maxTicks} · fünf Abschnitte</span>
-      <canvas id="feld" width="900" height="330"></canvas>
+      <canvas id="feld" width="900" height="380"></canvas>
       <div class="battlefield">
         <div>
           ${seite("A", `Angreifer: ${ang.name}`, s.helferA, s.moralA)}
@@ -2909,6 +3524,7 @@ const SCREENS = {
       ${s.fertig
         ? `<div class="card" style="border-color:${s.sieger==='A'?'var(--green)':'var(--red)'}">
              <p class="${s.sieger==='A'?'green':'red'}" style="font-size:17px;font-weight:700">${s.ergebnis}</p>
+             ${s.plünder?`<p class="small" style="margin-top:6px">🔥 ${s.plünder}</p>`:""}
              <table style="margin-top:10px">
                <tr><th></th><th class="r">Angreifer</th><th class="r">Verteidiger</th></tr>
                <tr><td>Ausgerückt</td><td class="r">${fmt(s.startG.A)}</td><td class="r">${fmt(s.startG.D)}</td></tr>
@@ -2959,7 +3575,7 @@ const SCREENS = {
 
   befoerderung(){
     const p = cur();
-    if(p.titel===8){ G.sieger = p; }
+    if(p.titel===8){ G.sieger = p; mpSync(); }
     setTimeout(()=>{ konfetti(p.titel===8?140:70); (p.titel===8?sKroenung:sFanfare)(); }, 150);
     return `
       <div class="hero" style="padding-top:34px">
@@ -3106,7 +3722,10 @@ const SCREENS = {
           Nicht-Nachbarn erreicht Ihr nur mit Durchmarschrechten. Vor der Schlacht stellen
           beide Seiten ihre Truppen geheim auf fünf Abschnitten auf: Artillerie feuert aus
           der Tiefe, Kavallerie stürmt schneller, leere Abschnitte laden zum Flankendurchbruch
-          ein. Mitspieler können Truppen leihen. Sinkt die Moral unter 30 %, flieht das Heer.</p>
+          ein. Mitspieler können Truppen leihen. Sinkt die Moral unter 30 %, flieht das Heer.
+          Je mehr Abschnitte der Angreifer räumt, desto tiefer dringt er ein — und plündert
+          Märkte, Mühlen, Korn und sogar Palast- und Dom-Teile des Verteidigers.
+          Steuerung auch per Gamepad: Steuerkreuz wählt, A drückt.</p>
         </div>
       </div>
       <button class="btn-primary btn-lg" onclick="hilfeZu()">Zurück zum Spiel</button>`;
@@ -3131,6 +3750,7 @@ const SCREENS = {
           ${rows}
         </table>
       </div>
+      ${vergleichsChart()}
       ${charts?`<h3 style="margin:14px 0 8px">Die Regierungsjahre im Rückblick</h3><div class="grid g2">${charts}</div>`:""}
       <button class="btn-primary btn-lg" onclick="G.spieler=[];zeige('title')">Neues Spiel</button>
       <button class="btn-lg" onclick="erfolgeAuf()">🏅 Erfolge</button>
@@ -3285,6 +3905,161 @@ function hilfeAuf(){
   zeige("hilfe");
 }
 function hilfeZu(){ zeige(G._vorHilfe || "title"); }
+
+/* ============================================================
+   Online-Mehrspieler: WebSocket-Relay, Räume mit Code,
+   rundenbasierte Zustands-Synchronisation
+   ============================================================ */
+const MP_STANDARD = (location.hostname && location.hostname.endsWith("onrender.com"))
+  ? "wss://kaiser-mp.onrender.com"
+  : "ws://localhost:8081";
+let MP = null;
+
+function mpVerbinden(url, beiOffen){
+  try{
+    const ws = new WebSocket(url || MP_STANDARD);
+    ws.onopen = () => beiOffen(ws);
+    ws.onerror = () => alertMsg("Keine Verbindung zum Spielserver. Gratis-Server brauchen nach einer Pause ~1 Minute zum Aufwachen — gleich noch einmal versuchen.");
+    ws.onmessage = ev => { try{ mpNachricht(JSON.parse(ev.data)); }catch(e){} };
+    ws.onclose = () => { if(MP && MP.aktiv){ alertMsg("Verbindung zum Spielserver verloren."); } };
+    return ws;
+  }catch(e){ alertMsg("WebSocket nicht verfügbar."); return null; }
+}
+function mpHost(){
+  const url = $("#mpUrl") ? $("#mpUrl").value.trim() : "";
+  const name = ($("#mpName").value.trim() || "Gastgeber");
+  const ws = mpVerbinden(url, w => w.send(JSON.stringify({t:"neu", name})));
+  if(ws) MP = { ws, name, host:true, roster:[], code:null, id:null, aktiv:false };
+}
+function mpBeitritt(){
+  const url = $("#mpUrl") ? $("#mpUrl").value.trim() : "";
+  const code = $("#mpCode").value.trim().toUpperCase();
+  const name = ($("#mpName").value.trim() || "Gast");
+  if(!code){ alertMsg("Bitte den Raum-Code eingeben."); return; }
+  const ws = mpVerbinden(url, w => w.send(JSON.stringify({t:"beitritt", code, name})));
+  if(ws) MP = { ws, name, host:false, roster:[], code, id:null, aktiv:false };
+}
+function mpVerlassen(){
+  if(MP && MP.ws){ MP.aktiv = false; try{ MP.ws.close(); }catch(e){} }
+  MP = null;
+  G.spieler = [];
+  zeige("title");
+}
+function mpNachricht(m){
+  if(!MP) return;
+  if(m.t === "raum"){ MP.code = m.code; MP.id = m.id; MP.roster = m.roster; zeige("lobby"); }
+  else if(m.t === "roster"){ MP.roster = m.roster; if(G.screen === "lobby") render(); }
+  else if(m.t === "fehler"){ alertMsg(m.text); }
+  else if(m.t === "start"){ mpStartEmpfangen(m); }
+  else if(m.t === "sync"){ mpSyncEmpfangen(m); }
+  else if(m.t === "weg"){ toast("⚠️ Ein Mitspieler hat die Verbindung verloren."); }
+}
+function mpStart(){
+  if(!MP || !MP.host) return;
+  const m = { t:"start", tempo:+$("#mpTempo").value, diff:+$("#mpDiff").value,
+              kis: clamp(+($("#mpKis").value||0), 0, 9-MP.roster.length), roster: MP.roster };
+  MP.ws.send(JSON.stringify(m));
+  mpStartEmpfangen(m);
+}
+function mpStartEmpfangen(m){
+  MP.aktiv = true;
+  MP.zuordnung = {};
+  const namen=[], w=[], kis=[];
+  m.roster.forEach((r,i)=>{ namen.push(r.name); w.push(i%2===1); kis.push(false); MP.zuordnung[i]=r.id; });
+  for(let k=0;k<(m.kis||0);k++){
+    const i = namen.length;
+    namen.push(NAMEN[i%NAMEN.length]); w.push(i%2===1); kis.push(true); MP.zuordnung[i]=null;
+  }
+  starteSpiel(namen.length, namen, w, m.tempo, kis, {vergleich:true, tutorial:true, diff:m.diff});
+  G._pend = null;
+  /* Intro läuft auf allen Geräten; der Weiter-Knopf routet dann über mpRoute() */
+}
+const mpMein = i => !MP || !MP.aktiv || (MP.zuordnung && MP.zuordnung[i] === MP.id);
+let _mpTimer = null;
+function mpSync(){
+  if(!MP || !MP.aktiv || !G.spieler.length) return;
+  clearTimeout(_mpTimer);
+  _mpTimer = setTimeout(()=>{
+    if(!MP || !MP.aktiv) return;
+    try{
+      MP.ws.send(JSON.stringify({
+        t:"sync", state: spielstand(), kr: G._kr || null, pend: G._pend || null,
+        hint: (G.screen==="ende"||G.screen==="sieg") ? G.screen : null,
+        sieger: G.sieger ? G.spieler.indexOf(G.sieger) : -1,
+        zuordnung: MP.zuordnung
+      }));
+    }catch(e){}
+  }, 120);
+}
+function mpSyncEmpfangen(m){
+  if(!MP) return;
+  MP.aktiv = true;
+  MP._anwenden = true;
+  try{
+    const d = JSON.parse(m.state);
+    G.jahr = d.jahr; G.tempo = d.tempo; G.aktiv = d.aktiv; G.spieler = d.spieler;
+    G.opt = d.opt || G.opt; G.diff = d.diff || 2; G.tipps = d.tipps || {};
+    G.spieler.forEach((p,i)=>{
+      if(!p.heer) p.heer = {inf:0,kav:0,art:0};
+      if(!p.gebaeude) p.gebaeude = [];
+      if(!p.chronik) p.chronik = [];
+      if(!p.kornHist) p.kornHist = [];
+    });
+    if(m.zuordnung) MP.zuordnung = m.zuordnung;
+    G._kr = m.kr || null;
+    G._pend = m.pend || null;
+    G.sieger = (m.sieger>=0) ? G.spieler[m.sieger] : null;
+    if(m.hint){ zeige(m.hint); MP._anwenden = false; return; }
+    mpRoute();
+  }finally{ MP._anwenden = false; }
+}
+function mpRoute(){
+  if(!MP || !MP.aktiv) return;
+  const pend = G._pend;
+  if(pend){
+    if(mpMein(pend.fuer)){
+      G._pend = null;
+      if(pend.typ === "diplo") zeige("diplomatie");
+      else if(pend.typ === "schlachtplan"){ G._aufW = [2,2,2,2,2]; zeige("aufstellungA"); }
+      else if(pend.typ === "aufD"){ G._aufW = [2,2,2,2,2]; zeige("aufstellungD"); }
+      else if(pend.typ === "schlacht") schlachtStarten();
+      else if(pend.typ === "kriegAbbruch") zeige("kriegAbbruch");
+    } else zeige("warten");
+    return;
+  }
+  if(alleTot()){ zeige("ende"); return; }
+  if(mpMein(G.aktiv)) zeige(cur().tot ? "tod" : "handoff");
+  else zeige("warten");
+}
+function mpPend(typ, fuer){
+  G._pend = { typ, fuer };
+  mpSync();
+  zeige("warten");
+}
+
+/* ---------- Gamepad: Steuerkreuz navigiert, A drückt ---------- */
+setInterval(()=>{
+  try{
+    const gp = navigator.getGamepads && navigator.getGamepads()[0];
+    if(!gp) return;
+    const jetzt = performance.now();
+    if(jetzt < (G._padCd||0)) return;
+    const knoepfe = [...document.querySelectorAll("#screen button:not(:disabled)")];
+    if(!knoepfe.length) return;
+    const idx = knoepfe.indexOf(document.activeElement);
+    const l = (gp.buttons[14]&&gp.buttons[14].pressed) || gp.axes[0] < -0.6;
+    const r = (gp.buttons[15]&&gp.buttons[15].pressed) || gp.axes[0] >  0.6;
+    const o = (gp.buttons[12]&&gp.buttons[12].pressed) || gp.axes[1] < -0.6;
+    const u = (gp.buttons[13]&&gp.buttons[13].pressed) || gp.axes[1] >  0.6;
+    if(r || u){ knoepfe[(idx+1+knoepfe.length)%knoepfe.length].focus(); G._padCd = jetzt+220; }
+    else if(l || o){ knoepfe[(idx-1+knoepfe.length)%knoepfe.length].focus(); G._padCd = jetzt+220; }
+    else if(gp.buttons[0] && gp.buttons[0].pressed){
+      const ziel = knoepfe.includes(document.activeElement)
+        ? document.activeElement : $("#screen .btn-primary");
+      if(ziel && !ziel.disabled){ ziel.click(); G._padCd = jetzt+380; }
+    }
+  }catch(e){}
+}, 60);
 
 /* ---------- Tastatur: Enter = Hauptaktion ---------- */
 document.addEventListener("keydown", e => {

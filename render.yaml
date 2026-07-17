@@ -11,3 +11,9 @@ services:
       - path: /*
         name: Cache-Control
         value: no-cache
+  - type: web
+    name: kaiser-mp
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js

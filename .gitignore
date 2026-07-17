@@ -1,9 +1,8 @@
 node_modules/
-package.json
-package-lock.json
 *.png
 test*.mjs
 shots.mjs
 *.zip
 shots*.mjs
 !icon-*.png
+package-lock.json
