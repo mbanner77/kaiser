@@ -2178,6 +2178,9 @@ const SCREENS = {
           </table>
           <p class="muted small" style="margin-top:6px">Unterhalt: <b>${fmt(unterhalt(p))} T/Jahr</b>
             — der Sold steigt mit Eurem Rang (+10 % je Titel).</p>
+          ${p.titel<1?`<div class="event bad" style="margin-top:8px">⚠️ Als einfache${p.w?"":"r"} ${titelName(p)} dürft
+            Ihr noch keinen Krieg erklären — erst ab dem Rang <b>Baron</b> (${BEDINGUNGEN[1].txt}).
+            Söldner kosten bis dahin nur Sold!</div>`:""}
           ${heerGroesse(p.heer)>0?`<button class="btn-sm" onclick="entlassen()">Heer auflösen</button>`:""}
         </div>
       </div>
@@ -2185,7 +2188,7 @@ const SCREENS = {
       <button class="btn-danger" onclick="zeige('kriegPlan')" ${kriegOk?'':'disabled'}>⚔️ Krieg führen</button>
       <button onclick="weltAuf()">🗺️ Gesamtkarte</button>
       <button class="btn-primary btn-lg" onclick="jahrAbschliessen()">Jahr abschließen</button>
-      ${!kriegOk?`<p class="muted small">⚔️ Für einen Feldzug fehlt Euch noch: ${kannKrieg(p).fehlt.join(" · ")}.</p>`:''}`;
+      ${!kriegOk?`<div class="event bad" style="max-width:640px">⚔️ <b>Für einen Feldzug fehlt Euch noch:</b> ${kannKrieg(p).fehlt.join(" · ")}.</div>`:''}`;
   },
 
   kriegPlan(){
