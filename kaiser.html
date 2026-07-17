@@ -288,7 +288,7 @@
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser v1.6 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v1.7 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <script>
@@ -489,6 +489,7 @@ function sVogel(){
   }catch(e){}
 }
 const sWind = () => rausch(2.2, 0, 0.028, true);
+const sDonner = () => { rausch(1.4, 0, 0.2, true, true); beep(45, 1.1, 0.05, "sine", 0.14); };
 /* Ambiente-Bett auf den Karten-Bildschirmen */
 setInterval(()=>{
   if(muted || document.hidden) return;
@@ -884,6 +885,10 @@ const sRestTyp = (s,seite,typ) => s.lanes.reduce((a,l)=>a+l[seite][typ],0);
 function einTick(s, leise){
   s.tick++;
   const jetzt = performance.now();
+  /* Verlauf für das Zeitraffer-Replay aufzeichnen */
+  s.verlauf = s.verlauf || [];
+  if(s.verlauf.length < 60)
+    s.verlauf.push(s.lanes.map(l=>({ dist:l.dist, A:{...l.A}, D:{...l.D} })));
   let gefA = 0, gefD = 0;
   s.lanes.forEach((lane,i)=>{
     const a = lane.A, d = lane.D;
@@ -993,6 +998,38 @@ function schlachtUeberspringen(){
   while(!s.fertig) einTick(s, true);
   schlachtAbschliessen();
   render();
+}
+/* Zeitraffer-Replay der geschlagenen Schlacht */
+function replayStarten(){
+  const s = G._s;
+  if(!s || !s.fertig || !s.verlauf || s.replayAktiv) return;
+  s.replayAktiv = true;
+  s._lanesEcht = s.lanes;
+  s.partikel = [];
+  let idx = 0, vorher = null;
+  const iv = setInterval(()=>{
+    if(idx >= s.verlauf.length || G.screen !== "schlacht"){
+      clearInterval(iv);
+      s.lanes = s._lanesEcht;
+      s.replayAktiv = false;
+      if(G.screen === "schlacht") zeichneFeld(performance.now());
+      return;
+    }
+    const frame = s.verlauf[idx];
+    /* Explosionen dort, wo Verluste passierten */
+    if(vorher){
+      frame.forEach((l,i)=>{
+        const verlust = (laneGroesse(vorher[i].A)+laneGroesse(vorher[i].D))
+                      - (laneGroesse(l.A)+laneGroesse(l.D));
+        if(verlust > 0)
+          s.partikel.push({ typ:"boom", rx:0.5+rf(-0.04,0.04), ry:0.30+(i+0.5)*0.135, born:performance.now() });
+      });
+    }
+    s.lanes = frame.map(f=>({ dist:f.dist, A:{...f.A}, D:{...f.D} }));
+    vorher = frame;
+    idx++;
+    zeichneFeld(performance.now());
+  }, 150);
 }
 /* ---------- Regenten-Porträt (prozedural: Rang, Geschlecht, Alter) ---------- */
 function zeichnePortraet(cid, p){
@@ -1613,6 +1650,94 @@ function zeichneWelt(t=0){
   ctx.fillStyle = "#dbe2ee"; ctx.font = "600 12px sans-serif"; ctx.textAlign = "left";
   ctx.fillText(`Die bekannte Welt · Anno ${G.jahr} · ${saison().n}`, 18, H-15);
 }
+/* Animierte Wetterszene für die Jahresbilanz */
+function zeichneWetter(t=0){
+  const c = document.getElementById("wetterBild");
+  const p = cur();
+  if(!c || !p || !p.report) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  const f = p.report.wetter.f;
+  const art = f<=0.6 ? "duerre" : f<=0.85 ? "regen" : f<1.12 ? "wechsel" : f<1.3 ? "gut" : "pracht";
+  ctx.clearRect(0,0,W,H);
+  const himmel = ctx.createLinearGradient(0,0,0,H);
+  if(art==="duerre"){ himmel.addColorStop(0,"#7a5c30"); himmel.addColorStop(1,"#8a6a38"); }
+  else if(art==="regen"){ himmel.addColorStop(0,"#28313f"); himmel.addColorStop(1,"#39434f"); }
+  else if(art==="wechsel"){ himmel.addColorStop(0,"#3a4456"); himmel.addColorStop(1,"#55607a"); }
+  else { himmel.addColorStop(0,"#3d4a68"); himmel.addColorStop(1,"#7a6a48"); }
+  ctx.fillStyle = himmel; ctx.fillRect(0,0,W,H);
+  /* Hügelkamm */
+  ctx.fillStyle = art==="duerre" ? "#5c4a26" : "#22301f";
+  ctx.beginPath(); ctx.moveTo(0,H);
+  ctx.quadraticCurveTo(W*0.3, H-26, W*0.55, H-14);
+  ctx.quadraticCurveTo(W*0.8, H-4, W, H-18);
+  ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+  if(art==="duerre"){
+    /* gleißende Sonne mit Hitzeflimmern */
+    const sx = W*0.78, sy = H*0.35;
+    const grad = ctx.createRadialGradient(sx,sy,2,sx,sy,34);
+    grad.addColorStop(0,"#fff0c0"); grad.addColorStop(0.6,"#e8c05a"); grad.addColorStop(1,"rgba(232,192,90,0)");
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(sx,sy,34,0,7); ctx.fill();
+    ctx.strokeStyle = "rgba(255,240,200,.25)"; ctx.lineWidth = 1.5;
+    for(let i=0;i<8;i++){
+      const x0 = W*0.08 + i*W*0.11;
+      ctx.beginPath();
+      for(let y=H-16; y>H*0.45; y-=6)
+        ctx.lineTo(x0 + Math.sin(y/9 + t/160 + i)*3.5, y);
+      ctx.stroke();
+    }
+  } else if(art==="regen" || art==="wechsel"){
+    /* Wolkenbänke */
+    ctx.fillStyle = "rgba(210,214,224,.16)";
+    for(let i=0;i<5;i++){
+      const wx = ((t/(60+i*18) + i*220) % (W+240)) - 120;
+      for(let b=0;b<4;b++){ ctx.beginPath(); ctx.arc(wx+b*30, 22+i*7+(b%2)*6, 18+(b%3)*7, 0, 7); ctx.fill(); }
+    }
+    if(art==="regen"){
+      ctx.strokeStyle = "rgba(170,200,230,.45)"; ctx.lineWidth = 1.3;
+      for(let i=0;i<46;i++){
+        const seed = ((i*61)%97)/97;
+        const rx2 = (seed*W + t/(2.2+seed)) % W;
+        const ry2 = (t/(3+seed*2) + i*37) % H;
+        ctx.beginPath(); ctx.moveTo(rx2, ry2); ctx.lineTo(rx2-3, ry2+11); ctx.stroke();
+      }
+      /* Blitz alle paar Sekunden */
+      const blitzPhase = (t % 4200);
+      if(blitzPhase < 160){
+        ctx.fillStyle = `rgba(255,255,240,${0.35*(1-blitzPhase/160)})`;
+        ctx.fillRect(0,0,W,H);
+        const bx = W*0.3 + (Math.floor(t/4200)%3)*W*0.2;
+        ctx.strokeStyle = "#fff8d0"; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(bx, 6);
+        ctx.lineTo(bx-8, H*0.35); ctx.lineTo(bx+4, H*0.4); ctx.lineTo(bx-6, H*0.75);
+        ctx.stroke();
+      }
+    }
+  } else {
+    /* goldene Strahlen und Sonne */
+    const sx = W*0.72, sy = H*0.4;
+    ctx.save(); ctx.translate(sx,sy); ctx.rotate(t/9000);
+    ctx.fillStyle = art==="pracht" ? "rgba(255,220,120,.10)" : "rgba(230,205,140,.07)";
+    for(let i=0;i<10;i++){ ctx.rotate(Math.PI/5); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(190,-18); ctx.lineTo(190,18); ctx.closePath(); ctx.fill(); }
+    ctx.restore();
+    const grad = ctx.createRadialGradient(sx,sy,3,sx,sy,30);
+    grad.addColorStop(0,"#fff3cf"); grad.addColorStop(0.6,"#e0b458"); grad.addColorStop(1,"rgba(224,180,88,0)");
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(sx,sy,30,0,7); ctx.fill();
+    if(art==="pracht"){
+      ctx.strokeStyle = "rgba(200,205,220,.5)"; ctx.lineWidth = 1.5;
+      for(let i=0;i<2;i++){
+        const vx = ((t/(26+i*9) + i*300) % (W+60)) - 30;
+        const vy = 26 + i*16 + Math.sin(t/400+i)*5;
+        ctx.beginPath(); ctx.moveTo(vx-5,vy); ctx.quadraticCurveTo(vx-1.5,vy-3.5,vx,vy);
+        ctx.quadraticCurveTo(vx+1.5,vy-3.5,vx+5,vy); ctx.stroke();
+      }
+    }
+  }
+  /* Textzeile */
+  ctx.fillStyle = "rgba(13,17,23,.72)"; ctx.fillRect(10, H-28, 300, 20);
+  ctx.fillStyle = "#dbe2ee"; ctx.font = "600 12px sans-serif"; ctx.textAlign = "left";
+  ctx.fillText(`${p.report.wetter.ico} ${p.report.wetter.t}`, 16, H-14);
+}
 function weltAuf(){ G._vorWelt = G.screen; zeige("welt"); }
 function weltZu(){ zeige(G._vorWelt || "status"); }
 function angreifenAus(i){ G._zielVorwahl = i; zeige("kriegPlan"); }
@@ -1767,9 +1892,14 @@ function zeichneFeld(t=0){
   }
   if(s.partikel) s.partikel = s.partikel.filter(pk => jetzt - pk.born < (pk.typ==="gefallen" ? 4200 : 1900));
   /* Weisse Flagge */
-  if(s.fertig){
+  if(s.fertig && !s.replayAktiv){
     ctx.font = "22px sans-serif"; ctx.textAlign = "center";
     ctx.fillText("🏳️", s.sieger==="A" ? W*0.8 : W*0.2, H*0.16);
+  }
+  if(s.replayAktiv){
+    ctx.fillStyle = "rgba(13,17,23,.72)"; ctx.fillRect(10, 10, 158, 24);
+    ctx.fillStyle = "#e0b458"; ctx.font = "600 13px sans-serif"; ctx.textAlign = "left";
+    ctx.fillText("🎞️ Zeitraffer läuft …", 18, 27);
   }
 }
 /* Vorschau der eigenen Aufstellung (Platzierungs-Bildschirm) */
@@ -2049,6 +2179,7 @@ function beginneZug(){
   p.ausgabe = 0;
   p.turnStart = Date.now();
   G._kiBerichte = [];
+  G._donnerte = false;
   zeige("status");
 }
 function naechsterSpieler(){
@@ -2148,6 +2279,12 @@ function render(){
   if(G.screen === "bauen") zeichneKarte(cur(), "karte");
   if(G.screen === "status"){ zeichneKarte(cur(), "karteS"); zeichnePortraet("portraitS", cur()); }
   if(G.screen === "welt") zeichneWelt();
+  if(G.screen === "bilanz"){
+    zeichneWetter();
+    const f = cur().report ? cur().report.wetter.f : 1;
+    if(f <= 0.85 && f > 0.6 && !G._donnerte){ G._donnerte = true; setTimeout(sDonner, 600); }
+    if(f > 0.85 || f <= 0.6) G._donnerte = false;
+  }
   if(G.screen === "befoerderung") zeichnePortraet("portraitB", cur());
   if(G.screen === "sieg" && G.sieger) zeichnePortraet("portraitK", G.sieger);
   if(G.screen === "tod") zeichnePortraet("portraitT", cur());
@@ -2780,7 +2917,8 @@ const SCREENS = {
                    <td class="r red">${fmt(s.startG.D-restD)}</td></tr>
              </table>
            </div>
-           <button class="btn-primary btn-lg" onclick="zeige('bauen')">Weiter</button>`
+           <button class="btn-primary btn-lg" onclick="zeige('bauen')">Weiter</button>
+           <button class="btn-lg" onclick="replayStarten()">🎞️ Replay ansehen</button>`
         : `<button class="btn-lg" onclick="schlachtUeberspringen()">Schlacht überspringen ⏩</button>`}`;
   },
 
@@ -2792,9 +2930,7 @@ const SCREENS = {
     return `
       ${stepper("Bilanz")}
       <h2>Jahresbilanz Anno ${G.jahr}</h2>
-      <div class="event ${r.wetter.f>=1.1?'good':r.wetter.f<=0.8?'bad':''}">
-        <span class="wetter-ico">${r.wetter.ico}</span> <b>Wetter:</b> ${r.wetter.t}
-      </div>
+      <canvas id="wetterBild" width="920" height="110" style="width:100%;border-radius:12px;border:1px solid var(--border);margin-bottom:10px"></canvas>
       ${evHtml}
       <div class="grid g2">
         <div class="card">
@@ -3169,8 +3305,9 @@ function animLoop(t){
   if(G.screen === "title")        zeichneTitel(t);
   else if(G.screen === "bauen")   zeichneKarte(cur(), "karte", t);
   else if(G.screen === "status")  zeichneKarte(cur(), "karteS", t);
-  else if(G.screen === "schlacht") zeichneFeld(t);
+  else if(G.screen === "schlacht"){ if(!(G._s && G._s.replayAktiv)) zeichneFeld(t); }
   else if(G.screen === "welt")    zeichneWelt(t);
+  else if(G.screen === "bilanz")  zeichneWetter(t);
 }
 requestAnimationFrame(animLoop);
 

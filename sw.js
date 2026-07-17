@@ -1,6 +1,6 @@
 /* Kaiser PWA Service Worker — Netzwerk zuerst für die Seite (immer aktuelle
    Version), Cache als Offline-Fallback; Assets stale-while-revalidate. */
-const CACHE = "kaiser-v5";
+const CACHE = "kaiser-v6";
 const DATEIEN = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(DATEIEN)).then(() => self.skipWaiting()));
