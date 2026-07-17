@@ -151,3 +151,28 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
   Raum-Code und demselben Namen steigen Spieler jederzeit wieder ein, auch
   Tage später — niemand muss gleichzeitig online sein (Sitzbindung über Namen,
   Rückkehrer werden automatisch erkannt); vier neue Erfolge (21 gesamt)
+
+## Version 2.4 — Reichstag, Lehrjahre und die belagerte Mauer
+
+- **Festungen im Schlachtbild**: Stadtmauer mit Zinnen und Burg des Verteidigers
+  werden auf dem Schlachtfeld gezeichnet — nach Beschuss klaffen Breschen mit
+  Trümmern, Artillerie-Einschläge stauben im Mauerwerk, dazu dumpfe
+  Belagerungsklänge und ein eigener Belagerungs-Marsch
+- **Ereignisketten**: Hof-Entscheidungen wirken Jahre später nach — geduldete
+  Räuber verschanzen sich im Wald, gespeiste Bettler bringen dankbare Siedler,
+  abgewiesene bringen Aufruhr, Feste locken Mäzene, geflickte Deiche brechen erneut
+- **Der Reichstag**: alle zehn Jahre Abstimmung mit Stimmgewicht nach Rang —
+  Reichsfrieden (2 Jahre Kriegsverbot), Reichssteuer (5 % ans ärmste Reich) oder
+  Handelsprivileg (+50 % Routenzoll); Gegenstimmen lassen sich kaufen, die KI
+  stimmt nach Interesse
+- **Partien-Browser & Beobachter**: Räume lassen sich öffentlich listen und im
+  Browser durchstöbern; Zuschauer verfolgen Partien live ohne mitzuspielen;
+  „Meine Partien" merkt sich laufende Runden für den Ein-Klick-Wiedereinstieg
+- **Mobile-Optimierung**: daumengroße Touch-Ziele, einspaltiges Layout,
+  scrollbarer Phasen-Stepper, 16-px-Eingaben gegen Auto-Zoom, PWA-Installationshinweis
+- **Die Lehrjahre**: geführtes Tutorial — Meister Konrad stellt zehn Aufgaben
+  von der Kornausgabe bis zur Heerwerbung, mit Fortschrittsbanner und Abschlussfeier
+- **Klangausbau**: jahreszeitliches Ambiente (Vögel, Wind), Mühlenklappern und
+  Hafenglocke aus dem eigenen Reich, Trauergeläut, Marschtrommeln vor den Toren
+- **Partie-Replay**: die ganze Regentschaft als Jahres-Zeitraffer — wachsende
+  und schrumpfende Reiche, mitlaufende Chronik, Geschwindigkeitsregler

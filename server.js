@@ -23,6 +23,7 @@ try {
   const roh = JSON.parse(fs.readFileSync(RAUM_DATEI, "utf8"));
   for (const r of roh) {
     raeume.set(r.code, { clients: new Map(), hostId: null, pass: r.pass || "",
+      oeffentlich: !!r.oeffentlich,
       gestartet: !!r.gestartet, startMsg: r.startMsg || null, syncMsg: r.syncMsg || null,
       zuletzt: r.zuletzt || Date.now() });
   }
@@ -34,7 +35,7 @@ function raeumeSpeichern(){
     const roh = [];
     for (const [code, r] of raeume) {
       if (!r.gestartet) continue;                 /* nur laufende Partien sichern */
-      roh.push({ code, pass: r.pass, gestartet: true,
+      roh.push({ code, pass: r.pass, gestartet: true, oeffentlich: !!r.oeffentlich,
         startMsg: r.startMsg, syncMsg: r.syncMsg, zuletzt: r.zuletzt });
     }
     try { fs.writeFileSync(RAUM_DATEI, JSON.stringify(roh)); } catch (e) {}
@@ -61,7 +62,7 @@ const neuerCode = () => Array.from({ length: 6 }, () => ZEICHEN[Math.floor(Math.
 
 function sende(ws, obj){ try { ws.send(JSON.stringify(obj)); } catch (e) {} }
 function roster(raum){
-  return [...raum.clients.entries()].map(([id, c]) => ({ id, name: c.name, host: id === raum.hostId }));
+  return [...raum.clients.entries()].map(([id, c]) => ({ id, name: c.name, host: id === raum.hostId, z: !!c.z }));
 }
 function broadcast(raum, obj, ausser){
   for (const [id, c] of raum.clients) if (id !== ausser) sende(c.ws, obj);
@@ -89,11 +90,26 @@ wss.on("connection", ws => {
       ranglisteSpeichern();
       return;
     }
+    if (m.t === "raeume") {
+      /* Öffentliche Räume für den Partien-Browser */
+      const liste = [];
+      for (const [code, r] of raeume) {
+        if (!r.oeffentlich) continue;
+        liste.push({ code, gestartet: !!r.gestartet, pass: !!r.pass,
+          namen: [...r.clients.values()].filter(c => !c.z).map(c => c.name).slice(0, 9),
+          zuschauer: [...r.clients.values()].filter(c => c.z).length,
+          zuletzt: r.zuletzt || 0 });
+      }
+      liste.sort((a, b) => b.zuletzt - a.zuletzt);
+      sende(ws, { t: "raeume", liste: liste.slice(0, 20) });
+      return;
+    }
     if (m.t === "neu") {
       let code; do { code = neuerCode(); } while (raeume.has(code));
       meinId = naechsteId++;
       raeume.set(code, { clients: new Map([[meinId, { ws, name: (m.name || "Gastgeber").substring(0, 14) }]]),
         hostId: meinId, pass: (m.pass || "").substring(0, 24),
+        oeffentlich: !!m.oeffentlich,
         gestartet: false, startMsg: null, syncMsg: null, zuletzt: Date.now() });
       raumCode = code;
       sende(ws, { t: "raum", code, id: meinId, roster: roster(raeume.get(code)) });
@@ -103,14 +119,19 @@ wss.on("connection", ws => {
       const raum = raeume.get(code);
       if (!raum) { sende(ws, { t: "fehler", text: "Raum nicht gefunden — Code prüfen." }); return; }
       if (raum.pass && raum.pass !== (m.pass || "")) { sende(ws, { t: "fehler", text: "Falsches Passwort." }); return; }
-      if (raum.clients.size >= 9) { sende(ws, { t: "fehler", text: "Der Raum ist voll (max. 9)." }); return; }
+      const zuschauer = !!m.zuschauer;
+      const sitze = [...raum.clients.values()].filter(c => !c.z).length;
+      const gaeste = [...raum.clients.values()].filter(c => c.z).length;
+      if (!zuschauer && sitze >= 9) { sende(ws, { t: "fehler", text: "Der Raum ist voll (max. 9)." }); return; }
+      if (zuschauer && gaeste >= 5) { sende(ws, { t: "fehler", text: "Zu viele Zuschauer in diesem Raum." }); return; }
       const name = (m.name || "Gast").substring(0, 14);
       for (const [, c] of raum.clients)
         if (c.name === name) { sende(ws, { t: "fehler", text: "Dieser Name ist im Raum bereits vergeben." }); return; }
       meinId = naechsteId++;
       raumCode = code;
-      raum.clients.set(meinId, { ws, name });
-      if (raum.hostId == null || !raum.clients.has(raum.hostId)) raum.hostId = meinId;
+      raum.clients.set(meinId, { ws, name, z: zuschauer });
+      if (!zuschauer && (raum.hostId == null || !raum.clients.has(raum.hostId) ||
+          (raum.clients.get(raum.hostId) && raum.clients.get(raum.hostId).z))) raum.hostId = meinId;
       raum.zuletzt = Date.now();
       sende(ws, { t: "raum", code, id: meinId, roster: roster(raum) });
       broadcast(raum, { t: "roster", roster: roster(raum) }, meinId);
@@ -142,7 +163,10 @@ wss.on("connection", ws => {
       else raeumeSpeichern();
       return;
     }
-    if (raum.hostId === meinId) raum.hostId = raum.clients.keys().next().value;
+    if (raum.hostId === meinId) {
+      const erster = [...raum.clients.entries()].find(([, c]) => !c.z);
+      raum.hostId = erster ? erster[0] : raum.clients.keys().next().value;
+    }
     broadcast(raum, { t: "roster", roster: roster(raum) }, null);
     broadcast(raum, { t: "weg", id: meinId, name: wegName }, null);
   });

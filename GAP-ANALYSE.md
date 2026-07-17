@@ -146,3 +146,9 @@ Belagerungsphase (Sturm/Beschuss/Aushungern) · Heiratspolitik mit Erbansprüche
 Handelsrouten mit Karawanen-Darstellung · Kampagnenmodus in vier Kapiteln ·
 Statistik-Dashboard · asynchroner Online-Mehrspieler (Server speichert Partien,
 Wiedereinstieg per Code + Name).
+
+**Ausbaustufe 5 (v2.4):**
+Festungswerke sichtbar im Schlachtbild (Breschen, Einschläge) · Ereignisketten mit
+Spätfolgen · Reichstag mit gewichteten Abstimmungen und Bestechung · Partien-Browser,
+Beobachtermodus und Partien-Merkliste · Mobile-Layout mit Touch-Zielen ·
+Tutorial „Die Lehrjahre" · jahreszeitliches Klang-Ambiente · Partie-Replay im Zeitraffer.
