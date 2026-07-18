@@ -195,3 +195,18 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
   Überfahren, schwebende Symbole auf den Statuskacheln, Glanzlauf über
   Primärknöpfen und Wappenschilden, einschwebende Toasts mit Goldakzent,
   Zeilen-Hover in Tabellen, einpoppende Veränderungs-Abzeichen
+
+## Version 2.6 — Lebendige Szenen
+
+- **Tag-/Nachtwechsel im Titelbild**: der Himmel durchläuft Abendrot, Nacht,
+  Morgenrot und Tag (~80 s je Umlauf) — nachts steigt ein Sichelmond mit Hof auf,
+  die Sterne funkeln heller und die Burgfenster glühen; tags wandert die Sonne
+- **Reichskarte**: Lastkähne treiben mit Kielwasser den Fluss hinab (mit Häfen
+  mehr Verkehr), Untertanen pendeln sichtbar zwischen Dorf und Bauwerken
+- **Weltkarte**: ein Segelschiff mit geblähtem Segel kreuzt das Weltmeer
+- **Schlacht-Auftakt**: Wappen und Namenszüge beider Heerführer fahren von den
+  Seiten herein und prallen am gekreuzten Schwert aufeinander, ehe das Gefecht beginnt
+- **Übergänge**: Karten schweben nacheinander gestaffelt ein
+  (respektiert »Bewegung reduzieren«), feierliches Pulsleuchten hinter den
+  Porträts bei Beförderung und Krönung, Kornkurs-Sparkline mit Füllverlauf
+  und pulsierendem Endpunkt

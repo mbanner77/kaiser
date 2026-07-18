@@ -63,6 +63,19 @@
   main{max-width:1080px;margin:0 auto;padding:22px 20px 60px;}
   #screen{animation:fadein .28s ease;}
   @keyframes fadein{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  /* Karten schweben nacheinander ein */
+  #screen .card{animation:cardIn .4s cubic-bezier(.2,.9,.3,1) both;}
+  #screen .card:nth-of-type(2){animation-delay:.05s;}
+  #screen .card:nth-of-type(3){animation-delay:.1s;}
+  #screen .card:nth-of-type(4){animation-delay:.15s;}
+  #screen .grid .card:nth-child(1){animation-delay:.04s;}
+  #screen .grid .card:nth-child(2){animation-delay:.1s;}
+  #screen .grid .card:nth-child(3){animation-delay:.16s;}
+  #screen .grid .card:nth-child(4){animation-delay:.22s;}
+  @keyframes cardIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+  @media (prefers-reduced-motion:reduce){
+    #screen, #screen .card, .up, .down, .stat .ico, .schild::after{animation:none !important;}
+  }
   h1{font-size:30px;font-weight:800;margin-bottom:6px;
     font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;letter-spacing:.5px;}
   h2{font-size:21px;font-weight:700;margin-bottom:14px;
@@ -215,6 +228,12 @@
   @keyframes schildGlanz{0%,55%{background-position:160% 0;}80%,100%{background-position:-70% 0;}}
   .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:baseline;}
   .kiber{border-left:3px solid var(--cyan);}
+  /* Feierliches Leuchten hinter den großen Porträts */
+  #portraitB, #portraitK{animation:portraitGlanz 3.2s ease-in-out infinite;}
+  @keyframes portraitGlanz{
+    0%,100%{box-shadow:0 12px 44px rgba(0,0,0,.5), 0 0 34px rgba(224,180,88,.22);}
+    50%{box-shadow:0 12px 44px rgba(0,0,0,.5), 0 0 64px rgba(224,180,88,.45);}
+  }
   .setup-tabelle{table-layout:fixed;width:100%;}
   .setup-tabelle td{padding:4px 3px;overflow:hidden;}
   .setup-tabelle td:first-child{width:26px;}
@@ -351,7 +370,7 @@
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser v2.5 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v2.6 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -1194,6 +1213,7 @@ function schlachtStarten(){
     moralA:100, moralD:100, routA:false, routD:false,
     tick:0, maxTicks:40, log:[], partikel:[], fertig:false, sieger:null, iv:null, still:false
   };
+  G._s.introBis = performance.now() + 2800;
   if(kr.belagerung === "sturm") G._s.log.unshift("⚔️ Sturmangriff auf die Festungswerke — die ersten Reihen zahlen den Blutzoll!");
   if(kr.belagerung === "beschuss") G._s.log.unshift(`💣 Die Artillerie hat Breschen geschossen${kr.mauerZerstoert?" — ein Mauerring liegt in Trümmern":""}.`);
   if(kr.belagerung === "aushungern") G._s.log.unshift(`⏳ Nach langer Belagerung: ${fmt(kr.hungerKorn||0)} Fuder verdorben, die Verteidiger sind entkräftet.`);
@@ -1560,34 +1580,75 @@ function zeichnePortraet(cid, p){
   }
 }
 
-/* ---------- Titelpanorama (prozedural gemalt) ---------- */
+/* ---------- Titelpanorama (prozedural gemalt, mit Tag-/Nachtwechsel) ---------- */
+function lerpFarbe(a, b, q){
+  return `rgb(${Math.round(a[0]+(b[0]-a[0])*q)},${Math.round(a[1]+(b[1]-a[1])*q)},${Math.round(a[2]+(b[2]-a[2])*q)})`;
+}
+/* Himmelpaletten: Abend → Nacht → Morgen → Tag → Abend (ein Umlauf ≈ 80 s) */
+const TITEL_PHASEN = [
+  { o:[27,36,54],  m:[58,53,82],   u:[122,90,72]  },   /* Abendrot */
+  { o:[7,10,20],   m:[14,18,34],   u:[24,30,48]   },   /* Nacht */
+  { o:[30,38,58],  m:[80,60,90],   u:[160,110,80] },   /* Morgenrot */
+  { o:[42,64,102], m:[86,110,150], u:[150,150,140]}    /* Tag */
+];
 function zeichneTitel(t){
   const c = document.getElementById("titelbild");
   if(!c) return;
   const ctx = c.getContext("2d");
   const W = c.width, H = c.height;
-  /* Morgenhimmel */
+  /* Tageszeit: weicher Umlauf durch die vier Phasen */
+  const umlauf = (t/80000) % 1;
+  const seg = umlauf*4, si = Math.floor(seg)%4, sq = seg - Math.floor(seg);
+  const glatt = sq*sq*(3-2*sq);
+  const A = TITEL_PHASEN[si], B = TITEL_PHASEN[(si+1)%4];
   const himmel = ctx.createLinearGradient(0,0,0,H);
-  himmel.addColorStop(0,"#1b2436"); himmel.addColorStop(0.55,"#3a3552"); himmel.addColorStop(1,"#7a5a48");
+  himmel.addColorStop(0, lerpFarbe(A.o, B.o, glatt));
+  himmel.addColorStop(0.55, lerpFarbe(A.m, B.m, glatt));
+  himmel.addColorStop(1, lerpFarbe(A.u, B.u, glatt));
   ctx.fillStyle = himmel; ctx.fillRect(0,0,W,H);
-  /* Sonne mit Strahlen */
-  const sx = W*0.72, sy = H*0.62;
-  ctx.save(); ctx.translate(sx,sy); ctx.rotate(t/14000);
-  for(let i=0;i<12;i++){
-    ctx.rotate(Math.PI/6);
-    ctx.fillStyle = "rgba(224,180,88,.06)";
-    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(240,-26); ctx.lineTo(240,26); ctx.closePath(); ctx.fill();
+  /* Nachtanteil (1 = tiefste Nacht) steuert Sterne, Mond und Fensterlicht */
+  const nacht = si===0 ? glatt : si===1 ? 1-glatt*0 : 0;      /* Abend→Nacht steigt */
+  const nachtFaktor = si===0 ? glatt : si===1 ? 1 : si===2 ? 1-glatt : 0;
+  /* Sonne wandert über den Bogen (tags), der Mond bei Nacht */
+  const sonnenPhase = ((umlauf + 0.5) % 1);                    /* 0.5 versetzt: mittags oben */
+  const sx = W*(0.15 + 0.7*((umlauf*2 + 0.6) % 1));
+  const sy = H*0.62;
+  if(nachtFaktor < 0.85){
+    ctx.save(); ctx.globalAlpha = 1-nachtFaktor;
+    ctx.translate(sx,sy); ctx.rotate(t/14000);
+    for(let i=0;i<12;i++){
+      ctx.rotate(Math.PI/6);
+      ctx.fillStyle = "rgba(224,180,88,.06)";
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(240,-26); ctx.lineTo(240,26); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    ctx.save(); ctx.globalAlpha = 1-nachtFaktor;
+    const sonne = ctx.createRadialGradient(sx,sy,4,sx,sy,46);
+    sonne.addColorStop(0,"#ffe9b0"); sonne.addColorStop(0.5,"#e0b458"); sonne.addColorStop(1,"rgba(224,180,88,0)");
+    ctx.fillStyle = sonne; ctx.beginPath(); ctx.arc(sx,sy,46,0,7); ctx.fill();
+    ctx.restore();
   }
-  ctx.restore();
-  const sonne = ctx.createRadialGradient(sx,sy,4,sx,sy,46);
-  sonne.addColorStop(0,"#ffe9b0"); sonne.addColorStop(0.5,"#e0b458"); sonne.addColorStop(1,"rgba(224,180,88,0)");
-  ctx.fillStyle = sonne; ctx.beginPath(); ctx.arc(sx,sy,46,0,7); ctx.fill();
-  /* Erste Sterne funkeln im hohen Dämmerhimmel */
-  for(let i=0;i<24;i++){
+  if(nachtFaktor > 0.15){
+    /* Sichelmond mit Hof */
+    const mx = W*0.78, my = H*0.28;
+    ctx.save(); ctx.globalAlpha = nachtFaktor;
+    const hof = ctx.createRadialGradient(mx,my,6,mx,my,40);
+    hof.addColorStop(0,"rgba(220,228,245,.35)"); hof.addColorStop(1,"rgba(220,228,245,0)");
+    ctx.fillStyle = hof; ctx.beginPath(); ctx.arc(mx,my,40,0,7); ctx.fill();
+    ctx.fillStyle = "#e8edf6";
+    ctx.beginPath(); ctx.arc(mx,my,15,0,7); ctx.fill();
+    ctx.fillStyle = lerpFarbe(A.o, B.o, glatt);
+    ctx.beginPath(); ctx.arc(mx-6,my-4,13,0,7); ctx.fill();
+    ctx.restore();
+  }
+  /* Sterne: je dunkler, desto mehr funkeln */
+  for(let i=0;i<34;i++){
     const seedX = ((i*71)%97)/97, seedY = ((i*37)%89)/89;
     const zwinkern = 0.5 + 0.5*Math.sin(t/700 + i*2.3);
-    ctx.fillStyle = `rgba(235,240,250,${0.10 + 0.24*zwinkern*(1-seedY)})`;
-    ctx.beginPath(); ctx.arc(seedX*W, seedY*H*0.34, 0.8 + zwinkern*0.7, 0, 7); ctx.fill();
+    const hell = (0.06 + 0.5*nachtFaktor) * zwinkern * (1-seedY*0.5);
+    if(hell < 0.04) continue;
+    ctx.fillStyle = `rgba(235,240,250,${hell})`;
+    ctx.beginPath(); ctx.arc(seedX*W, seedY*H*0.4, 0.8 + zwinkern*0.7, 0, 7); ctx.fill();
   }
   /* Wolken ziehen */
   ctx.fillStyle = "rgba(220,215,230,.10)";
@@ -1612,11 +1673,12 @@ function zeichneTitel(t){
     ctx.beginPath(); ctx.moveTo(tx-tw/2-5, by-th); ctx.lineTo(tx, by-th-26); ctx.lineTo(tx+tw/2+5, by-th); ctx.closePath(); ctx.fill();
   };
   turm(bx-90, 108, 34); turm(bx+90, 108, 34); turm(bx, 150, 42);
-  /* Warm erleuchtete Fenster — einzelne flackern */
+  /* Warm erleuchtete Fenster — nachts hell, tags erloschen */
   const fenster = [[bx-96,86],[bx-84,60],[bx+84,86],[bx+96,60],[bx-6,120],[bx+6,96],[bx-40,44],[bx+34,52],[bx-12,36],[bx+18,30]];
+  const fensterHell = 0.25 + 0.75*nachtFaktor;
   fenster.forEach(([fx2, fh], k) => {
     const flacker = 0.7 + 0.3*Math.sin(t/230 + k*3.1);
-    ctx.fillStyle = `rgba(255,205,110,${(k%3===0 ? 0.5 : 0.75) * flacker})`;
+    ctx.fillStyle = `rgba(255,205,110,${(k%3===0 ? 0.5 : 0.75) * flacker * fensterHell})`;
     ctx.fillRect(fx2-2, by-fh, 4, 6);
   });
   /* Wehende Fahne auf dem Hauptturm */
@@ -1824,6 +1886,32 @@ function zeichneKarte(p, canvasId, t=0){
   ctx.bezierCurveTo(cx-rr*0.5, fy+rr*0.35, cx+rr*0.4, fy-rr*0.45, cx+rr*1.5, fy+rr*0.1);
   ctx.stroke();
   ctx.restore();
+  /* Lastkähne treiben den Fluss hinab (mit Hafen mehr Verkehr) */
+  const kaehne = 1 + Math.min(2, p.haefen||0);
+  const flussPunkt = (q2) => {
+    const p0=[cx-rr*1.5, fy-rr*0.4], p1=[cx-rr*0.5, fy+rr*0.35], p2=[cx+rr*0.4, fy-rr*0.45], p3=[cx+rr*1.5, fy+rr*0.1];
+    const u2 = 1-q2;
+    return [
+      u2*u2*u2*p0[0] + 3*u2*u2*q2*p1[0] + 3*u2*q2*q2*p2[0] + q2*q2*q2*p3[0],
+      u2*u2*u2*p0[1] + 3*u2*u2*q2*p1[1] + 3*u2*q2*q2*p2[1] + q2*q2*q2*p3[1]
+    ];
+  };
+  for(let kb=0; kb<kaehne; kb++){
+    const q2 = ((t/16000) + kb*0.37) % 1;
+    const [kx3, ky3] = flussPunkt(q2);
+    const [nx3, ny3] = flussPunkt(Math.min(1, q2+0.02));
+    const wink = Math.atan2(ny3-ky3, nx3-kx3);
+    ctx.save();
+    ctx.translate(kx3, ky3 + Math.sin(t/600 + kb)*0.7);
+    ctx.rotate(wink);
+    ctx.fillStyle = "#6e5233";
+    ctx.beginPath(); ctx.moveTo(-7,-2.4); ctx.lineTo(7,-2.4); ctx.lineTo(4.6,2.4); ctx.lineTo(-4.6,2.4); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#8a6a40"; ctx.fillRect(-3.4,-4,6.8,2);
+    /* Kielwasser */
+    ctx.strokeStyle = "rgba(220,240,255,.25)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-8,-1.5); ctx.lineTo(-13,-3); ctx.moveTo(-8,1.5); ctx.lineTo(-13,3); ctx.stroke();
+    ctx.restore();
+  }
   /* Brücke */
   ctx.strokeStyle = "#7a5c37"; ctx.lineWidth = 5;
   ctx.beginPath(); ctx.moveTo(cx-14, fy+2); ctx.lineTo(cx+14, fy-4); ctx.stroke();
@@ -1857,6 +1945,23 @@ function zeichneKarte(p, canvasId, t=0){
     ctx.beginPath(); ctx.moveTo(cx, cy+12);
     ctx.quadraticCurveTo((cx+gx)/2 + (g.ang%1-0.5)*26, (cy+gy)/2, gx, gy+3);
     ctx.stroke();
+  });
+  /* Dorfleben: Untertanen wandern zwischen Dorf und Bauwerken hin und her */
+  (p.gebaeude||[]).slice(0, 7).forEach((g, gi) => {
+    const gx = cx + Math.cos(g.ang)*g.dist*rr*1.25;
+    const gy = cy + Math.sin(g.ang)*g.dist*rr*0.75;
+    const mx2 = (cx+gx)/2 + (g.ang%1-0.5)*26, my2 = (cy+gy)/2;
+    /* hin und zurück pendeln */
+    const ph = (t/7000 + gi*0.61) % 2;
+    const q3 = ph < 1 ? ph : 2-ph;
+    const u3 = 1-q3;
+    const wx3 = u3*u3*cx + 2*u3*q3*mx2 + q3*q3*gx;
+    const wy3 = u3*u3*(cy+12) + 2*u3*q3*my2 + q3*q3*(gy+3);
+    ctx.fillStyle = "rgba(0,0,0,.2)";
+    ctx.beginPath(); ctx.ellipse(wx3, wy3+1.8, 1.8, 0.7, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = gi%2 ? "#b5a37e" : "#8f7f65";
+    ctx.beginPath(); ctx.arc(wx3, wy3-1.2, 1.35, 0, 7); ctx.fill();
+    ctx.fillRect(wx3-1, wy3-0.6, 2, 2.8);
   });
   if(p.palast>0){ ctx.beginPath(); ctx.moveTo(cx,cy+12); ctx.quadraticCurveTo(cx-rr*0.24,cy-rr*0.1,cx-rr*0.5,cy-rr*0.30); ctx.stroke(); }
   if(p.dom>0){    ctx.beginPath(); ctx.moveTo(cx,cy+12); ctx.quadraticCurveTo(cx+rr*0.26,cy-rr*0.12,cx+rr*0.52,cy-rr*0.32); ctx.stroke(); }
@@ -2152,6 +2257,26 @@ function zeichneWelt(t=0){
     ctx.fillText(`${fmt(p.land)} ha · ${fmt(p.pop)} Einw.`, px, py + rrW*0.85 + 30);
     ctx.restore();
   });
+  /* Ein Segelschiff kreuzt das Weltmeer am Kartenrand */
+  {
+    const bahn = (t/34000) % 1;
+    const sa = bahn * 6.2832;
+    const shx = cx + Math.cos(sa) * W*0.455;
+    const shy = cy + Math.sin(sa) * H*0.44;
+    const nachRechts = Math.cos(sa + Math.PI/2) >= 0;
+    ctx.save();
+    ctx.translate(shx, shy + Math.sin(t/500)*1.4);
+    if(!nachRechts) ctx.scale(-1,1);
+    ctx.fillStyle = "#5c4426";
+    ctx.beginPath(); ctx.moveTo(-9,0); ctx.lineTo(9,0); ctx.lineTo(5.5,4); ctx.lineTo(-5.5,4); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#8a6a40"; ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-12); ctx.stroke();
+    ctx.fillStyle = "#e2ddd0";
+    ctx.beginPath(); ctx.moveTo(0,-12); ctx.quadraticCurveTo(7+Math.sin(t/400)*1.2,-7,0,-2); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(200,225,250,.28)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-10,2); ctx.lineTo(-16,1); ctx.moveTo(-10,3.5); ctx.lineTo(-15,4.5); ctx.stroke();
+    ctx.restore();
+  }
   /* Kartenrahmen wie auf alten Seekarten: Doppellinie mit Eckzier */
   ctx.strokeStyle = "rgba(224,180,88,.5)"; ctx.lineWidth = 2;
   ctx.strokeRect(6, 6, W-12, H-12);
@@ -2637,6 +2762,31 @@ function zeichneFeld(t=0){
     ctx.fillStyle = "rgba(13,17,23,.72)"; ctx.fillRect(10, 10, 158, 24);
     ctx.fillStyle = "#e0b458"; ctx.font = "600 13px sans-serif"; ctx.textAlign = "left";
     ctx.fillText("🎞️ Zeitraffer läuft …", 18, 27);
+  }
+  /* Schlacht-Auftakt: Wappen und Namen prallen aufeinander */
+  if(s.introBis && jetzt < s.introBis && !s.fertig && G._kr){
+    const rest = (s.introBis - jetzt) / 2800;
+    const alpha = rest > 0.85 ? (1-rest)/0.15 : rest < 0.25 ? rest/0.25 : 1;
+    const ang2 = G.spieler[G._kr.a], ver2 = G.spieler[G._kr.d];
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, alpha);
+    ctx.fillStyle = "rgba(8,10,16,.62)"; ctx.fillRect(0,0,W,H);
+    /* Namenszüge fahren von den Seiten herein */
+    const einzug = Math.min(1, (1-rest)*2.4);
+    const ease = 1-Math.pow(1-einzug,3);
+    ctx.textAlign = "center";
+    ctx.font = "bold 30px Georgia, serif";
+    ctx.fillStyle = ang2.farbe;
+    ctx.fillText(`${ang2.wappen} ${ang2.name}`, W*0.26 - (1-ease)*W*0.3, H*0.44);
+    ctx.fillStyle = ver2.farbe;
+    ctx.fillText(`${ver2.name} ${ver2.wappen}`, W*0.74 + (1-ease)*W*0.3, H*0.44);
+    ctx.fillStyle = "#e0b458";
+    ctx.font = `bold ${Math.round(40 + Math.sin(jetzt/120)*3)}px Georgia, serif`;
+    ctx.fillText("⚔", W/2, H*0.47);
+    ctx.font = "600 15px Georgia, serif";
+    ctx.fillStyle = "rgba(219,226,238,.85)";
+    ctx.fillText(s.belagerung ? "Die Belagerung ist gebrochen — zur Schlacht!" : "Die Heere treffen aufeinander", W/2, H*0.58);
+    ctx.restore();
   }
 }
 /* Vorschau der eigenen Aufstellung (Platzierungs-Bildschirm) */
@@ -3858,9 +4008,17 @@ function sparkline(hist){
   const sp = Math.max(1, max-min);
   const pt = hist.map((v,i)=>`${(i/(hist.length-1)*w).toFixed(1)},${(h-6-(v-min)/sp*(h-14)).toFixed(1)}`);
   const letzt = pt[pt.length-1].split(",");
+  const gid = "sparkGrad" + Math.floor(min*7+max);
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(224,180,88,.30)"/>
+      <stop offset="100%" stop-color="rgba(224,180,88,0)"/>
+    </linearGradient></defs>
+    <polygon points="0,${h} ${pt.join(" ")} ${w},${h}" fill="url(#${gid})"/>
     <polyline points="${pt.join(" ")}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round"/>
-    <circle cx="${letzt[0]}" cy="${letzt[1]}" r="3.5" fill="var(--gold)"/>
+    <circle cx="${letzt[0]}" cy="${letzt[1]}" r="3.5" fill="var(--gold)">
+      <animate attributeName="r" values="3.5;4.6;3.5" dur="1.6s" repeatCount="indefinite"/>
+    </circle>
     <text x="2" y="10" font-size="9" fill="#8b96a8">${fmt(max)}</text>
     <text x="2" y="${h-2}" font-size="9" fill="#8b96a8">${fmt(min)}</text>
   </svg>`;
