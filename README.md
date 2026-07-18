@@ -176,3 +176,22 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
   Hafenglocke aus dem eigenen Reich, Trauergeläut, Marschtrommeln vor den Toren
 - **Partie-Replay**: die ganze Regentschaft als Jahres-Zeitraffer — wachsende
   und schrumpfende Reiche, mitlaufende Chronik, Geschwindigkeitsregler
+
+## Version 2.5 — Der Feinschliff (Grafik, UI & Animationen)
+
+- **Reichskarte**: Blumenwiesen im Frühling und Sommer, weidende Schafe nahe dem
+  Dorf, ein Vogelschwarm zieht in V-Formation mit Flügelschlag über das Land
+- **Gesamtkarte als Seekarte**: Weltmeer mit wandernden Wellenlinien und Glitzern,
+  doppelter Goldrahmen mit Eckzier, Kompassrose, Kartusche in Antiqua
+- **Schlachtfeld**: Boden mit Tiefenwirkung (Himmelstreifen, dunkler werdendes
+  Feld), Grasbüschel und zertrampelte Erde, Pulverrauch treibt nach jedem Schuss
+  davon, marschierende Linien wiegen im Schritt, Sieger-Vignette mit Ordensband
+- **Wetterszenen**: ein blasser Regenbogen spannt sich bei Wechselwetter über die Hügel
+- **Porträts als Ahnenbilder**: goldener Doppelrahmen mit Eck-Rosetten und
+  Galerie-Vignette um jedes Regentenporträt
+- **Titelpanorama**: funkelnde Sterne im Dämmerhimmel, warm erleuchtete,
+  flackernde Burgfenster
+- **UI-Feinschliff**: Zierlinie unter Überschriften, Karten heben sich beim
+  Überfahren, schwebende Symbole auf den Statuskacheln, Glanzlauf über
+  Primärknöpfen und Wappenschilden, einschwebende Toasts mit Goldakzent,
+  Zeilen-Hover in Tabellen, einpoppende Veränderungs-Abzeichen
