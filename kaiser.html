@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kaiser — Wirtschaftssimulation</title>
-<meta name="description" content="Kaiser — Wirtschaftssimulation im 18. Jahrhundert. Steige vom einfachen Herrn zum Kaiser auf: Korn, Land, Steuern, Städte, Diplomatie und Schlachten. 1-9 Spieler, Solo gegen KI-Regenten.">
+<title>Kaiser. Wirtschaftssimulation</title>
+<meta name="description" content="Kaiser. Wirtschaftssimulation im 18. Jahrhundert. Steige vom einfachen Herrn zum Kaiser auf: Korn, Land, Steuern, Städte, Diplomatie und Schlachten. 1-9 Spieler, Solo gegen KI-Regenten.">
 <meta name="theme-color" content="#0e1117">
-<meta property="og:title" content="KAISER — Wirtschaftssimulation im 18. Jahrhundert">
+<meta property="og:title" content="KAISER. Wirtschaftssimulation im 18. Jahrhundert">
 <meta property="og:description" content="Vom einfachen Herrn zum Kaiser: Korn, Land, Steuern, Städte, Diplomatie und Schlachten. 1-9 Spieler, Solo gegen KI-Regenten. Kostenlos im Browser.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="icon-512.png">
@@ -409,7 +409,23 @@
   </details>
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
-<main><div id="screen"></div>
+<main>
+<noscript>
+  <div style="max-width:560px;margin:40px auto;padding:24px;border:1px solid #e0b458;border-radius:14px;
+    background:linear-gradient(175deg,#241f16,#1c1812);text-align:center">
+    <p style="font-size:40px;margin-bottom:10px">👑</p>
+    <p style="font-size:18px;font-weight:700;color:#e0b458;margin-bottom:10px">Diese Vorschau kann Kaiser nicht ausführen</p>
+    <p style="line-height:1.6">Ihr seht das Spiel gerade in einer <b>Dateivorschau ohne JavaScript</b>
+    (z.&nbsp;B. der Dateien-App auf dem iPhone). Das Spiel selbst braucht einen richtigen Browser.</p>
+    <p style="line-height:1.6;margin-top:12px"><b>So spielt Ihr auf dem Handy:</b><br>
+    Öffnet Eure Online-Adresse (Render) in <b>Safari</b> und wählt dort
+    „Teilen → Zum Home-Bildschirm". Kaiser installiert sich dann als App
+    und läuft sogar offline.</p>
+    <p style="line-height:1.6;margin-top:12px;color:#8b96a8;font-size:14px">Alternative: die Datei mit einer
+    Browser-App öffnen (nicht mit der Dateivorschau), oder am Rechner per Doppelklick im Browser starten.</p>
+  </div>
+</noscript>
+<div id="screen"></div>
 <footer>Kaiser v3.0 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
@@ -417,7 +433,7 @@
 <script>
 "use strict";
 /* ============================================================
-   KAISER — Hommage an den C64-Klassiker von 1984
+   KAISER. Hommage an den C64-Klassiker von 1984
    Eigenständige Neu-Implementierung · Hotseat · 1-9 Spieler
    ============================================================ */
 
@@ -459,7 +475,7 @@ const PALAST_TEILE = 16, DOM_TEILE = 14;
 const JUSTIZ = ["","sehr fair","fair","streng","gierig"];
 const PHASEN = ["Status","Korn","Handel","Zw.-Bilanz","Steuern","Bauen","Bilanz"];
 const WETTER = [
-  { t:"Dürre — die Felder verdorren",        ico:"☀️", f:0.55, w:8  },
+  { t:"Dürre, die Felder verdorren",        ico:"☀️", f:0.55, w:8  },
   { t:"Verregneter Sommer",                  ico:"🌧️", f:0.78, w:12 },
   { t:"Wechselhaftes Jahr",                  ico:"⛅",  f:0.95, w:34 },
   { t:"Gutes Erntewetter",                   ico:"🌤️", f:1.10, w:30 },
@@ -528,7 +544,7 @@ function paktAktiv(a, b){
   const ib = G.spieler.indexOf(b);
   return a.pakte && a.pakte[ib] && a.pakte[ib] >= G.jahr;
 }
-/* Handelsrouten: beide Seiten kassieren jährlich Zoll — Krieg kappt die Route */
+/* Handelsrouten: beide Seiten kassieren jährlich Zoll. Krieg kappt die Route */
 function routeAktiv(i, j){
   return (G.routen||[]).some(r => (r.a===i && r.b===j) || (r.a===j && r.b===i));
 }
@@ -632,7 +648,7 @@ function auftragPruefen(p, r){
   }
 }
 
-/* Charakterzüge: jeder Regent bringt eine eigene Stärke mit — auch die Erben */
+/* Charakterzüge: jeder Regent bringt eine eigene Stärke mit, auch die Erben */
 const CHARAKTERZUEGE = [
   { id:"sparsam",      ico:"🧮", n:"Sparsam",      d:"Baut 5 % günstiger." },
   { id:"gelehrt",      ico:"📚", n:"Gelehrt",      d:"Eine zusätzliche Diplomatie-Aktion pro Jahr." },
@@ -653,10 +669,10 @@ const PRIVILEGIEN = [
   { ico:"⚔️", n:"Herzogliche Heerfolge",    d:"−10 % Sold für das stehende Heer." },
   { ico:"🏛️", n:"Kurfürstenwürde",          d:"+3 Stimmen im Reichstag." },
   { ico:"🌾", n:"Königlicher Erntesegen",   d:"+10 % Ernte im ganzen Reich." },
-  { ico:"👑", n:"Kaiserliche Majestät",     d:"Das Reich gehört Euch — das Spiel ist gewonnen." }
+  { ico:"👑", n:"Kaiserliche Majestät",     d:"Das Reich gehört Euch, das Spiel ist gewonnen." }
 ];
 const hatPrivileg = (p, stufe) => (p.titel||0) >= stufe;
-/* Baukosten in Talern — Markgrafen bauen günstiger */
+/* Baukosten in Talern. Markgrafen bauen günstiger */
 const bauKosten = (p, was) => Math.round(KOSTEN[was] * (hatPrivileg(p,3) ? 0.9 : 1) * (p.zug==="sparsam" ? 0.95 : 1));
 
 /* Beförderungs-Bedingungen: Index = Ziel-Titel */
@@ -794,7 +810,7 @@ const sTrauer = () => [196,175,147,131].forEach((f,i)=>{ beep(f,1.8,i*.8,"sine",
 /* Mühlenklappern und Hafenglocke als Ambiente */
 const sKlappern = () => { for(let i=0;i<3;i++){ rausch(.03,i*.11,.05); beep(180+i*8,.04,i*.11,"square",.02); } };
 const sHafen  = () => { beep(523,.9,0,"sine",.045,true); beep(523*2.72,.35,0,"sine",.014,true); };
-/* Ambiente-Bett auf den Karten-Bildschirmen — moduliert mit Jahreszeit und Reich */
+/* Ambiente-Bett auf den Karten-Bildschirmen, moduliert mit Jahreszeit und Reich */
 setInterval(()=>{
   if(muted || document.hidden) return;
   if(!["status","bauen","welt","korn","handel"].includes(G.screen)) return;
@@ -861,7 +877,7 @@ function starteMusik(){
         if(T.bass[i])    beep(T.bass[i],   1.2, 0, "sine",     .05);
         themaPos++;
       } else if(G.screen === "schlacht" && G._s && !G._s.fertig){
-        /* Kriegsthema — bei Belagerungen der schwere Marsch */
+        /* Kriegsthema, bei Belagerungen der schwere Marsch */
         const T = (G._s.mauerStufe||0) > 0 ? THEMA_BELAGERUNG : THEMA_KRIEG;
         const i = themaPos % T.melodie.length;
         if(i % 4 === 0) rausch(.09, 0, .12, true);
@@ -938,9 +954,9 @@ function erfolg(id){
 
 /* ---------- Berater-Tipps (Tutorial) ---------- */
 const TIPPS = {
-  status:  "Hier seht Ihr Euer Reich auf einen Blick. Behaltet die nächste Beförderung im Auge — sie ist Euer Wegweiser. Und zögert nicht zu lange: Über 90 Sekunden pro Zug kosten Lebenszeit!",
-  korn:    "Gebt Eurem Volk stets etwas mehr als das nötige Korn — etwa +25 bis +50 % — dann wächst die Bevölkerung durch Zuzug und gute Stimmung. Zu wenig Korn bedeutet Hungertote.",
-  handel:  "Kauft Korn und Land, wenn die Preise niedrig sind, und verkauft bei Höchstständen — Spekulation ist Eure wichtigste Einnahmequelle! Der Kursverlauf zeigt, wo Ihr steht.",
+  status:  "Hier seht Ihr Euer Reich auf einen Blick. Behaltet die nächste Beförderung im Auge, sie ist Euer Wegweiser. Und zögert nicht zu lange: Über 90 Sekunden pro Zug kosten Lebenszeit!",
+  korn:    "Gebt Eurem Volk stets etwas mehr als das nötige Korn, etwa +25 bis +50 %, dann wächst die Bevölkerung durch Zuzug und gute Stimmung. Zu wenig Korn bedeutet Hungertote.",
+  handel:  "Kauft Korn und Land, wenn die Preise niedrig sind, und verkauft bei Höchstständen. Spekulation ist Eure wichtigste Einnahmequelle! Der Kursverlauf zeigt, wo Ihr steht.",
   zwbilanz:"Die Zwischenbilanz zeigt, wie Euer Volk auf Kornausgabe, Steuern und Justiz reagiert hat. Wandern die Leute ab, senkt die Steuern oder gebt mehr Korn.",
   steuern: "Moderate Steuern (Summe unter ~45 %) halten das Volk bei Laune. Die Justiz auf 'fair' zu stellen kostet nichts und beruhigt die Gemüter.",
   bauen:   "Erst Märkte und Mühlen (im Verhältnis 5:3 zur Stadt), dann Land zukaufen, später Palast und Kathedrale. Aber Vorsicht: Jedes Bauwerk verringert die Anbaufläche."
@@ -1005,7 +1021,7 @@ function zwischenbilanz(p){
   if(ev < 0.05 && p.pop > 1200){
     const opfer = Math.round(p.pop * rf(0.12,0.28));
     p.pop -= opfer;
-    geschichte("💀", `Die Pest sucht ${p.name}s Reich heim — ${fmt(opfer)} Tote.`);
+    geschichte("💀", `Die Pest sucht ${p.name}s Reich heim · ${fmt(opfer)} Tote.`);
     r.ereignisse.push({t:`Die Pest wütet im Land! ${fmt(opfer)} Untertanen sterben.`,c:"bad"});
   } else if(ev < 0.10){
     const zuzug = Math.round(p.pop * rf(0.02,0.05));
@@ -1013,7 +1029,7 @@ function zwischenbilanz(p){
     r.ereignisse.push({t:`Ein Treck von Siedlern trifft ein: +${fmt(zuzug)} Einwohner.`,c:"good"});
   }
 
-  /* Grundstimmung aus Steuern, Justiz und Kornausgabe — Ereignis-Effekte
+  /* Grundstimmung aus Steuern, Justiz und Kornausgabe. Ereignis-Effekte
      (Feste, Aufruhr, Kriege …) hallen mit halber Stärke ins nächste Jahr nach */
   const stimmungBasis = clamp(90 - (p.einkSt+p.mwSt)*0.8 - p.zoll*0.4 - (p.justiz-2)*10 + (f-1)*40
     + (p.zug==="volksnah" ? 5 : 0), 5, 100);
@@ -1086,7 +1102,7 @@ function jahresschluss(p){
   } else if(beraterGehalt(p) > 0 && p.geld < 0 && Math.random() < 0.5){
     const aktiv = BERATER.filter(b=>p.berater[b.k]);
     if(aktiv.length){ const b = aktiv[ri(0,aktiv.length-1)]; delete p.berater[b.k];
-      r.ereignisse.push({t:`${b.person} quittiert den Dienst — die Kasse ist leer.`,c:"bad"}); }
+      r.ereignisse.push({t:`${b.person} quittiert den Dienst, die Kasse ist leer.`,c:"bad"}); }
   }
   if(r.unterhalt > 0 && p.geld < 0){
     const rest = Math.max(0, Math.round(heerGroesse(p.heer)*0.7));
@@ -1094,7 +1110,7 @@ function jahresschluss(p){
     if(verlust > 0){
       const q = rest / Math.max(1, heerGroesse(p.heer));
       p.heer.inf = Math.floor(p.heer.inf*q); p.heer.kav = Math.floor(p.heer.kav*q); p.heer.art = Math.floor(p.heer.art*q);
-      r.ereignisse.push({t:`Der Sold bleibt aus — ${fmt(verlust)} Söldner desertieren!`,c:"bad"});
+      r.ereignisse.push({t:`Der Sold bleibt aus · ${fmt(verlust)} Söldner desertieren!`,c:"bad"});
     }
   }
 
@@ -1237,7 +1253,7 @@ const seiteStaerke = s =>
 
 /* ============================================================
    Schlacht nach Original-Vorbild: Truppen werden vor der Schlacht
-   auf fünf Abschnitte aufgestellt, dann rücken die Linien vor —
+   auf fünf Abschnitte aufgestellt, dann rücken die Linien vor.
    Fernkampf der Artillerie, Nahkampf am Berührungspunkt,
    Durchbrüche in die Nachbarabschnitte, Moral und Flucht.
    ============================================================ */
@@ -1338,8 +1354,8 @@ function schlachtStarten(){
     tick:0, maxTicks:40, log:[], partikel:[], fertig:false, sieger:null, iv:null, still:false
   };
   G._s.introBis = performance.now() + 2800;
-  if(kr.belagerung === "sturm") G._s.log.unshift("⚔️ Sturmangriff auf die Festungswerke — die ersten Reihen zahlen den Blutzoll!");
-  if(kr.belagerung === "beschuss") G._s.log.unshift(`💣 Die Artillerie hat Breschen geschossen${kr.mauerZerstoert?" — ein Mauerring liegt in Trümmern":""}.`);
+  if(kr.belagerung === "sturm") G._s.log.unshift("⚔️ Sturmangriff auf die Festungswerke, die ersten Reihen zahlen den Blutzoll!");
+  if(kr.belagerung === "beschuss") G._s.log.unshift(`💣 Die Artillerie hat Breschen geschossen${kr.mauerZerstoert?", ein Mauerring liegt in Trümmern":""}.`);
   if(kr.belagerung === "aushungern") G._s.log.unshift(`⏳ Nach langer Belagerung: ${fmt(kr.hungerKorn||0)} Fuder verdorben, die Verteidiger sind entkräftet.`);
   cur().kriegGefuehrt = true;
   sTrommel();
@@ -1368,9 +1384,9 @@ function einTick(s, leise){
     const ry = 0.30 + (i+0.5)*0.135;
     const gel = (s.gelaende && s.gelaende[i]) || GELAENDE[0];
     if(lane.dist > 0 && gA > 0 && gD > 0){
-      /* Vormarsch — Kavallerie beschleunigt, Furten bremsen */
+      /* Vormarsch. Kavallerie beschleunigt, Furten bremsen */
       lane.dist = Math.max(0, lane.dist - (9 + (a.kav/Math.max(1,gA))*16) * (gel.tempo || 1));
-      /* Artillerie-Fernkampf beider Seiten — Regen macht das Pulver feucht */
+      /* Artillerie-Fernkampf beider Seiten. Regen macht das Pulver feucht */
       const artFx = (gel.artFaktor || 1) * (s.regen ? 0.65 : 1);
       const feuerA = a.art * rf(0.7,1.3) * artFx;
       const feuerD = d.art * rf(0.7,1.3) * 1.15 * artFx;
@@ -1386,7 +1402,7 @@ function einTick(s, leise){
         }
       }
     } else if(gA > 0 && gD > 0){
-      /* Nahkampf im Abschnitt — Hügel schützen, Wald bremst die Reiterei */
+      /* Nahkampf im Abschnitt. Hügel schützen, Wald bremst die Reiterei */
       const kavFx = gel.kavFaktor || 1;
       const nah = u => u.inf + u.kav*2.5*kavFx + u.art*0.4 + u.miliz*0.8 + u.auf*0.5;
       const stA = nah(a) * rf(0.85,1.15);
@@ -1414,7 +1430,7 @@ function einTick(s, leise){
           lane[mein][typ] -= abgabe*nachbarn.length;
           for(const k of nachbarn) s.lanes[k][mein][typ] += abgabe;
         }
-        s.log.unshift(`⚡ Durchbruch im Abschnitt „${LANE_NAMEN[i]}" — ${mein==="A"?"die Angreifer":"die Verteidiger"} fallen den Nachbarn in die Flanke!`);
+        s.log.unshift(`⚡ Durchbruch im Abschnitt „${LANE_NAMEN[i]}" · ${mein==="A"?"die Angreifer":"die Verteidiger"} fallen den Nachbarn in die Flanke!`);
       }
     }
   });
@@ -1443,7 +1459,7 @@ function einTick(s, leise){
     if(s.routA && !s.routD){
       s.sieger = "D";
       s.lanes.forEach(l=>laneVerlust(l.A, laneGroesse(l.A)*0.08));
-      s.log.unshift("Die Moral der Angreifer bricht — das Heer flieht vom Feld!");
+      s.log.unshift("Die Moral der Angreifer bricht, das Heer flieht vom Feld!");
     } else if(s.routD && !s.routA){
       s.sieger = "A";
       s.lanes.forEach(l=>laneVerlust(l.D, laneGroesse(l.D)*0.08));
@@ -1452,7 +1468,7 @@ function einTick(s, leise){
       const kA = s.lanes.reduce((x,l)=>x+laneNahkampf(l.A),0);
       const kD = s.lanes.reduce((x,l)=>x+laneNahkampf(l.D),0)*1.15;
       s.sieger = kA > kD ? "A" : "D";
-      s.log.unshift("Erschöpft trennen sich die Heere — der Feldherr mit der stärkeren Linie behält das Feld.");
+      s.log.unshift("Erschöpft trennen sich die Heere, der Feldherr mit der stärkeren Linie behält das Feld.");
     }
     s.fertig = true;
   }
@@ -1953,7 +1969,7 @@ function zeichneTitel(t){
     ctx.beginPath(); ctx.moveTo(tx-tw/2-5, by-th); ctx.lineTo(tx, by-th-26); ctx.lineTo(tx+tw/2+5, by-th); ctx.closePath(); ctx.fill();
   };
   turm(bx-90, 108, 34); turm(bx+90, 108, 34); turm(bx, 150, 42);
-  /* Warm erleuchtete Fenster — nachts hell, tags erloschen */
+  /* Warm erleuchtete Fenster, nachts hell, tags erloschen */
   const fenster = [[bx-96,86],[bx-84,60],[bx+84,86],[bx+96,60],[bx-6,120],[bx+6,96],[bx-40,44],[bx+34,52],[bx-12,36],[bx+18,30]];
   const fensterHell = 0.25 + 0.75*nachtFaktor;
   fenster.forEach(([fx2, fh], k) => {
@@ -2136,7 +2152,7 @@ function zeichneKarte(p, canvasId, t=0){
       ctx.beginPath(); ctx.arc(bx2, by2, 1.3+rng()*0.9, 0, 7); ctx.fill();
     }
   }
-  /* Weidende Schafe nahe dem Dorf — sie trotten gemächlich umher */
+  /* Weidende Schafe nahe dem Dorf, sie trotten gemächlich umher */
   for(let i=0;i<4;i++){
     const wanderA = rng()*6.2832, wanderD = rr*(0.32+rng()*0.2);
     const sx3 = cx + Math.cos(wanderA)*wanderD*1.2 + Math.sin(t/2200 + i*2.1)*6;
@@ -2245,7 +2261,7 @@ function zeichneKarte(p, canvasId, t=0){
   });
   if(p.palast>0){ ctx.beginPath(); ctx.moveTo(cx,cy+12); ctx.quadraticCurveTo(cx-rr*0.24,cy-rr*0.1,cx-rr*0.5,cy-rr*0.30); ctx.stroke(); }
   if(p.dom>0){    ctx.beginPath(); ctx.moveTo(cx,cy+12); ctx.quadraticCurveTo(cx+rr*0.26,cy-rr*0.12,cx+rr*0.52,cy-rr*0.32); ctx.stroke(); }
-  /* Felder (Anbaufläche) — die Saat wächst mit der Jahreszeit */
+  /* Felder (Anbaufläche), die Saat wächst mit der Jahreszeit */
   const felder = clamp(Math.round(Math.min(p.pop*4, anbau(p))/1800), 2, 16);
   for(let i=0;i<felder;i++){
     const a = rng()*6.2832, d = rr*(0.3+rng()*0.34);
@@ -2364,7 +2380,7 @@ function zeichneKarte(p, canvasId, t=0){
     else if(g.t==="s") malBruch(ctx, gx, gy);
     else malMuehle(ctx, gx, gy, t);
   });
-  /* Stadtmauer: Palisadenring um das Dorf — Burg als Turm */
+  /* Stadtmauer: Palisadenring um das Dorf. Burg als Turm */
   if((p.mauer||0) > 0){
     const mr = 34 + (p.mauer||0)*5;
     ctx.strokeStyle = "#8d8577"; ctx.lineWidth = 2 + (p.mauer||0);
@@ -3021,7 +3037,7 @@ function zeichneFeld(t=0){
     ctx.fillText(fmt(laneGroesse(lane.D)), W-8, y0 + laneH - 8);
     if(laneGroesse(lane.A)===0 && laneGroesse(lane.D)===0){
       ctx.fillStyle = "rgba(219,226,238,.18)"; ctx.font = "11px sans-serif"; ctx.textAlign="center";
-      ctx.fillText("— verwaist —", W/2, y0+laneH/2);
+      ctx.fillText("verwaist", W/2, y0+laneH/2);
     } else if(laneGroesse(lane.D)===0 && laneGroesse(lane.A)>0){
       ctx.fillStyle = "rgba(224,180,88,.5)"; ctx.font = "600 10px sans-serif"; ctx.textAlign="center";
       ctx.fillText("⚡ Durchbruch", W*0.72, y0+12);
@@ -3186,7 +3202,7 @@ function zeichneFeld(t=0){
     ctx.fillText("⚔", W/2, H*0.47);
     ctx.font = "600 15px Georgia, serif";
     ctx.fillStyle = "rgba(219,226,238,.85)";
-    ctx.fillText(s.belagerung ? "Die Belagerung ist gebrochen — zur Schlacht!" : "Die Heere treffen aufeinander", W/2, H*0.58);
+    ctx.fillText(s.belagerung ? "Die Belagerung ist gebrochen, zur Schlacht!" : "Die Heere treffen aufeinander", W/2, H*0.58);
     ctx.restore();
   }
 }
@@ -3225,7 +3241,7 @@ function schlachtAbschliessen(){
   /* Verluste anteilig in die stehenden Heere zurückschreiben (Leihtruppen kehren dezimiert heim) */
   verlusteZurueck(s);
   if(s.sieger === "A"){
-    /* Eindringtiefe: geräumte Abschnitte — oder Überrennen nach der Flucht */
+    /* Eindringtiefe: geräumte Abschnitte, oder Überrennen nach der Flucht */
     const geraeumt = s.lanes.filter(l => laneGroesse(l.D) === 0).length;
     const verlustquote = 1 - sRest(s,"D")/s.startG.D;
     let tiefe = clamp(Math.max(geraeumt,
@@ -3284,8 +3300,8 @@ function schlachtAbschliessen(){
     bezAendern(ang, ver, -35);
     if(tiefe >= 5) erfolg("brandschatzer");
     s.plünder = schaeden.length || kornBeute
-      ? `Eindringtiefe ${tiefe}/5 — geplündert: ${[...schaeden, kornBeute?fmt(kornBeute)+" Fuder Korn":null].filter(Boolean).join(", ")}.`
-      : (tiefe>0 ? `Eindringtiefe ${tiefe}/5 — die Plünderer fanden wenig.` : "");
+      ? `Eindringtiefe ${tiefe}/5, geplündert: ${[...schaeden, kornBeute?fmt(kornBeute)+" Fuder Korn":null].filter(Boolean).join(", ")}.`
+      : (tiefe>0 ? `Eindringtiefe ${tiefe}/5, die Plünderer fanden wenig.` : "");
     s.ergebnis = `Sieg! Eure Truppen erobern ${fmt(beute)} ha von ${ver.name}. ${fmt(gefallene)} Feinde fallen.`;
     geschichte("⚔️", `${ang.name} besiegt ${ver.name} und erobert ${fmt(beute)} ha.`);
     if(!s.still){
@@ -3345,7 +3361,7 @@ function erben(p){
   if(!/ (II\.|III\.|IV\.|V\.|VI\.|VII\.|\d+\.)$/.test(p.name)) p.name = p.name + " " + roem;
   else p.name = p.name.replace(/ (II\.|III\.|IV\.|V\.|VI\.|VII\.|\d+\.)$/, " " + roem);
   const zg = zugVon(p);
-  geschichte("👶", `${alterName} stirbt — ${p.name} (${zg?zg.n.toLowerCase():"?"}) tritt das Erbe an (Erbstreit: −${fmt(verlustGeld)} T, −${fmt(verlustLand)} ha).`);
+  geschichte("👶", `${alterName} stirbt · ${p.name} (${zg?zg.n.toLowerCase():"?"}) tritt das Erbe an (Erbstreit: −${fmt(verlustGeld)} T, −${fmt(verlustLand)} ha).`);
   if(!p.ki && zg) toast(`${zg.ico} Der neue Regent ist <b>${zg.n.toLowerCase()}</b>: ${zg.d}`, 7000);
   quicksave(); mpSync();
 }
@@ -3355,15 +3371,15 @@ const EREIGNISSE = [
   { id:"bettler", ico:"🥣",
     txt:p=>`Ein Zug ausgehungerter Bettelleute lagert vor Euren Toren und fleht um Brot.`,
     wahl:[
-      { t:"Kornkammern öffnen", fx:p=>{ const k=Math.min(p.korn,Math.ceil(noetigKorn(p)*0.15)); p.korn-=k; p.stimmung=clamp(p.stimmung+8,5,100); folgePlanen(p,"dankbarkeit",3); return `Ihr gebt ${fmt(k)} Fuder — das Volk preist Eure Milde.`; } },
+      { t:"Kornkammern öffnen", fx:p=>{ const k=Math.min(p.korn,Math.ceil(noetigKorn(p)*0.15)); p.korn-=k; p.stimmung=clamp(p.stimmung+8,5,100); folgePlanen(p,"dankbarkeit",3); return `Ihr gebt ${fmt(k)} Fuder, das Volk preist Eure Milde.`; } },
       { t:"Abweisen", fx:p=>{ p.stimmung=clamp(p.stimmung-5,5,100); folgePlanen(p,"aufruhr",2); return "Die Bettler ziehen weiter. Man munkelt über Euer hartes Herz."; } }
     ]},
   { id:"raeuber", ico:"🗡️",
     txt:p=>`Eine Räuberbande brandschatzt die Dörfer am Waldrand.`,
     wahl:[
-      { t:"Kopfgeld aussetzen (800 T)", fx:p=>{ p.geld-=800; p.stimmung=clamp(p.stimmung+4,5,100); return "Die Bande wird gefasst — Ruhe kehrt ein."; } },
+      { t:"Kopfgeld aussetzen (800 T)", fx:p=>{ p.geld-=800; p.stimmung=clamp(p.stimmung+4,5,100); return "Die Bande wird gefasst. Ruhe kehrt ein."; } },
       { t:"Die Miliz schicken", fx:p=>{ const v=ri(15,45); p.pop-=v; p.stimmung=clamp(p.stimmung+2,5,100); return `Die Räuber werden vertrieben, doch ${v} Männer kehren nicht heim.`; } },
-      { t:"Ignorieren", fx:p=>{ const k=Math.round(p.korn*0.08); p.korn-=k; p.stimmung=clamp(p.stimmung-4,5,100); folgePlanen(p,"raeuberlager",2); return `Die Bande plündert ${fmt(k)} Fuder aus den Speichern — und bleibt in der Gegend.`; } }
+      { t:"Ignorieren", fx:p=>{ const k=Math.round(p.korn*0.08); p.korn-=k; p.stimmung=clamp(p.stimmung-4,5,100); folgePlanen(p,"raeuberlager",2); return `Die Bande plündert ${fmt(k)} Fuder aus den Speichern, und bleibt in der Gegend.`; } }
     ]},
   { id:"hochzeit", ico:"💍",
     txt:p=>`Eine angesehene Adelsfamilie bittet Euch, ihre Hochzeit auszurichten.`,
@@ -3372,73 +3388,73 @@ const EREIGNISSE = [
       { t:"Bescheiden gratulieren", fx:p=>{ p.stimmung=clamp(p.stimmung+2,5,100); return "Ein höfliches Geschenk, mehr nicht."; } }
     ]},
   { id:"damm", ico:"🌊",
-    txt:p=>`Der Fluss steigt bedrohlich — die Deiche sind alt und morsch.`,
+    txt:p=>`Der Fluss steigt bedrohlich, die Deiche sind alt und morsch.`,
     wahl:[
       { t:"Dämme verstärken (2.000 T)", fx:p=>{ p.geld-=2000; return "Die neuen Deiche halten. Die Felder bleiben trocken."; } },
-      { t:"Auf Gott vertrauen", fx:p=>{ folgePlanen(p,"deichbruch",1); if(Math.random()<0.45){ const k=Math.round(p.korn*0.15); p.korn-=k; p.stimmung=clamp(p.stimmung-6,5,100); return `Die Flut kommt! ${fmt(k)} Fuder verderben in den Speichern.`; } return "Der Fluss beruhigt sich — vorerst."; } }
+      { t:"Auf Gott vertrauen", fx:p=>{ folgePlanen(p,"deichbruch",1); if(Math.random()<0.45){ const k=Math.round(p.korn*0.15); p.korn-=k; p.stimmung=clamp(p.stimmung-6,5,100); return `Die Flut kommt! ${fmt(k)} Fuder verderben in den Speichern.`; } return "Der Fluss beruhigt sich, vorerst."; } }
     ]},
   { id:"wucherer", ico:"🎭",
-    txt:p=>`Ein fahrender Händler bietet 200 Fuder Korn zum halben Marktpreis — die Herkunft ist zweifelhaft.`,
+    txt:p=>`Ein fahrender Händler bietet 200 Fuder Korn zum halben Marktpreis, die Herkunft ist zweifelhaft.`,
     wahl:[
-      { t:p=>`Kaufen (${fmt(Math.round((G.kornMarkt||100)*100))} T)`, fx:p=>{ const kosten=Math.round((G.kornMarkt||100)*100); if(p.geld<kosten) return "Eure Kasse gibt das nicht her."; p.geld-=kosten; p.korn+=200; if(Math.random()<0.25){ p.stimmung=clamp(p.stimmung-6,5,100); return "Das Korn stammt aus einem Raubzug — das Volk murrt über den Hehlerhandel."; } return "Ein Schnäppchen — niemand fragt nach."; } },
-      { t:"Ablehnen", fx:p=>{ p.stimmung=clamp(p.stimmung+2,5,100); return "Ihr bleibt sauber — das spricht sich herum."; } }
+      { t:p=>`Kaufen (${fmt(Math.round((G.kornMarkt||100)*100))} T)`, fx:p=>{ const kosten=Math.round((G.kornMarkt||100)*100); if(p.geld<kosten) return "Eure Kasse gibt das nicht her."; p.geld-=kosten; p.korn+=200; if(Math.random()<0.25){ p.stimmung=clamp(p.stimmung-6,5,100); return "Das Korn stammt aus einem Raubzug, das Volk murrt über den Hehlerhandel."; } return "Ein Schnäppchen, niemand fragt nach."; } },
+      { t:"Ablehnen", fx:p=>{ p.stimmung=clamp(p.stimmung+2,5,100); return "Ihr bleibt sauber, das spricht sich herum."; } }
     ]},
   { id:"gaukler", ico:"🎪",
     txt:p=>`Eine berühmte Gauklertruppe bietet an, ein Fest für das Volk zu geben.`,
     wahl:[
-      { t:"Fest ausrichten (400 T)", fx:p=>{ p.geld-=400; p.stimmung=clamp(p.stimmung+8,5,100); folgePlanen(p,"maezen",1); return "Drei Tage Musik und Feuerschlucker — das Volk jubelt."; } },
+      { t:"Fest ausrichten (400 T)", fx:p=>{ p.geld-=400; p.stimmung=clamp(p.stimmung+8,5,100); folgePlanen(p,"maezen",1); return "Drei Tage Musik und Feuerschlucker, das Volk jubelt."; } },
       { t:"Wegschicken", fx:p=>"Die Gaukler ziehen zum Nachbarn weiter." }
     ]},
   { id:"komet", ico:"☄️",
-    txt:p=>`Ein Schweifstern steht am Nachthimmel — das Volk raunt von Omen und Unheil, die Gelehrten streiten.`,
+    txt:p=>`Ein Schweifstern steht am Nachthimmel, das Volk raunt von Omen und Unheil, die Gelehrten streiten.`,
     wahl:[
-      { t:"Hofastrologen deuten lassen (300 T)", fx:p=>{ p.geld-=300; p.stimmung=clamp(p.stimmung+6,5,100); return "Der Astrologe verkündet ein Zeichen des Aufstiegs — das Volk atmet auf."; } },
-      { t:"Als Naturschauspiel abtun", fx:p=>{ if(Math.random()<0.3){ p.stimmung=clamp(p.stimmung-6,5,100); return "Die Prediger nutzen Eure Gleichgültigkeit — Endzeitstimmung in den Gassen."; } return "Nach drei Nächten verblasst der Stern — und mit ihm das Gerede."; } }
+      { t:"Hofastrologen deuten lassen (300 T)", fx:p=>{ p.geld-=300; p.stimmung=clamp(p.stimmung+6,5,100); return "Der Astrologe verkündet ein Zeichen des Aufstiegs, das Volk atmet auf."; } },
+      { t:"Als Naturschauspiel abtun", fx:p=>{ if(Math.random()<0.3){ p.stimmung=clamp(p.stimmung-6,5,100); return "Die Prediger nutzen Eure Gleichgültigkeit. Endzeitstimmung in den Gassen."; } return "Nach drei Nächten verblasst der Stern, und mit ihm das Gerede."; } }
     ]},
   { id:"ingenieur", ico:"⚙️",
     txt:p=>`Ein reisender Ingenieur bietet an, Eure Mühlen mit einem neuartigen Kammrad zu versehen: „Nächstes Jahr mahlt Ihr das Anderthalbfache!"`,
     wahl:[
-      { t:"Anheuern (1.200 T)", fx:p=>{ if(p.geld<1200) return "Eure Kasse gibt das nicht her — der Ingenieur zieht enttäuscht weiter."; p.geld-=1200; folgePlanen(p,"erfindung",1); return "Er macht sich sofort ans Werk. Kommendes Jahr wird sich zeigen, was sein Kammrad taugt."; } },
+      { t:"Anheuern (1.200 T)", fx:p=>{ if(p.geld<1200) return "Eure Kasse gibt das nicht her, der Ingenieur zieht enttäuscht weiter."; p.geld-=1200; folgePlanen(p,"erfindung",1); return "Er macht sich sofort ans Werk. Kommendes Jahr wird sich zeigen, was sein Kammrad taugt."; } },
       { t:"Scharlatan! Fortjagen", fx:p=>{ return "Der Mann zieht zum Nachbarn weiter. Vielleicht war es doch kein Schwindel …"; } }
     ]},
   { id:"turnier", ico:"🏇",
-    txt:p=>`Die Ritterschaft bittet Euch, ein großes Turnier auszurichten — Lanzenstechen, Gaukelei und ein Fest für das ganze Reich.`,
+    txt:p=>`Die Ritterschaft bittet Euch, ein großes Turnier auszurichten. Lanzenstechen, Gaukelei und ein Fest für das ganze Reich.`,
     wahl:[
-      { t:"Prächtig ausrichten (800 T)", fx:p=>{ p.geld-=800; p.stimmung=clamp(p.stimmung+7,5,100); G.spieler.forEach(z=>{ if(z!==p&&!z.tot) bezAendern(p,z,5); }); return "Drei Tage Waffenspiel und Wein — Euer Name klingt in allen Reichen."; } },
-      { t:"Selbst in die Schranken reiten", fx:p=>{ if(Math.random()<0.5){ p.geld+=1500; p.stimmung=clamp(p.stimmung+9,5,100); return "Ihr werft den Champion aus dem Sattel! 1.500 Taler Siegprämie und tosender Jubel."; } p.stimmung=clamp(p.stimmung-3,5,100); p.todesJahr-=0.3; return "Eine Lanze trifft Euch hart — der Medicus schüttelt den Kopf, das Volk lacht verstohlen."; } },
+      { t:"Prächtig ausrichten (800 T)", fx:p=>{ p.geld-=800; p.stimmung=clamp(p.stimmung+7,5,100); G.spieler.forEach(z=>{ if(z!==p&&!z.tot) bezAendern(p,z,5); }); return "Drei Tage Waffenspiel und Wein. Euer Name klingt in allen Reichen."; } },
+      { t:"Selbst in die Schranken reiten", fx:p=>{ if(Math.random()<0.5){ p.geld+=1500; p.stimmung=clamp(p.stimmung+9,5,100); return "Ihr werft den Champion aus dem Sattel! 1.500 Taler Siegprämie und tosender Jubel."; } p.stimmung=clamp(p.stimmung-3,5,100); p.todesJahr-=0.3; return "Eine Lanze trifft Euch hart, der Medicus schüttelt den Kopf, das Volk lacht verstohlen."; } },
       { t:"Absagen", fx:p=>{ p.stimmung=clamp(p.stimmung-3,5,100); return "Die Ritterschaft zieht murrend ab."; } }
     ]},
   { id:"gesandtschaft", ico:"🐫",
-    txt:p=>`Eine Gesandtschaft einer fernen Großmacht erscheint mit Seide und Säbeln: Man fordert 1.000 Taler „Wegzoll" — oder bietet ein Handelsgeschäft.`,
+    txt:p=>`Eine Gesandtschaft einer fernen Großmacht erscheint mit Seide und Säbeln: Man fordert 1.000 Taler „Wegzoll", oder bietet ein Handelsgeschäft.`,
     wahl:[
       { t:"Wegzoll zahlen (1.000 T)", fx:p=>{ p.geld-=1000; return "Die Gesandten verneigen sich kühl und ziehen weiter."; } },
       { t:"Handel: 200 Fuder Korn teuer verkaufen", fx:p=>{ const m=Math.min(200,p.korn); const preis=Math.round((G.kornMarkt||100)*1.6); p.korn-=m; p.geld+=m*preis; return `Sie zahlen Fantasiepreise: ${fmt(m)} Fuder für ${fmt(m*preis)} Taler!`; } },
-      { t:"Stolz abweisen", fx:p=>{ if(Math.random()<0.35){ const k=Math.round(p.korn*0.08); p.korn-=k; return `In der Nacht verschwinden ${fmt(k)} Fuder aus den Grenzdörfern — ein Abschiedsgruß.`; } p.stimmung=clamp(p.stimmung+3,5,100); return "Die Gesandten ziehen ab. Euer Volk ist stolz auf Euren geraden Rücken."; } }
+      { t:"Stolz abweisen", fx:p=>{ if(Math.random()<0.35){ const k=Math.round(p.korn*0.08); p.korn-=k; return `In der Nacht verschwinden ${fmt(k)} Fuder aus den Grenzdörfern, ein Abschiedsgruß.`; } p.stimmung=clamp(p.stimmung+3,5,100); return "Die Gesandten ziehen ab. Euer Volk ist stolz auf Euren geraden Rücken."; } }
     ]},
   { id:"grenzstein", ico:"🪨",
-    txt:p=>{ const nb=nachbarn(G.spieler.indexOf(p)).map(i=>G.spieler[i]).filter(z=>!z.tot)[0]; return `Bauern melden: ${nb?nb.name+"s":"des Nachbarn"} Leute haben Grenzsteine versetzt — 300 Hektar sind strittig.`; },
+    txt:p=>{ const nb=nachbarn(G.spieler.indexOf(p)).map(i=>G.spieler[i]).filter(z=>!z.tot)[0]; return `Bauern melden: ${nb?nb.name+"s":"des Nachbarn"} Leute haben Grenzsteine versetzt · 300 Hektar sind strittig.`; },
     wahl:[
-      { t:"Nachgeben", fx:p=>{ const nb=nachbarn(G.spieler.indexOf(p)).map(i=>G.spieler[i]).filter(z=>!z.tot)[0]; if(nb){ const ha=Math.min(300,freiLand(p)); p.land-=ha; nb.land+=ha; bezAendern(p,nb,12); return `Ihr überlasst ${nb.name} die ${fmt(ha)} Hektar — der Friede ist gewahrt.`; } return "Der Streit verläuft im Sande."; } },
+      { t:"Nachgeben", fx:p=>{ const nb=nachbarn(G.spieler.indexOf(p)).map(i=>G.spieler[i]).filter(z=>!z.tot)[0]; if(nb){ const ha=Math.min(300,freiLand(p)); p.land-=ha; nb.land+=ha; bezAendern(p,nb,12); return `Ihr überlasst ${nb.name} die ${fmt(ha)} Hektar, der Friede ist gewahrt.`; } return "Der Streit verläuft im Sande."; } },
       { t:"Hart bleiben", fx:p=>{ const nb=nachbarn(G.spieler.indexOf(p)).map(i=>G.spieler[i]).filter(z=>!z.tot)[0]; if(nb) bezAendern(p,nb,-12); return "Die Grenzsteine werden zurückversetzt. Man wird sich das merken."; } }
     ]}
 ];
 const EREIGNIS_GOLDADER = { id:"goldader", ico:"✨",
-  txt:p=>`Eure Steinbrecher stoßen auf eine glitzernde Ader im Fels — Gold! Noch weiß es niemand außer dem Vorarbeiter.`,
+  txt:p=>`Eure Steinbrecher stoßen auf eine glitzernde Ader im Fels. Gold! Noch weiß es niemand außer dem Vorarbeiter.`,
   wahl:[
-    { t:"Ordentlich verzollen und fördern", fx:p=>{ const g=ri(1500,2600); p.geld+=g; p.stimmung=clamp(p.stimmung+3,5,100); return `Die Ader gibt ${fmt(g)} Taler her — sauber verbucht, das Volk feiert Euer Glück.`; } },
-    { t:"Heimlich abschöpfen", fx:p=>{ const g=ri(2500,4000); p.geld+=g; if(Math.random()<0.35){ p.stimmung=clamp(p.stimmung-8,5,100); return `${fmt(g)} Taler — doch der Vorarbeiter plaudert im Wirtshaus. Man nennt Euch nun raffgierig.`; } return `${fmt(g)} Taler wandern still in Eure Schatulle. Niemand fragt nach.`; } }
+    { t:"Ordentlich verzollen und fördern", fx:p=>{ const g=ri(1500,2600); p.geld+=g; p.stimmung=clamp(p.stimmung+3,5,100); return `Die Ader gibt ${fmt(g)} Taler her, sauber verbucht, das Volk feiert Euer Glück.`; } },
+    { t:"Heimlich abschöpfen", fx:p=>{ const g=ri(2500,4000); p.geld+=g; if(Math.random()<0.35){ p.stimmung=clamp(p.stimmung-8,5,100); return `${fmt(g)} Taler, doch der Vorarbeiter plaudert im Wirtshaus. Man nennt Euch nun raffgierig.`; } return `${fmt(g)} Taler wandern still in Eure Schatulle. Niemand fragt nach.`; } }
   ]};
 const EREIGNIS_WALDBRAND = { id:"waldbrand", ico:"🔥",
-  txt:p=>`Rauch über dem Forst! Ein Blitzschlag hat das Unterholz entzündet — die Flammen fressen sich auf Euren Forsthof zu.`,
+  txt:p=>`Rauch über dem Forst! Ein Blitzschlag hat das Unterholz entzündet, die Flammen fressen sich auf Euren Forsthof zu.`,
   wahl:[
-    { t:"Alle Männer zum Löschen!", fx:p=>{ const v=ri(5,20); p.pop-=v; const h=Math.round((p.holz||0)*0.1); p.holz-=h; return `Nach zwei Tagen ist der Brand erstickt — ${v} Helfer verletzt, ${fmt(h)} Holz verloren, der Forst gerettet.`; } },
-    { t:"Brennen lassen und Schneisen ziehen", fx:p=>{ const h=Math.round((p.holz||0)*0.35); p.holz-=h; if(Math.random()<0.3 && (p.forst||0)>0){ p.forst--; const idx=(p.gebaeude||[]).findIndex(g=>g.t==="f"); if(idx>=0) p.gebaeude.splice(idx,1); return `Das Feuer verschlingt ${fmt(h)} Holz — und einen ganzen Forsthof.`; } return `Die Schneisen halten. ${fmt(h)} Holz verbrennt, doch der Hof steht.`; } }
+    { t:"Alle Männer zum Löschen!", fx:p=>{ const v=ri(5,20); p.pop-=v; const h=Math.round((p.holz||0)*0.1); p.holz-=h; return `Nach zwei Tagen ist der Brand erstickt · ${v} Helfer verletzt, ${fmt(h)} Holz verloren, der Forst gerettet.`; } },
+    { t:"Brennen lassen und Schneisen ziehen", fx:p=>{ const h=Math.round((p.holz||0)*0.35); p.holz-=h; if(Math.random()<0.3 && (p.forst||0)>0){ p.forst--; const idx=(p.gebaeude||[]).findIndex(g=>g.t==="f"); if(idx>=0) p.gebaeude.splice(idx,1); return `Das Feuer verschlingt ${fmt(h)} Holz, und einen ganzen Forsthof.`; } return `Die Schneisen halten. ${fmt(h)} Holz verbrennt, doch der Hof steht.`; } }
   ]};
 const EREIGNIS_PIRATEN = { id:"piraten", ico:"🏴‍☠️",
   txt:p=>`Flusspiraten kapern Lastkähne vor Eurem Hafen und fordern Wegzoll.`,
   wahl:[
-    { t:"Wegzoll zahlen (600 T)", fx:p=>{ p.geld-=600; return "Die Piraten ziehen ab — vorerst."; } },
-    { t:"Die Miliz auf Kähne setzen", fx:p=>{ if(Math.random()<0.6){ p.stimmung=clamp(p.stimmung+5,5,100); return "Die Piraten werden versenkt! Der Fluss ist frei."; } const k=Math.round(p.korn*0.1); p.korn-=k; return `Das Gefecht misslingt — ${fmt(k)} Fuder Fracht gehen verloren.`; } }
+    { t:"Wegzoll zahlen (600 T)", fx:p=>{ p.geld-=600; return "Die Piraten ziehen ab, vorerst."; } },
+    { t:"Die Miliz auf Kähne setzen", fx:p=>{ if(Math.random()<0.6){ p.stimmung=clamp(p.stimmung+5,5,100); return "Die Piraten werden versenkt! Der Fluss ist frei."; } const k=Math.round(p.korn*0.1); p.korn-=k; return `Das Gefecht misslingt · ${fmt(k)} Fuder Fracht gehen verloren.`; } }
   ]};
 /* ---------- Ereignisketten: Entscheidungen wirken Jahre später nach ---------- */
 function folgePlanen(p, id, inJahren){
@@ -3452,45 +3468,45 @@ function faelligeFolge(p){
 }
 const FOLGEN = {
   raeuberlager: { id:"raeuberlager", ico:"⛺",
-    txt:p=>`Die Räuberbande, die Ihr einst gewähren ließt, hat sich tief im Wald verschanzt — ihr Lager ist zur Festung des Gesindels geworden, und die Dörfer zahlen ihr heimlich Tribut.`,
+    txt:p=>`Die Räuberbande, die Ihr einst gewähren ließt, hat sich tief im Wald verschanzt, ihr Lager ist zur Festung des Gesindels geworden, und die Dörfer zahlen ihr heimlich Tribut.`,
     wahl:[
       { t:"Feldzug gegen das Lager (1.500 T)", fx:p=>{ p.geld-=1500; const v=ri(20,50); p.pop-=v; p.stimmung=clamp(p.stimmung+8,5,100); return `Das Lager wird ausgehoben! ${v} Männer fallen, doch die Straßen sind endlich sicher.`; } },
-      { t:"Weiter dulden", fx:p=>{ const k=Math.round(p.korn*0.12); p.korn-=k; p.stimmung=clamp(p.stimmung-6,5,100); folgePlanen(p,"raeuberlager",2); return `Die Bande presst ${fmt(k)} Fuder aus den Dörfern — und wird weiter erstarken.`; } }
+      { t:"Weiter dulden", fx:p=>{ const k=Math.round(p.korn*0.12); p.korn-=k; p.stimmung=clamp(p.stimmung-6,5,100); folgePlanen(p,"raeuberlager",2); return `Die Bande presst ${fmt(k)} Fuder aus den Dörfern, und wird weiter erstarken.`; } }
     ]},
   aufruhr: { id:"aufruhr", ico:"🔥",
-    txt:p=>`Die Bettler, die Ihr einst abgewiesen habt, haben ihr Elend in die Gassen getragen — nun gärt es: Aufruhr vor den Speichern!`,
+    txt:p=>`Die Bettler, die Ihr einst abgewiesen habt, haben ihr Elend in die Gassen getragen, nun gärt es: Aufruhr vor den Speichern!`,
     wahl:[
-      { t:"Die Miliz einschreiten lassen", fx:p=>{ const v=ri(30,80); p.pop-=v; p.stimmung=clamp(p.stimmung-8,5,100); return `Die Miliz schlägt den Aufruhr nieder — ${v} Tote, und das Volk vergisst so etwas nicht.`; } },
-      { t:"Zugeständnisse machen", fx:p=>{ const k=Math.round(p.korn*0.10); p.korn-=k; p.stimmung=clamp(p.stimmung+4,5,100); return `Ihr öffnet die Speicher (${fmt(k)} Fuder) — der Zorn verraucht, Eure Milde macht die Runde.`; } }
+      { t:"Die Miliz einschreiten lassen", fx:p=>{ const v=ri(30,80); p.pop-=v; p.stimmung=clamp(p.stimmung-8,5,100); return `Die Miliz schlägt den Aufruhr nieder · ${v} Tote, und das Volk vergisst so etwas nicht.`; } },
+      { t:"Zugeständnisse machen", fx:p=>{ const k=Math.round(p.korn*0.10); p.korn-=k; p.stimmung=clamp(p.stimmung+4,5,100); return `Ihr öffnet die Speicher (${fmt(k)} Fuder), der Zorn verraucht, Eure Milde macht die Runde.`; } }
     ]},
   dankbarkeit: { id:"dankbarkeit", ico:"🙏",
-    txt:p=>`Die Bettelleute, die Ihr einst speistet, haben Euren Namen in alle Winde getragen — nun stehen ihre Sippen vor den Toren und wollen sich in Eurem Reich niederlassen.`,
+    txt:p=>`Die Bettelleute, die Ihr einst speistet, haben Euren Namen in alle Winde getragen, nun stehen ihre Sippen vor den Toren und wollen sich in Eurem Reich niederlassen.`,
     wahl:[
-      { t:"Willkommen heißen", fx:p=>{ const z=Math.round(p.pop*0.03)+ri(40,90); p.pop+=z; p.stimmung=clamp(p.stimmung+5,5,100); return `+${fmt(z)} fleißige Neubürger — Eure Milde von damals trägt Früchte.`; } },
+      { t:"Willkommen heißen", fx:p=>{ const z=Math.round(p.pop*0.03)+ri(40,90); p.pop+=z; p.stimmung=clamp(p.stimmung+5,5,100); return `+${fmt(z)} fleißige Neubürger. Eure Milde von damals trägt Früchte.`; } },
       { t:"Nur die Kräftigsten aufnehmen", fx:p=>{ const z=ri(20,50); p.pop+=z; return `+${fmt(z)} Handwerker bleiben, der Rest zieht weiter.`; } }
     ]},
   maezen: { id:"maezen", ico:"🎨",
-    txt:p=>`Euer prächtiges Gauklerfest ist in aller Munde — ein berühmter Hofmaler bittet darum, an Eurem Hofe wirken zu dürfen.`,
+    txt:p=>`Euer prächtiges Gauklerfest ist in aller Munde, ein berühmter Hofmaler bittet darum, an Eurem Hofe wirken zu dürfen.`,
     wahl:[
       { t:"Anstellen (600 T)", fx:p=>{ p.geld-=600; p.stimmung=clamp(p.stimmung+6,5,100); G.spieler.forEach(z=>{ if(z!==p&&!z.tot) bezAendern(p,z,3); }); return "Seine Gemälde tragen Euren Ruhm in alle Reiche."; } },
-      { t:"Höflich ablehnen", fx:p=>"Der Maler zieht weiter — schade um den Ruhm." }
+      { t:"Höflich ablehnen", fx:p=>"Der Maler zieht weiter, schade um den Ruhm." }
     ]},
   adelsgunst: { id:"adelsgunst", ico:"🎁",
     txt:p=>`Die Adelsfamilie, deren Hochzeit Ihr einst so prunkvoll ausrichtetet, revanchiert sich mit einer Gesandtschaft voller Geschenke.`,
     wahl:[
-      { t:"Mit Dank annehmen", fx:p=>{ const g=ri(1000,1800); p.geld+=g; return `${fmt(g)} Taler in Gold und Geschmeide — Großzügigkeit zahlt sich aus.`; } }
+      { t:"Mit Dank annehmen", fx:p=>{ const g=ri(1000,1800); p.geld+=g; return `${fmt(g)} Taler in Gold und Geschmeide. Großzügigkeit zahlt sich aus.`; } }
     ]},
   erfindung: { id:"erfindung", ico:"⚙️",
     txt:p=>`Der Ingenieur präsentiert stolz sein Werk: Alle Mühlen tragen nun das neue Kammrad. „Zur Ernte werdet Ihr staunen, ${titelName(p)}!"`,
     wahl:[
-      { t:"Das Werk abnehmen", fx:p=>{ p._ernteBonus = 0.35; return "Die Räder greifen wie Zahnwerk einer Uhr — die kommende Ernte wird kräftig ausfallen (+35 %)."; } },
-      { t:"Zusätzlich eine Prämie zahlen (400 T)", fx:p=>{ p.geld-=400; p._ernteBonus = 0.45; return "Der Ingenieur, beflügelt vom Lohn, feilt noch eine Woche nach — die Ernte wird glänzen (+45 %)."; } }
+      { t:"Das Werk abnehmen", fx:p=>{ p._ernteBonus = 0.35; return "Die Räder greifen wie Zahnwerk einer Uhr, die kommende Ernte wird kräftig ausfallen (+35 %)."; } },
+      { t:"Zusätzlich eine Prämie zahlen (400 T)", fx:p=>{ p.geld-=400; p._ernteBonus = 0.45; return "Der Ingenieur, beflügelt vom Lohn, feilt noch eine Woche nach, die Ernte wird glänzen (+45 %)."; } }
     ]},
   deichbruch: { id:"deichbruch", ico:"🌊",
-    txt:p=>`Die Deiche, die Ihr im letzten Hochwasser dem Himmel überließt, sind mürbe geworden — die Flussmeister schlagen erneut Alarm.`,
+    txt:p=>`Die Deiche, die Ihr im letzten Hochwasser dem Himmel überließt, sind mürbe geworden, die Flussmeister schlagen erneut Alarm.`,
     wahl:[
       { t:"Jetzt gründlich verstärken (2.500 T)", fx:p=>{ p.geld-=2500; return "Diesmal wird ordentlich gebaut. Die Deiche halten auf Jahre."; } },
-      { t:"Wieder riskieren", fx:p=>{ if(Math.random()<0.5){ const k=Math.round(p.korn*0.2); p.korn-=k; p.stimmung=clamp(p.stimmung-8,5,100); return `Der Deich bricht! ${fmt(k)} Fuder versinken in den Fluten.`; } return "Noch einmal gutgegangen — der Fluss bleibt in seinem Bett."; } }
+      { t:"Wieder riskieren", fx:p=>{ if(Math.random()<0.5){ const k=Math.round(p.korn*0.2); p.korn-=k; p.stimmung=clamp(p.stimmung-8,5,100); return `Der Deich bricht! ${fmt(k)} Fuder versinken in den Fluten.`; } return "Noch einmal gutgegangen, der Fluss bleibt in seinem Bett."; } }
     ]}
 };
 function ereignisWuerfeln(p){
@@ -3558,7 +3574,7 @@ function diploAktion(art){
       else toast(`❌ ${ziel.name} lehnt das Angebot ab.`);
     } else {
       G.angebote.push(angebot);
-      toast(`📜 Angebot an ${ziel.name} übermittelt — Antwort zu Beginn ${ziel.w?"ihres":"seines"} Zuges.`);
+      toast(`📜 Angebot an ${ziel.name} übermittelt. Antwort zu Beginn ${ziel.w?"ihres":"seines"} Zuges.`);
       mpSync();
     }
     p.diploZaehler++;
@@ -3567,13 +3583,13 @@ function diploAktion(art){
     if(routeAktiv(pi, zi)){ alertMsg("Zwischen Euren Reichen verkehren bereits Karawanen."); return; }
     if(routenVon(pi).length >= 3){ alertMsg("Mehr als drei Routen kann Euer Reich nicht unterhalten."); return; }
     if(p.geld < 1500){ alertMsg("Der Aufbau einer Route kostet 1.500 Taler."); return; }
-    if(bezWert(p, ziel) < 0){ alertMsg("Dafür ist das Verhältnis zu frostig — sendet erst Geschenke."); return; }
+    if(bezWert(p, ziel) < 0){ alertMsg("Dafür ist das Verhältnis zu frostig, sendet erst Geschenke."); return; }
     if(ziel.ki){
       if(routenVon(zi).length < 3 && (ziel.kiTyp === "haendler" || bezWert(ziel, p) >= 10)){
         p.geld -= 1500;
         routeEroeffnen(pi, zi);
-        toast(`🚚 ${ziel.name} lässt die Karawanen rollen — beide Reiche kassieren fortan Zoll.`);
-      } else toast(`❌ ${ziel.name} winkt ab — kein Interesse an Eurer Route.`);
+        toast(`🚚 ${ziel.name} lässt die Karawanen rollen, beide Reiche kassieren fortan Zoll.`);
+      } else toast(`❌ ${ziel.name} winkt ab, kein Interesse an Eurer Route.`);
     } else {
       G.angebote.push({ von:pi, an:zi, richtung:"route", menge:0, preis:0, jahr:G.jahr });
       toast(`📜 Routen-Angebot an ${ziel.name} übermittelt.`);
@@ -3589,7 +3605,7 @@ function diploAktion(art){
       const schwelle = ziel.kiTyp === "aggressor" ? 40 : 20;
       if(bezWert(ziel, p) + mitgift/300 >= schwelle){
         eheSchliessen(p, ziel, mitgift);
-        toast(`💍 ${ziel.name} nimmt den Heiratsantrag an — die Häuser sind vereint (12 Jahre Frieden).`);
+        toast(`💍 ${ziel.name} nimmt den Heiratsantrag an, die Häuser sind vereint (12 Jahre Frieden).`);
       } else toast(`❌ ${ziel.name} weist den Antrag zurück. Pflegt erst das Verhältnis.`);
     } else {
       G.angebote.push({ von:G.spieler.indexOf(p), an:G.spieler.indexOf(ziel), richtung:"ehe", menge:mitgift, preis:0, jahr:G.jahr });
@@ -3705,10 +3721,10 @@ function kiAngebotPruefen(ki, a){
   const markt = G.kornMarkt || 100;
   const bez = bezWert(ki, G.spieler[a.von]);
   const toleranz = (ki.kiTyp==="haendler" ? 0.18 : 0.06) + bez/500;
-  if(a.richtung === "kauf"){           /* Anbieter kauft — KI verkauft */
+  if(a.richtung === "kauf"){           /* Anbieter kauft. KI verkauft */
     if(ki.korn - a.menge < noetigKorn(ki)*1.5) return false;
     return a.preis >= markt * (1 - toleranz);
-  } else {                             /* Anbieter verkauft — KI kauft */
+  } else {                             /* Anbieter verkauft. KI kauft */
     if(ki.geld < a.menge*a.preis + 4000) return false;
     return a.preis <= markt * (1 + toleranz);
   }
@@ -3736,7 +3752,7 @@ function kiDiploWahl(p, kr){
   const ang = G.spieler[kr.a], ver = G.spieler[kr.d];
   const bezA = bezWert(p, ang), bezV = bezWert(p, ver);
   const kampfbereit = heerGroesse(p.heer) > 50;
-  /* Freunden beistehen, Feinden schaden — je nach Charakter */
+  /* Freunden beistehen, Feinden schaden, je nach Charakter */
   if(kampfbereit){
     if(bezV > 30 && bezV > bezA && Math.random() < 0.6) return "def";
     if(bezA > 30 && bezA > bezV && Math.random() < (p.kiTyp==="aggressor" ? 0.55 : 0.35)) return "atk";
@@ -3861,7 +3877,7 @@ function kiZug(p){
     p.geld -= kosten; p.holz = (p.holz||0) + fh; p.stein = (p.stein||0) + fs;
     return true;
   };
-  /* eigene Betriebe zuerst — sie machen alle späteren Bauten billiger */
+  /* eigene Betriebe zuerst, sie machen alle späteren Bauten billiger */
   if((p.forst||0) < 2 && p.geld > 8000 && p.land >= 3000){ p.geld -= KOSTEN.forst; p.forst=(p.forst||0)+1; platziereGebaeude(p,"f"); bericht.push("legt einen Forsthof an"); }
   if((p.bruch||0) < 2 && p.geld > 10000 && p.land >= 5000 && kiMaterial("bruch")){ p.geld -= KOSTEN.bruch; zahleMaterial(p,"bruch"); p.bruch=(p.bruch||0)+1; platziereGebaeude(p,"s"); bericht.push("eröffnet einen Steinbruch"); }
   /* Bauen */
@@ -3888,7 +3904,7 @@ function kiZug(p){
   }
   if(p.land >= LAND.palast){ let t=0; while(p.geld > 25000 && p.palast < PALAST_TEILE && kiMaterial("palastTeil")){ p.geld-=KOSTEN.palastTeil; zahleMaterial(p,"palastTeil"); p.palast++; t++; } if(t) bericht.push(`baut am Palast (${p.palast}/${PALAST_TEILE})`); }
   if(p.palast >= PALAST_TEILE && p.land >= LAND.dom){ let t=0; while(p.geld > 112000 && p.dom < DOM_TEILE && kiMaterial("domTeil")){ p.geld-=KOSTEN.domTeil; zahleMaterial(p,"domTeil"); p.dom++; t++; } if(t) bericht.push(`baut an der Kathedrale (${p.dom}/${DOM_TEILE})`); }
-  /* Heer — der Eroberer rüstet stärker */
+  /* Heer, der Eroberer rüstet stärker */
   const heerZiel = (p.kiTyp==="aggressor" ? 260 : 130) + p.titel*80;
   if(p.titel>=1 && p.geld > (p.kiTyp==="aggressor" ? 14000 : 20000) && heerGroesse(p.heer) < heerZiel){
     const rekruten = Math.min(40, Math.floor((p.geld-12000)/KOSTEN.inf));
@@ -4063,25 +4079,25 @@ function hatQuicksave(){
    Die Lehrjahre: geführtes Tutorial mit Schritt-für-Schritt-Aufgaben
    ============================================================ */
 const LEHRE = [
-  { t:"Gebt dem Volk mehr als das nötige Korn — etwa +25 % (Knopf bei der Kornausgabe).",
+  { t:"Gebt dem Volk mehr als das nötige Korn, etwa +25 % (Knopf bei der Kornausgabe).",
     ok:(p,f)=> p.ausgabe > noetigKorn(p) },
-  { t:"Kauft am Markt Korn oder Land — Spekulation ist Eure wichtigste Einnahmequelle.",
+  { t:"Kauft am Markt Korn oder Land. Spekulation ist Eure wichtigste Einnahmequelle.",
     ok:(p,f)=> !!f.gehandelt },
   { t:"Setzt maßvolle Steuern: Einkommen- und Mehrwertsteuer zusammen unter 45 %.",
     ok:(p,f)=> !!f.steuern },
-  { t:"Baut Euren ersten Markt (1.000 T + 20 🪵) — er bringt Zölle und Miliz.",
+  { t:"Baut Euren ersten Markt (1.000 T + 20 🪵), er bringt Zölle und Miliz.",
     ok:(p,f)=> p.maerkte >= 1 },
-  { t:"Legt einen Forsthof an (800 T) — er liefert jedes Jahr 30 🪵 Holz.",
+  { t:"Legt einen Forsthof an (800 T), er liefert jedes Jahr 30 🪵 Holz.",
     ok:(p,f)=> (p.forst||0) >= 1 },
   { t:"Schließt das Jahr ab und lest die Jahresbilanz aufmerksam.",
     ok:(p,f)=> G.jahr > 1700 },
-  { t:"Baut eine Mühle (2.000 T + Material) — sie steigert Eure Ernte um 5 %.",
+  { t:"Baut eine Mühle (2.000 T + Material), sie steigert Eure Ernte um 5 %.",
     ok:(p,f)=> p.muehlen >= 1 },
-  { t:"Sendet Meister Konrad ein Geschenk (Bauen → Diplomatie) — Freunde sind Gold wert.",
+  { t:"Sendet Meister Konrad ein Geschenk (Bauen → Diplomatie). Freunde sind Gold wert.",
     ok:(p,f)=> !!f.geschenk },
-  { t:"Werbt mindestens 10 Infanteristen an (Bauen → Militär) — ganz ohne Schutz geht es nicht.",
+  { t:"Werbt mindestens 10 Infanteristen an (Bauen → Militär), ganz ohne Schutz geht es nicht.",
     ok:(p,f)=> p.heer.inf >= 10 },
-  { t:"Schließt ein weiteres Jahr ab — dann seid Ihr bereit für die Kampagne!",
+  { t:"Schließt ein weiteres Jahr ab, dann seid Ihr bereit für die Kampagne!",
     ok:(p,f)=> G.jahr > 1701 }
 ];
 function lehreStart(){
@@ -4111,7 +4127,7 @@ function lehreCheck(){
 }
 
 /* ============================================================
-   Der Reichstag: alle zehn Jahre stimmen die Regenten ab —
+   Der Reichstag: alle zehn Jahre stimmen die Regenten ab.
    Stimmgewicht nach Titel, die KI stimmt nach Interesse.
    ============================================================ */
 const REICHSTAG_VORSCHLAEGE = [
@@ -4130,7 +4146,7 @@ function reichstagEinberufen(){
   G.reichstag = { jahr:G.jahr, vorschlag:v.id, stimmen:{}, bestochen:{} };
   for(const {p,i} of lebende().map(x=>({p:x.p,i:x.i})))
     if(p.ki) G.reichstag.stimmen[i] = v.kiJa(p) ? "ja" : "nein";
-  geschichte("🏛️", `Der Reichstag tritt zusammen — beraten wird: ${v.n}.`);
+  geschichte("🏛️", `Der Reichstag tritt zusammen, beraten wird: ${v.n}.`);
 }
 const reichstagVorschlag = () => REICHSTAG_VORSCHLAEGE.find(v=>v.id===G.reichstag.vorschlag);
 const stimmgewicht = p => (p.titel||0) + 1 + (hatPrivileg(p,6) ? 3 : 0);
@@ -4180,23 +4196,23 @@ function reichstagAuswerten(){
     }
   }
   geschichte("🏛️", `Der Reichstag ${angenommen?"beschließt":"verwirft"} „${v.n}" (${ja}:${nein} Stimmen).`);
-  toast(`🏛️ Der Reichstag ${angenommen?"beschließt":"verwirft"} <b>${v.n}</b> — ${ja}:${nein} Stimmen.`, 7000);
+  toast(`🏛️ Der Reichstag ${angenommen?"beschließt":"verwirft"} <b>${v.n}</b> · ${ja}:${nein} Stimmen.`, 7000);
   G.reichstag = null;
 }
 
 /* ============================================================
-   Kampagne: vier verkettete Kapitel — vom Bauernsohn zum Kaiser
+   Kampagne: vier verkettete Kapitel, vom Bauernsohn zum Kaiser
    ============================================================ */
 const KAMPAGNE = [
   { titel:"Der Bauernsohn", ico:"🌾",
     intro:`Anno 1700. Euer Vater, ein freier Bauer, hinterlässt Euch ein kleines Gut am Fluss.
-      Die Nachbarn — ein geschäftiger Baumeister und ein listiger Kaufmann — belächeln den
+      Die Nachbarn, ein geschäftiger Baumeister und ein listiger Kaufmann, belächeln den
       Emporkömmling. Zeigt ihnen, dass in Euch mehr steckt als Ackerschmutz und Schwielen.`,
     ziel:"Steigt bis Anno 1716 zum Landgrafen auf.",
     bis:1716, ok:p=>p.titel>=2,
     kis:["baumeister","haendler"], szenario:"frei", diff:2 },
   { titel:"Die Schulden des Vaters", ico:"🪙",
-    intro:`Euer Aufstieg weckt Begehrlichkeiten: Ein vergessener Schuldbrief des Vaters taucht auf —
+    intro:`Euer Aufstieg weckt Begehrlichkeiten: Ein vergessener Schuldbrief des Vaters taucht auf.
       4.000 Taler, sofort fällig. Die Gläubiger lachen schon. Wirtschaftet Euch frei und beweist,
       dass Euer Haus mehr kann als Schulden erben.`,
     ziel:"Erwirtschaftet bis Anno 1720 ein Vermögen von 30.000 Talern und eine Stadt.",
@@ -4204,14 +4220,14 @@ const KAMPAGNE = [
     kis:["haendler","haendler"], szenario:"erbe", diff:2 },
   { titel:"Die Kriegstreiber", ico:"⚔️",
     intro:`Euer Reichtum ist den Säbelrasslern ein Dorn im Auge. Aufgerüstete Nachbarn scharren an
-      den Grenzen — diesmal helfen keine Taler, sondern nur Mut und ein gutes Heer. Schlagt sie
+      den Grenzen, diesmal helfen keine Taler, sondern nur Mut und ein gutes Heer. Schlagt sie
       auf dem Feld, ehe sie Euch schlagen.`,
     ziel:"Gewinnt bis Anno 1722 zwei Schlachten.",
     bis:1722, ok:p=>p.stat.siege>=2,
     kis:["aggressor","aggressor","baumeister"], szenario:"kriegstreiber", diff:2 },
   { titel:"Die Krone", ico:"👑",
-    intro:`Der Kaiserthron ist verwaist, und das Reich blickt auf Euch. Alles, was Ihr gelernt habt —
-      Wirtschaft, Diplomatie, Krieg — entscheidet nun über die Krone. Vollendet die Kathedrale
+    intro:`Der Kaiserthron ist verwaist, und das Reich blickt auf Euch. Alles, was Ihr gelernt habt.
+      Wirtschaft, Diplomatie, Krieg, entscheidet nun über die Krone. Vollendet die Kathedrale
       und werdet, was Euer Vater nie zu träumen wagte: Kaiser.`,
     ziel:"Werdet Kaiser, ehe Eure Linie endet.",
     bis:9999, ok:p=>p.titel>=8,
@@ -4399,7 +4415,7 @@ function kopf(){
     $("#hTimer").style.display = "";
     const tick = () => {
       const t = Math.floor((Date.now()-cur().turnStart)/1000);
-      $("#hTimer").innerHTML = t>90 ? `⏳ <b>${t}s</b> — Euer Leben verrinnt!` : `⏱ <b>${t}s</b> / 90s`;
+      $("#hTimer").innerHTML = t>90 ? `⏳ <b>${t}s</b>. Euer Leben verrinnt!` : `⏱ <b>${t}s</b> / 90s`;
       $("#hTimer").className = "chip" + (t>90 ? " warn" : "");
     };
     tick(); timerIv = setInterval(tick, 1000);
@@ -4457,7 +4473,7 @@ function render(){
   if(G.lehre && G.lehre.schritt < LEHRE.length && G.spieler.length && G.aktiv === 0
      && ["status","korn","handel","zwbilanz","steuern","bauen","bilanz","diplo","handoff","entscheidung"].includes(G.screen)){
     el.insertAdjacentHTML("afterbegin",
-      `<div class="card tut" style="border-color:var(--gold)">🎓 <b>Lehrjahre — Aufgabe ${G.lehre.schritt+1}/${LEHRE.length}:</b>
+      `<div class="card tut" style="border-color:var(--gold)">🎓 <b>Lehrjahre · Aufgabe ${G.lehre.schritt+1}/${LEHRE.length}:</b>
        ${LEHRE[G.lehre.schritt].t}</div>`);
   }
   /* Berater-Tipp der Phase einblenden */
@@ -4675,7 +4691,7 @@ function zeichnePartieReplay(t){
   ctx.fillText(`${r.speed}×`, 168, 34);
   if(r.fertig){
     ctx.fillStyle = "rgba(224,180,88,.92)"; ctx.font = "bold 17px Georgia, serif"; ctx.textAlign = "center";
-    ctx.fillText(`⏳ ${r.j0}–${r.j1} — die ganze Regentschaft im Zeitraffer`, W/2, 34);
+    ctx.fillText(`⏳ ${r.j0}–${r.j1}, die ganze Regentschaft im Zeitraffer`, W/2, 34);
   }
 }
 
@@ -4750,7 +4766,7 @@ const SCREENS = {
     <div class="card" style="max-width:640px;margin:0 auto 16px">
       <p>Führt Euer Volk vom einfachen <b>Herrn</b> zum <b class="gold">Kaiser</b>:
       Verteilt Korn, spekuliert mit Land, erhebt Steuern, baut Märkte, Mühlen, Palast und
-      Kathedrale, unterhaltet ein stehendes Heer — und schmiedet im Kriegsfall Bündnisse.</p>
+      Kathedrale, unterhaltet ein stehendes Heer, und schmiedet im Kriegsfall Bündnisse.</p>
       <p class="muted" style="margin-top:10px">Aber bedenkt: Eure Lebenszeit ist begrenzt.
       Wer länger als 90 Sekunden pro Zug grübelt, altert schneller.</p>
     </div>
@@ -4774,7 +4790,7 @@ const SCREENS = {
       </div>`;
     }).join("");
     return `
-      <h2>🏅 Erfolge — ${erfolge().size} von ${ERFOLGE.length}</h2>
+      <h2>🏅 Erfolge · ${erfolge().size} von ${ERFOLGE.length}</h2>
       <div class="grid g2">${karten}</div>
       <p class="muted small">Erfolge gelten für menschliche Regenten und bleiben auf diesem Gerät erhalten.</p>
       <button class="btn-primary btn-lg" onclick="zeige(G._vorErf || (G.spieler.length?'handoff':'title'))">Zurück</button>`;
@@ -4814,31 +4830,31 @@ const SCREENS = {
             ${rows}
           </table>
           <p class="muted small" style="margin-top:8px">Die Reihenfolge bestimmt die Nachbarschaft:
-          Reich 1 grenzt an Reich 2, Reich 2 an Reich 3 usw. — Kriege gegen Nicht-Nachbarn
+          Reich 1 grenzt an Reich 2, Reich 2 an Reich 3 usw.. Kriege gegen Nicht-Nachbarn
           brauchen Durchmarschrechte.</p>
         </div>
         <div class="card">
           <h3>Partie</h3>
           <div class="rowflex">
             <select id="tempo" style="width:100%">
-              <option value="1">Original — Leben bis ca. 1760–1768 (lange Partie)</option>
-              <option value="1.8" selected>Kurzspiel — schnelleres Wachstum, Leben bis ca. 1739–1746</option>
-              <option value="2.6">Blitz — für einen Abend: rasantes Wachstum, Leben bis ca. 1721–1726</option>
+              <option value="1">Original. Leben bis ca. 1760–1768 (lange Partie)</option>
+              <option value="1.8" selected>Kurzspiel, schnelleres Wachstum, Leben bis ca. 1739–1746</option>
+              <option value="2.6">Blitz, für einen Abend: rasantes Wachstum, Leben bis ca. 1721–1726</option>
             </select>
           </div>
           <div class="rowflex">
             <select id="szenario" style="width:100%">
               <option value="frei" selected>Freies Spiel</option>
-              <option value="erbe">Das verschuldete Erbe — Start mit 4.000 Talern Schulden</option>
-              <option value="kriegstreiber">Die Kriegstreiber — aufgerüstete, aggressive KI-Nachbarn</option>
-              <option value="kornkrise">Die Kornkrise — leere Speicher, Wucherpreise</option>
+              <option value="erbe">Das verschuldete Erbe. Start mit 4.000 Talern Schulden</option>
+              <option value="kriegstreiber">Die Kriegstreiber, aufgerüstete, aggressive KI-Nachbarn</option>
+              <option value="kornkrise">Die Kornkrise, leere Speicher, Wucherpreise</option>
             </select>
           </div>
           <div class="rowflex">
             <select id="diff" style="width:100%">
-              <option value="1">Leicht — mehr Startkapital, mildere Schicksalsschläge</option>
-              <option value="2" selected>Normal — wie es sich gehört</option>
-              <option value="3">Schwer — karge Kassen, launisches Schicksal, aggressive KI</option>
+              <option value="1">Leicht, mehr Startkapital, mildere Schicksalsschläge</option>
+              <option value="2" selected>Normal, wie es sich gehört</option>
+              <option value="3">Schwer, karge Kassen, launisches Schicksal, aggressive KI</option>
             </select>
           </div>
           <p class="muted small" style="margin-top:8px">Start im Jahr 1700 mit
@@ -4854,9 +4870,9 @@ const SCREENS = {
           </div>
           <div class="rowflex">
             <label class="small"><input type="checkbox" id="optDynastie" checked>
-            Dynastie — beim Tod übernimmt der Erbe (mit Erbstreit-Malus)</label>
+            Dynastie, beim Tod übernimmt der Erbe (mit Erbstreit-Malus)</label>
           </div>
-          <p class="muted small">Computer-Regenten regieren ihre Reiche selbstständig —
+          <p class="muted small">Computer-Regenten regieren ihre Reiche selbstständig,
           ideal für Solo-Partien gegen die Krone.</p>
         </div>
       </div>
@@ -4880,7 +4896,7 @@ const SCREENS = {
           Das alte Reich sucht einen neuen Kaiser. ${G.spieler.length>1?"Diese Regenten treten an:":"Ein Regent tritt an:"}</p>
         <div class="zer z3" style="margin:8px 0 4px">${reihen}</div>
         <p class="muted small zer z4" style="margin-top:10px">Wer zuerst Kathedrale, fünf Städte, 25.000 Hektar und
-        100.000 Taler vereint, trägt die Krone — doch die Lebenszeit verrinnt.</p>
+        100.000 Taler vereint, trägt die Krone, doch die Lebenszeit verrinnt.</p>
         <div class="zer z5" style="margin-top:22px">
           <button class="btn-primary btn-lg" onclick="MP&&MP.aktiv?mpRoute():zeige('handoff')">Der Aufstieg beginnt</button>
         </div>
@@ -4895,7 +4911,7 @@ const SCREENS = {
           <h3>Euer Name</h3>
           <input type="text" id="mpName" maxlength="14" value="${(MP&&MP.name)||"" }" placeholder="Regentenname">
           <p class="muted small" style="margin-top:10px">Alle Mitspieler brauchen nur diese Seite
-          und den Raum-Code — gespielt wird reihum, jeder an seinem Gerät.</p>
+          und den Raum-Code, gespielt wird reihum, jeder an seinem Gerät.</p>
         </div>
         <div class="card">
           <h3>Raum</h3>
@@ -4910,11 +4926,11 @@ const SCREENS = {
           <details style="margin-top:10px"><summary class="muted small">Eigener Server</summary>
             <input type="text" id="mpUrl" placeholder="${MP_STANDARD}" style="width:100%;margin-top:6px">
           </details>
-          <p class="muted small" style="margin-top:8px">Der Gratis-Server schläft bei Inaktivität —
+          <p class="muted small" style="margin-top:8px">Der Gratis-Server schläft bei Inaktivität,
           das Spiel weckt ihn automatisch und versucht es bis zu viermal (~1 Minute). Einfach
           kurz warten, die Lobby öffnet sich von selbst.</p>
           <p class="small" style="margin-top:8px">♻️ <b>Asynchron spielen:</b> Der Server merkt sich laufende
-          Partien. Verlasst das Spiel, wann Ihr wollt — mit <b>Code und demselben Namen</b> steigt Ihr
+          Partien. Verlasst das Spiel, wann Ihr wollt, mit <b>Code und demselben Namen</b> steigt Ihr
           jederzeit wieder ein, auch Tage später. Niemand muss gleichzeitig online sein.</p>
         </div>
       </div>
@@ -4943,7 +4959,7 @@ const SCREENS = {
       : liste === "fehler"
         ? '<p class="red">Der Spielserver ist gerade nicht erreichbar.</p>'
         : !liste.length
-          ? '<p class="muted">Keine öffentlichen Räume — eröffnet den ersten (Häkchen „öffentlich listen")!</p>'
+          ? '<p class="muted">Keine öffentlichen Räume, eröffnet den ersten (Häkchen „öffentlich listen")!</p>'
           : liste.map(r=>`
             <div class="rowflex" style="justify-content:space-between;border-bottom:1px solid var(--border);padding:6px 0">
               <span><b class="gold">${r.code}</b>${r.pass?" 🔒":""} · ${(r.namen||[]).join(", ")||"—"}
@@ -4974,7 +4990,7 @@ const SCREENS = {
       : liste === "fehler"
         ? '<p class="red">Der Spielserver ist gerade nicht erreichbar.</p>'
         : !liste.length
-          ? '<p class="muted">Noch keine Einträge — spielt die erste Online-Partie zu Ende!</p>'
+          ? '<p class="muted">Noch keine Einträge, spielt die erste Online-Partie zu Ende!</p>'
           : `<table>
               <tr><th></th><th>Regent</th><th class="r">Titel</th><th class="r">Endjahr</th><th class="r">Punkte</th></tr>
               ${liste.map((e,i)=>`<tr style="${i===0?'color:var(--gold);font-weight:700':''}">
@@ -4996,7 +5012,7 @@ const SCREENS = {
       <tr style="${r.z?'opacity:.6':''}"><td>${r.z?"👁️":WAPPEN[i%WAPPEN.length]} ${r.name}</td>
       <td class="r muted small">${r.z?"Zuschauer":r.host?"Gastgeber":"bereit"}${r.id===MP.id?" · Ihr":""}</td></tr>`).join("");
     return `
-      <h2>🌐 Lobby — Raum <span class="gold">${MP.code}</span></h2>
+      <h2>🌐 Lobby. Raum <span class="gold">${MP.code}</span></h2>
       <div class="grid g2">
         <div class="card">
           <h3>Angetreten (${(MP.roster||[]).length}/9)</h3>
@@ -5008,9 +5024,9 @@ const SCREENS = {
           <h3>Partie</h3>
           ${MP.host ? `
             <div class="rowflex"><select id="mpTempo" style="width:100%">
-              <option value="1">Original — lange Partie</option>
+              <option value="1">Original, lange Partie</option>
               <option value="1.8" selected>Kurzspiel</option>
-              <option value="2.6">Blitz — für einen Abend</option>
+              <option value="2.6">Blitz, für einen Abend</option>
             </select></div>
             <div class="rowflex"><select id="mpDiff" style="width:100%">
               <option value="1">Leicht</option><option value="2" selected>Normal</option><option value="3">Schwer</option>
@@ -5051,7 +5067,7 @@ const SCREENS = {
         <span class="schild" style="box-shadow:inset 0 0 26px ${wer?wer.farbe:'#888'}66">${wer?wer.wappen:"⏳"}</span>
         <h1 style="font-size:28px;margin-top:12px">Anno ${G.jahr}</h1>
         <p style="font-size:17px;margin:12px 0 4px"><b class="gold">${wer?titelName(wer)+" "+wer.name:"…"}</b> ${was} …</p>
-        <p class="muted small blink">${MP && MP.zuschauer ? "Ihr beobachtet diese Partie." : "Bitte warten — Euer Zug kommt."}</p>
+        <p class="muted small blink">${MP && MP.zuschauer ? "Ihr beobachtet diese Partie." : "Bitte warten. Euer Zug kommt."}</p>
       </div>
       <div class="card" style="max-width:640px;margin:0 auto">
         <h3>Die Reiche im Vergleich</h3>
@@ -5119,9 +5135,9 @@ const SCREENS = {
       </div>
       ${p.auftrag && auftragArt(p.auftrag) ? (()=>{ const art = auftragArt(p.auftrag); return `
       <div class="card" style="border-color:rgba(224,180,88,.5)">
-        <p><b class="gold">${art.ico} Reichsauftrag: ${art.n}</b> — ${art.txt(p.auftrag.ziel)}</p>
+        <p><b class="gold">${art.ico} Reichsauftrag: ${art.n}</b> · ${art.txt(p.auftrag.ziel)}</p>
         <p class="muted small" style="margin-top:4px">Belohnung: ${fmt(p.auftrag.lohn)} Taler · Frist: Anno ${p.auftrag.frist}
-          ${art.ok(p, p.auftrag) ? ' · <span class="green">Bedingung derzeit erfüllt — am Jahresende wird abgerechnet.</span>' : ""}</p>
+          ${art.ok(p, p.auftrag) ? ' · <span class="green">Bedingung derzeit erfüllt, am Jahresende wird abgerechnet.</span>' : ""}</p>
       </div>`; })() : ""}
       ${statKarten(p)}
       <div class="grid g2">
@@ -5193,10 +5209,10 @@ const SCREENS = {
     const p = cur();
     return `
       ${stepper("Handel")}
-      <h2>Markt — Korn- und Landhandel</h2>
+      <h2>Markt. Korn- und Landhandel</h2>
       <div class="grid g2">
         <div class="card">
-          <h3>🌾 Korn — ${fmt(p.kornPreis)} Taler / Fuder</h3>
+          <h3>🌾 Korn · ${fmt(p.kornPreis)} Taler / Fuder</h3>
           ${sparkline(p.kornHist)}
           <p class="muted small">Gemeinsamer Markt aller Reiche: große Verkäufe drücken den Kurs des
           Folgejahres, Aufkäufe treiben ihn. Spanne 20–430 Taler, 10 % Provision auf Verkäufe.</p>
@@ -5209,7 +5225,7 @@ const SCREENS = {
             <button onclick="handelKorn(-1)">Verkauf</button></div>
         </div>
         <div class="card">
-          <h3>🌍 Land — ${fmt(p.landPreis)} Taler / ha</h3>
+          <h3>🌍 Land · ${fmt(p.landPreis)} Taler / ha</h3>
           <p class="muted small">Schwankt zwischen 16 und 70 Talern. Auf Verkäufe werden 10 % Provision fällig.
           Land unter Euren Gebäuden ist unverkäuflich.</p>
           <p style="margin-top:8px">Verkäuflich: <b>${fmt(freiLand(p))} ha</b></p>
@@ -5222,7 +5238,7 @@ const SCREENS = {
         </div>
       </div>
       <div class="card">
-        <h3>🪵🪨 Baustoffe — Holz ${fmt(p.holzPreis||12)} T · Stein ${fmt(p.steinPreis||20)} T</h3>
+        <h3>🪵🪨 Baustoffe. Holz ${fmt(p.holzPreis||12)} T · Stein ${fmt(p.steinPreis||20)} T</h3>
         <p class="muted small">Bauwerke brauchen neben Talern auch Holz und Stein. Eigene Forsthöfe
         (30 🪵/Jahr) und Steinbrüche (20 🪨/Jahr) liefern günstiger als der Markt. Verkauf zum halben Preis.</p>
         <p style="margin-top:8px">Lager: <b>${fmt(p.holz||0)} 🪵 Holz</b> · <b>${fmt(p.stein||0)} 🪨 Stein</b></p>
@@ -5303,7 +5319,7 @@ const SCREENS = {
         <p style="font-size:16px;text-align:center;max-width:560px;margin:10px auto">${er.txt}</p>
         ${er.deltas.length
           ? `<table style="max-width:340px;margin:14px auto 4px">${zeilen}</table>`
-          : `<p class="muted center" style="margin-top:12px">Diesmal bleibt Euer Reich unberührt — doch man wird sich Eure Wahl merken.</p>`}
+          : `<p class="muted center" style="margin-top:12px">Diesmal bleibt Euer Reich unberührt, doch man wird sich Eure Wahl merken.</p>`}
         ${er.folge ? `<p class="small center" style="margin-top:10px;color:var(--gold)">⏳ Diese Entscheidung wird in einigen Jahren Folgen haben …</p>` : ""}
       </div>
       <div class="center" style="margin-top:14px">
@@ -5333,7 +5349,7 @@ const SCREENS = {
             ${[1,2,3,4].map(j=>`<option value="${j}" ${p.justiz===j?'selected':''}>${JUSTIZ[j]}</option>`).join("")}
           </select><span></span>
         </div>
-        <p class="muted small">Hohe Steuern füllen die Kasse, aber drücken die Stimmung —
+        <p class="muted small">Hohe Steuern füllen die Kasse, aber drücken die Stimmung,
         unzufriedene Untertanen wandern ab. Gierige Justiz vergrämt das Volk.</p>
       </div>
       <button class="btn-primary btn-lg" onclick="steuernSetzen()">Weiter: Landkarte &amp; Bauen</button>`;
@@ -5348,12 +5364,12 @@ const SCREENS = {
       && (heerGroesse(p.heer)>0 || miliz(p)>0);
     return `
       ${stepper("Bauen")}
-      <h2>Reichskarte — ${fmt(p.land)} ha</h2>
+      <h2>Reichskarte · ${fmt(p.land)} ha</h2>
       <div class="card">
         <canvas id="karte" width="920" height="${G._karteGross?640:430}" onclick="karteKlick(event)"
           style="cursor:${G._bauModus?'crosshair':'zoom-in'}"
           title="${G._bauModus?'Bauplatz wählen':'Klicken zum Vergrößern/Verkleinern'}"></canvas>
-        ${G._bauModus?`<p class="small" style="color:var(--gold)">🏗️ Bauplatz für ${G._bauModus==="markt"?"den Markt":"die Mühle"} wählen — Klick auf die Karte (nochmals auf den Knopf: abbrechen).</p>`:""}
+        ${G._bauModus?`<p class="small" style="color:var(--gold)">🏗️ Bauplatz für ${G._bauModus==="markt"?"den Markt":"die Mühle"} wählen. Klick auf die Karte (nochmals auf den Knopf: abbrechen).</p>`:""}
         <p class="muted small">Neue Bauwerke erscheinen sofort auf der Karte (goldener Ring). Die Grenze
         wächst mit Eurem Landbesitz, Felder zeigen die Anbaufläche, Häuser das Volk, Mauerringe Eure Städte.
         Je 1.000 ha ein Bauplatz (${p.maerkte+p.muehlen}/${bauplaetze(p)} belegt) · Bebauung verringert die
@@ -5365,29 +5381,29 @@ const SCREENS = {
         <div class="card">
           <h3>Bauen</h3>
           <p class="small" style="margin-bottom:6px">Lager: <b>${fmt(p.holz||0)} 🪵</b> · <b>${fmt(p.stein||0)} 🪨</b>
-            <span class="muted small">— Baustoffe gibt's im Handel oder aus eigenen Betrieben</span></p>
-          ${bBtn(`${G._bauModus==="markt"?"✳️ ":""}Markt — ${fmt(KOSTEN.markt)} T${matText('markt')}`,"baue('markt')", p.geld>=KOSTEN.markt && platz && hatMaterial(p,'markt'))}
-          ${bBtn(`${G._bauModus==="muehle"?"✳️ ":""}Mühle — ${fmt(KOSTEN.muehle)} T${matText('muehle')}`,"baue('muehle')", p.geld>=KOSTEN.muehle && platz && hatMaterial(p,'muehle'))}
-          ${bBtn(`Forsthof ${p.forst||0}/${FORST_MAX} — ${fmt(KOSTEN.forst)} T <span class="muted small">(+30 🪵/J)</span>`,"baue('forst')",
+            <span class="muted small">· Baustoffe gibt's im Handel oder aus eigenen Betrieben</span></p>
+          ${bBtn(`${G._bauModus==="markt"?"✳️ ":""}Markt · ${fmt(KOSTEN.markt)} T${matText('markt')}`,"baue('markt')", p.geld>=KOSTEN.markt && platz && hatMaterial(p,'markt'))}
+          ${bBtn(`${G._bauModus==="muehle"?"✳️ ":""}Mühle · ${fmt(KOSTEN.muehle)} T${matText('muehle')}`,"baue('muehle')", p.geld>=KOSTEN.muehle && platz && hatMaterial(p,'muehle'))}
+          ${bBtn(`Forsthof ${p.forst||0}/${FORST_MAX} · ${fmt(KOSTEN.forst)} T <span class="muted small">(+30 🪵/J)</span>`,"baue('forst')",
               (p.forst||0)<FORST_MAX && p.geld>=KOSTEN.forst && p.land>=3000)}
-          ${bBtn(`Steinbruch ${p.bruch||0}/${BRUCH_MAX} — ${fmt(KOSTEN.bruch)} T${matText('bruch')} <span class="muted small">(+20 🪨/J)</span>`,"baue('bruch')",
+          ${bBtn(`Steinbruch ${p.bruch||0}/${BRUCH_MAX} · ${fmt(KOSTEN.bruch)} T${matText('bruch')} <span class="muted small">(+20 🪨/J)</span>`,"baue('bruch')",
               (p.bruch||0)<BRUCH_MAX && p.geld>=KOSTEN.bruch && p.land>=5000 && hatMaterial(p,'bruch'))}
-          ${bBtn(`Hafen ${p.haefen||0}/2 — ${fmt(KOSTEN.hafen)} T${matText('hafen')}`,"baue('hafen')",
+          ${bBtn(`Hafen ${p.haefen||0}/2 · ${fmt(KOSTEN.hafen)} T${matText('hafen')}`,"baue('hafen')",
               (p.haefen||0)<2 && p.geld>=KOSTEN.hafen && p.land>=12000 && hatMaterial(p,'hafen'))}
-          ${bBtn(`Stadtmauer ${p.mauer||0}/${MAUER_MAX} — ${fmt(KOSTEN.mauer)} T${matText('mauer')}`,"baue('mauer')",
+          ${bBtn(`Stadtmauer ${p.mauer||0}/${MAUER_MAX} · ${fmt(KOSTEN.mauer)} T${matText('mauer')}`,"baue('mauer')",
               (p.mauer||0)<MAUER_MAX && p.geld>=KOSTEN.mauer && p.maerkte>=2 && hatMaterial(p,'mauer'))}
-          ${bBtn(`Burg ${p.burg||0}/${BURG_MAX} — ${fmt(KOSTEN.burg)} T${matText('burg')}`,"baue('burg')",
+          ${bBtn(`Burg ${p.burg||0}/${BURG_MAX} · ${fmt(KOSTEN.burg)} T${matText('burg')}`,"baue('burg')",
               (p.burg||0)<BURG_MAX && p.geld>=KOSTEN.burg && (p.mauer||0)>=1 && p.land>=8000 && hatMaterial(p,'burg'))}
           ${(p.mauer||0)<MAUER_MAX && p.maerkte<2?`<p class="muted small">Die Stadtmauer verlangt mindestens 2 Märkte.</p>`:""}
-          ${bBtn(`Palast-Teil ${p.palast}/${PALAST_TEILE} — ${fmt(KOSTEN.palastTeil)} T${matText('palastTeil')}`,"baue('palast')",
+          ${bBtn(`Palast-Teil ${p.palast}/${PALAST_TEILE} · ${fmt(KOSTEN.palastTeil)} T${matText('palastTeil')}`,"baue('palast')",
               p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast && hatMaterial(p,'palastTeil'))}
-          ${bBtn(`Dom-Teil ${p.dom}/${DOM_TEILE} — ${fmt(KOSTEN.domTeil)} T${matText('domTeil')}`,"baue('dom')",
+          ${bBtn(`Dom-Teil ${p.dom}/${DOM_TEILE} · ${fmt(KOSTEN.domTeil)} T${matText('domTeil')}`,"baue('dom')",
               p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom && hatMaterial(p,'domTeil'))}
           ${p.land<LAND.palast?`<p class="muted small">Für den Palast fehlen Euch noch ${fmt(LAND.palast-p.land)} ha Land.</p>`:
             p.land<LAND.dom && p.palast>=PALAST_TEILE?`<p class="muted small">Für die Kathedrale fehlen Euch noch ${fmt(LAND.dom-p.land)} ha Land.</p>`:""}
         </div>
         <div class="card">
-          <h3>⚔️ Militär <span class="muted small">— stehendes Heer</span></h3>
+          <h3>⚔️ Militär <span class="muted small">· stehendes Heer</span></h3>
           <table>
             <tr><td>Infanterie <span class="muted small">${fmt(KOSTEN.inf)} T, Sold 10 T/J</span></td>
                 <td class="r">${fmt(p.heer.inf)}</td>
@@ -5402,9 +5418,9 @@ const SCREENS = {
                 <td class="r">${fmt(miliz(p))}</td><td></td></tr>
           </table>
           <p class="muted small" style="margin-top:6px">Unterhalt: <b>${fmt(unterhalt(p))} T/Jahr</b>
-            — der Sold steigt mit Eurem Rang (+10 % je Titel).</p>
+           , der Sold steigt mit Eurem Rang (+10 % je Titel).</p>
           ${p.titel<1?`<div class="event bad" style="margin-top:8px">⚠️ Als einfache${p.w?"":"r"} ${titelName(p)} dürft
-            Ihr noch keinen Krieg erklären — erst ab dem Rang <b>Baron</b> (${BEDINGUNGEN[1].txt}).
+            Ihr noch keinen Krieg erklären, erst ab dem Rang <b>Baron</b> (${BEDINGUNGEN[1].txt}).
             Söldner kosten bis dahin nur Sold!</div>`:""}
           ${heerGroesse(p.heer)>0?`<button class="btn-sm" onclick="entlassen()">Heer auflösen</button>`:""}
         </div>
@@ -5440,7 +5456,7 @@ const SCREENS = {
           Verhältnis, Kriege zerstören es. Verbündete Regenten unterstützen Euch eher im Krieg.</p>
         </div>
         <div class="card">
-          <h3>${diploLimit(p)} Aktion${diploLimit(p)>1?"en":""} pro Jahr ${(p.diploZaehler||0)>=diploLimit(p)?'<span class="red small">— aufgebraucht</span>':''}</h3>
+          <h3>${diploLimit(p)} Aktion${diploLimit(p)>1?"en":""} pro Jahr ${(p.diploZaehler||0)>=diploLimit(p)?'<span class="red small">(aufgebraucht)</span>':''}</h3>
           <div class="rowflex">Partner: <select id="dipZiel">${opts}</select></div>
           <div class="rowflex" style="margin-top:8px">
             <input type="number" id="dipGeschenk" min="100" step="100" value="500" style="width:100px">
@@ -5466,7 +5482,7 @@ const SCREENS = {
             <input type="number" id="dipMitgift" min="2000" step="500" value="3000" style="width:100px" title="Mitgift in Talern">
             <button onclick="diploAktion('ehe')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>💍 Vermählung anbieten</button>
           </div>
-          <p class="muted small">Eine Ehe stiftet 12 Jahre Frieden zwischen den Häusern — und beim Tod des
+          <p class="muted small">Eine Ehe stiftet 12 Jahre Frieden zwischen den Häusern, und beim Tod des
           vermählten Regenten erbt Euer Haus einen Teil seines Landes.</p>
           <div class="rowflex">
             <button onclick="spionEntsenden()" ${p.spionGenutzt?'disabled':''}>🕵️ Spion entsenden (600 T)</button>
@@ -5478,13 +5494,13 @@ const SCREENS = {
           <h3>👥 Der Hofstaat</h3>
           ${BERATER.map(b=>`
             <div class="rowflex" style="justify-content:space-between">
-              <span>${b.ico} <b>${b.person}</b> — ${b.n}<br>
+              <span>${b.ico} <b>${b.person}</b> · ${b.n}<br>
                 <span class="muted small">${b.d} · ${fmt(b.gehalt)} T Gehalt/Jahr</span></span>
               ${p.berater[b.k]
                 ? `<button class="btn-sm" onclick="beraterEntlassen('${b.k}')">Entlassen</button>`
                 : `<button class="btn-sm" onclick="beraterAnheuern('${b.k}')" ${p.geld<b.kosten?'disabled':''}>Anheuern (${fmt(b.kosten)} T)</button>`}
             </div>`).join("")}
-          <p class="muted small">Berater kosten Antrittsgeld und Jahresgehalt — und haben mitunter eigene Pläne.</p>
+          <p class="muted small">Berater kosten Antrittsgeld und Jahresgehalt, und haben mitunter eigene Pläne.</p>
           <p class="muted small">Angebote an menschliche Regenten werden zu Beginn von deren
           nächstem Zug beantwortet. Marktpreis derzeit ${fmt(G.kornMarkt||100)} T/Fuder.</p>
         </div>
@@ -5498,14 +5514,14 @@ const SCREENS = {
     const karten = meine.map(({a,i})=>{
       const von = G.spieler[a.von];
       const txt = a.richtung==="route"
-        ? `möchte eine <b>Handelsroute</b> zwischen Euren Reichen eröffnen — beide Seiten kassieren jährlich Zoll, der Antragsteller trägt die Kosten.`
+        ? `möchte eine <b>Handelsroute</b> zwischen Euren Reichen eröffnen, beide Seiten kassieren jährlich Zoll, der Antragsteller trägt die Kosten.`
         : a.richtung==="ehe"
-        ? `bittet um die <b>Vermählung Eurer Häuser</b> — mit einer Mitgift von <b>${fmt(a.menge)} Talern</b> (12 Jahre Frieden, Erbanspruch bei Todesfällen).`
+        ? `bittet um die <b>Vermählung Eurer Häuser</b>, mit einer Mitgift von <b>${fmt(a.menge)} Talern</b> (12 Jahre Frieden, Erbanspruch bei Todesfällen).`
         : a.richtung==="pakt"
         ? `bietet Euch einen <b>Nichtangriffspakt</b> über 5 Jahre an.`
         : a.richtung==="kauf"
-          ? `möchte <b>${fmt(a.menge)} Fuder Korn</b> von Euch kaufen — zu <b>${fmt(a.preis)} T/Fuder</b> (${fmt(a.menge*a.preis)} T gesamt).`
-          : `bietet Euch <b>${fmt(a.menge)} Fuder Korn</b> an — zu <b>${fmt(a.preis)} T/Fuder</b> (${fmt(a.menge*a.preis)} T gesamt).`;
+          ? `möchte <b>${fmt(a.menge)} Fuder Korn</b> von Euch kaufen, zu <b>${fmt(a.preis)} T/Fuder</b> (${fmt(a.menge*a.preis)} T gesamt).`
+          : `bietet Euch <b>${fmt(a.menge)} Fuder Korn</b> an, zu <b>${fmt(a.preis)} T/Fuder</b> (${fmt(a.menge*a.preis)} T gesamt).`;
       return `<div class="pergament" style="max-width:660px;margin:0 auto 14px">
         <p style="font-size:15px">${von.wappen} <b>${titelName(von)} ${von.name}</b> ${txt}</p>
         <div class="zierlinie" style="margin:10px auto"></div>
@@ -5534,7 +5550,7 @@ const SCREENS = {
       const adj = nb.includes(z.i);
       const weg = adj ? [] : wegZwischen(G.aktiv, z.i);
       const burg = ((z.p.mauer||0)+(z.p.burg||0))>0 ? " · 🏰 befestigt" : "";
-      return `<option value="${z.i}" ${z.i===vorwahl?'selected':''}>${titelName(z.p)} ${z.p.name} — ${fmt(z.p.land)} ha, ${fmt(z.p.pop)} Einw.${burg}${adj?" · Nachbar":" · Durchmarsch über "+weg.map(i=>G.spieler[i].name).join(", ")}</option>`;
+      return `<option value="${z.i}" ${z.i===vorwahl?'selected':''}>${titelName(z.p)} ${z.p.name} · ${fmt(z.p.land)} ha, ${fmt(z.p.pop)} Einw.${burg}${adj?" · Nachbar":" · Durchmarsch über "+weg.map(i=>G.spieler[i].name).join(", ")}</option>`;
     }).join("");
     return `
       ${stepper("Bauen")}
@@ -5554,7 +5570,7 @@ const SCREENS = {
         befragt: Sie können Euch oder den Verteidiger mit ihrem Heer unterstützen (die Miliz bleibt
         stets daheim) oder neutral bleiben. Liegt das Ziel nicht an Eurer Grenze, braucht Ihr
         Durchmarschrechte aller Reiche auf dem Weg. Danach stellt Ihr Eure Truppen auf dem
-        Schlachtfeld auf — der Verteidiger stellt geheim dagegen, hat Heimvorteil und ruft
+        Schlachtfeld auf, der Verteidiger stellt geheim dagegen, hat Heimvorteil und ruft
         das Volksaufgebot.</p>
       </div>
       <button class="btn-danger btn-lg" onclick="kriegVorbereiten(+$('#ziel').value)">Zu den Waffen!</button>
@@ -5576,15 +5592,15 @@ const SCREENS = {
           ${aufWeg?"Der Heerzug führt durch <b>Euer</b> Gebiet.":""}
           Wie haltet Ihr es, ${titelName(frag)} ${frag.name}?</p>
         <p class="muted small" style="margin-bottom:18px">Unterstützt Ihr eine Seite, kämpft Euer
-        stehendes Heer (${fmt(heerGroesse(frag.heer))} Mann) mit — Eure Miliz bleibt daheim.</p>
+        stehendes Heer (${fmt(heerGroesse(frag.heer))} Mann) mit. Eure Miliz bleibt daheim.</p>
         <div>
           <button class="btn-lg" onclick="diploWahl('atk')">⚔️ Angreifer unterstützen</button>
           <button class="btn-lg" onclick="diploWahl('def')">🛡️ Verteidiger unterstützen</button>
         </div>
         <div>
           ${aufWeg
-            ? `<button class="btn-lg" onclick="diploWahl('frei')">🕊️ Neutral — Durchmarsch gewähren</button>
-               <button class="btn-lg" onclick="diploWahl('sperr')">🚫 Neutral — Durchmarsch verweigern</button>`
+            ? `<button class="btn-lg" onclick="diploWahl('frei')">🕊️ Neutral. Durchmarsch gewähren</button>
+               <button class="btn-lg" onclick="diploWahl('sperr')">🚫 Neutral. Durchmarsch verweigern</button>`
             : `<button class="btn-lg" onclick="diploWahl('frei')">🕊️ Neutral bleiben</button>`}
         </div>
       </div>`;
@@ -5597,7 +5613,7 @@ const SCREENS = {
       <h2>Feldzug abgebrochen</h2>
       <div class="card">
         <p class="red" style="font-size:16px">Kein Durchkommen! ${sperrer} verweigert Euren Truppen
-        den Durchmarsch — das Heer kehrt unverrichteter Dinge heim.</p>
+        den Durchmarsch, das Heer kehrt unverrichteter Dinge heim.</p>
         <p class="muted" style="margin-top:8px">Die Gelegenheit dieses Jahres ist vertan.</p>
       </div>
       <button class="btn-primary btn-lg" onclick="zeige('bauen')">Weiter</button>`;
@@ -5608,7 +5624,7 @@ const SCREENS = {
     const ang = G.spieler[kr.a], ver = G.spieler[kr.d];
     const fest = festungsBonus(ver);
     return `
-      <h2>🏰 Belagerung — ${ver.name}s Festungswerke</h2>
+      <h2>🏰 Belagerung · ${ver.name}s Festungswerke</h2>
       <div class="card">
         <p><b class="cyan">${titelName(ver)} ${ver.name}</b> hat sich verschanzt:
           ${ver.mauer?`Stadtmauer Stufe ${ver.mauer}`:""}${ver.mauer&&ver.burg?" und ":""}${ver.burg?`Burg Stufe ${ver.burg}`:""}.
@@ -5617,12 +5633,12 @@ const SCREENS = {
       </div>
       <div style="max-width:680px">
         <button class="btn-lg" onclick="belagerungWahl('sturm')" style="display:block;width:100%;text-align:left;margin:6px 0">
-          ⚔️ <b>Sturmangriff</b> — sofort angreifen. Die Mauern stehen (voller Bonus), die ersten Sturmreihen erleiden Verluste.</button>
+          ⚔️ <b>Sturmangriff</b>, sofort angreifen. Die Mauern stehen (voller Bonus), die ersten Sturmreihen erleiden Verluste.</button>
         <button class="btn-lg" onclick="belagerungWahl('beschuss')" ${ang.heer.art>=2?"":"disabled"} style="display:block;width:100%;text-align:left;margin:6px 0">
-          💣 <b>Beschuss</b> ${ang.heer.art<2?'<span class="red small">(braucht mind. 2 Artillerie)</span>':""} — Breschen schießen:
+          💣 <b>Beschuss</b> ${ang.heer.art<2?'<span class="red small">(braucht mind. 2 Artillerie)</span>':""}. Breschen schießen:
           Mauerbonus stark geschwächt, gute Chance, einen Mauerring dauerhaft zu zerstören.</button>
         <button class="btn-lg" onclick="belagerungWahl('aushungern')" style="display:block;width:100%;text-align:left;margin:6px 0">
-          ⏳ <b>Aushungern</b> — lange Belagerung: der Verteidiger verliert Korn und Volk, Miliz und Aufgebot kämpfen entkräftet,
+          ⏳ <b>Aushungern</b>, lange Belagerung: der Verteidiger verliert Korn und Volk, Miliz und Aufgebot kämpfen entkräftet,
           der Mauerbonus sinkt beinahe zur Hälfte.</button>
       </div>`;
   },
@@ -5637,7 +5653,7 @@ const SCREENS = {
     return SCREENS._aufstellung(p, G.spieler[kr.d],
       `Stellt Eure ${fmt(A.inf+A.kav+A.art+A.miliz)} Mann auf den fünf Abschnitten auf.
        Die Artillerie feuert aus der Tiefe, Kavallerie stürmt schneller vor.
-       Der Verteidiger kennt Eure Aufstellung nicht — und Ihr nicht seine.`,
+       Der Verteidiger kennt Eure Aufstellung nicht, und Ihr nicht seine.`,
       "aufstellungAFertig()", "Aufstellung befehlen");
   },
 
@@ -5650,9 +5666,9 @@ const SCREENS = {
     G._aufFarbe = p.farbe; G._aufRechts = true;
     return SCREENS._aufstellung(p, G.spieler[kr.a],
       `Geheime Aufstellung! ${titelName(G.spieler[kr.a])} ${G.spieler[kr.a].name} rückt gegen
-       Euch vor — der Angreifer möge wegsehen. Verteilt Eure ${fmt(laneGroesse(G._aufE))} Mann
+       Euch vor, der Angreifer möge wegsehen. Verteilt Eure ${fmt(laneGroesse(G._aufE))} Mann
        (samt Miliz und Volksaufgebot) auf die fünf Abschnitte.`,
-      "aufstellungDFertig()", "Stellung beziehen — zur Schlacht!");
+      "aufstellungDFertig()", "Stellung beziehen, zur Schlacht!");
   },
 
   /* gemeinsames Aufstellungs-Formular */
@@ -5669,7 +5685,7 @@ const SCREENS = {
       `<button class="btn-sm" onclick="aufstellungPreset(${k})">${a.n}</button>`).join("");
     setTimeout(()=>zeichneAufstellung("aufVorschau", G._aufE, G._aufW, G._aufFarbe, G._aufRechts), 30);
     return `
-      <h2>🗡️ Aufstellung — ${titelName(p)} ${p.name} gegen ${titelName(gegner)} ${gegner.name}</h2>
+      <h2>🗡️ Aufstellung · ${titelName(p)} ${p.name} gegen ${titelName(gegner)} ${gegner.name}</h2>
       <div class="card"><p class="small">${text}</p>
       <p class="muted small" style="margin-top:6px">Erkundetes Gelände:
         ⛰️ Hügel schützen den Verteidiger · 🌊 Furten bremsen den Vormarsch · 🌲 Wald behindert Kavallerie und Artillerie.</p></div>
@@ -5708,7 +5724,7 @@ const SCREENS = {
       </div>`;
     return `
       <h2>⚔️ Schlacht um ${ver.name}s Land</h2>
-      <span class="phasebadge">Gefecht ${Math.min(s.tick,s.maxTicks)}/${s.maxTicks}${s.regen?" · 🌧️ Regen — Artillerie geschwächt":""}${(s.festung||1)>1?` · 🏰 Festung ×${(s.festung||1).toFixed(2)}`:""}${s.belagerung?` · ${s.belagerung==="sturm"?"⚔️ Sturmangriff":s.belagerung==="beschuss"?"💣 nach Beschuss":"⏳ nach Aushungern"}`:""}</span>
+      <span class="phasebadge">Gefecht ${Math.min(s.tick,s.maxTicks)}/${s.maxTicks}${s.regen?" · 🌧️ Regen: Artillerie geschwächt":""}${(s.festung||1)>1?` · 🏰 Festung ×${(s.festung||1).toFixed(2)}`:""}${s.belagerung?` · ${s.belagerung==="sturm"?"⚔️ Sturmangriff":s.belagerung==="beschuss"?"💣 nach Beschuss":"⏳ nach Aushungern"}`:""}</span>
       <canvas id="feld" width="900" height="380"></canvas>
       <div class="battlefield">
         <div>
@@ -5760,7 +5776,7 @@ const SCREENS = {
             ${r.holzErtrag||r.steinErtrag?row("Forst & Steinbruch", "+"+fmt(r.holzErtrag||0)+" 🪵, +"+fmt(r.steinErtrag||0)+" 🪨", "delta-pos"):""}
             ${r.erfindung?row("⚙️ Erfindung des Ingenieurs", "Ernte kräftig gesteigert", "delta-pos"):""}
             ${r.auftragErfuellt?row(r.auftragErfuellt.ico+" Reichsauftrag „"+r.auftragErfuellt.n+"\u201C erfüllt", "+"+fmt(r.auftragErfuellt.lohn)+" Taler", "delta-pos"):""}
-            ${r.auftragVerfallen?row(r.auftragVerfallen.ico+" Reichsauftrag „"+r.auftragVerfallen.n+"\u201C", "Frist verstrichen — der Hof ist verstimmt", "delta-neg"):""}
+            ${r.auftragVerfallen?row(r.auftragVerfallen.ico+" Reichsauftrag „"+r.auftragVerfallen.n+"\u201C", "Frist verstrichen, der Hof ist verstimmt", "delta-neg"):""}
             ${row("Steuern & Wirtschaft", "+"+fmt(r.steuern)+" Taler", "delta-pos")}
             ${r.routenGeld?row("Zoll aus "+routenVon(G.spieler.indexOf(p)).length+" Handelsroute"+(routenVon(G.spieler.indexOf(p)).length>1?"n":""), "+"+fmt(r.routenGeld)+" Taler", "delta-pos"):""}
             ${r.unterhalt?row("Heer-Unterhalt", "−"+fmt(r.unterhalt)+" Taler", "delta-neg"):""}
@@ -5778,7 +5794,7 @@ const SCREENS = {
           </table>
         </div>
       </div>
-      ${r.ueberzeit>0?`<div class="event bad">Ihr habt ${Math.round(r.ueberzeit)} Sekunden zu lange regiert — die Sorgen nagen an Eurer Gesundheit.</div>`:""}
+      ${r.ueberzeit>0?`<div class="event bad">Ihr habt ${Math.round(r.ueberzeit)} Sekunden zu lange regiert, die Sorgen nagen an Eurer Gesundheit.</div>`:""}
       <button class="btn-primary btn-lg" onclick="nachBilanz()">Weiter</button>`;
   },
 
@@ -5792,7 +5808,7 @@ const SCREENS = {
         <div style="margin:18px auto 6px;width:220px">
           <canvas id="portraitB" width="220" height="272" style="border-radius:14px;box-shadow:0 12px 44px rgba(0,0,0,.5)"></canvas>
         </div>
-        <p class="muted small">${titelName(p)} ${p.name}, ${alterJahre(p)} Jahre — im neuen Ornat</p>
+        <p class="muted small">${titelName(p)} ${p.name}, ${alterJahre(p)} Jahre, im neuen Ornat</p>
         <h1 style="font-size:30px;margin:14px 0">${p.name} wird zu${p.w?"r":"m"} <span class="gold">${titelName(p)}</span> erhoben!</h1>
         ${PRIVILEGIEN[p.titel] ? `
         <div class="pergament" style="max-width:480px;margin:6px auto 0;padding:14px 18px">
@@ -5800,7 +5816,7 @@ const SCREENS = {
           <p class="small" style="margin-top:4px">${PRIVILEGIEN[p.titel].d}</p>
         </div>` : ""}
         ${p.titel===8
-          ? `<p class="green" style="font-size:16px">Die Kathedrale ist vollendet — das Reich hat einen neuen ${titelName(p)}!</p>
+          ? `<p class="green" style="font-size:16px">Die Kathedrale ist vollendet, das Reich hat einen neuen ${titelName(p)}!</p>
              <div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="zeige('sieg')">Zur Krönung</button></div>`
           : `<div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="naechsterSpieler()">Weiter</button></div>`}
       </div>`;
@@ -5845,7 +5861,7 @@ const SCREENS = {
         <h1 class="zer z3" style="font-size:34px;margin:14px 0">Heil ${p.w?"der Kaiserin":"dem Kaiser"} ${p.name}!</h1>
         <p class="zer z4" style="margin:10px 0">Anno ${G.jahr} · ${alterJahre(p)} Jahre · ${fmt(p.pop)} Untertanen · ${fmt(p.land)} ha · ${fmt(p.geld)} Taler</p>
         <div class="monu zer z4" style="margin:10px 0">${svgPalast(p.palast)}${svgDom(p.dom)}</div>
-        <p class="muted zer z5">Vom einfachen ${p.w?"Fräulein":"Herrn"} zur Herrschaft über das Reich — das Spiel ist gewonnen.</p>
+        <p class="muted zer z5">Vom einfachen ${p.w?"Fräulein":"Herrn"} zur Herrschaft über das Reich, das Spiel ist gewonnen.</p>
         <div class="zer z5" style="margin-top:22px"><button class="btn-primary btn-lg" onclick="zeige('ende')">Schlusswertung</button></div>
       </div>`;
   },
@@ -5872,10 +5888,10 @@ const SCREENS = {
       </tr>`;
     }).join("");
     return `
-      <h2>🗺️ Die bekannte Welt — Anno ${G.jahr}</h2>
+      <h2>🗺️ Die bekannte Welt. Anno ${G.jahr}</h2>
       <div class="card">
         <canvas id="welt" width="920" height="430"></canvas>
-        <p class="muted small">Die Sitzreihenfolge bildet den Nachbarschaftskreis — blasse Wege verbinden
+        <p class="muted small">Die Sitzreihenfolge bildet den Nachbarschaftskreis, blasse Wege verbinden
         Nachbarn, <span class="gold">goldene Wege mit Karawanen</span> sind aktive Handelsrouten (jährlicher
         Zoll für beide Seiten). Euer Reich trägt den goldenen Ring.</p>
       </div>
@@ -5912,7 +5928,7 @@ const SCREENS = {
         </table>
       </div>
       <p class="muted small">Die zehn ruhmreichsten Regentschaften auf diesem Gerät.</p>`
-      : `<div class="card"><p class="muted">Noch keine vollendete Regentschaft — die Geschichte wartet auf Euch.</p></div>`}
+      : `<div class="card"><p class="muted">Noch keine vollendete Regentschaft, die Geschichte wartet auf Euch.</p></div>`}
       <button class="btn-primary btn-lg" onclick="zeige(G._vorRuhm || 'title')">Zurück</button>`;
   },
 
@@ -5923,14 +5939,14 @@ const SCREENS = {
         <div class="card">
           <h3>Ziel & Aufstieg</h3>
           <p class="small">Steigt in 8 Beförderungen vom Herrn zum Kaiser auf. Jede Stufe verlangt
-          Einwohner, Bauwerke oder Vermögen (im Status stets angezeigt) — und einen positiven
+          Einwohner, Bauwerke oder Vermögen (im Status stets angezeigt), und einen positiven
           Kontostand. Für den Kaiser braucht Ihr die vollendete Kathedrale, 5 Städte,
           25.000 ha und 100.000 Taler. Eure Lebenszeit ist begrenzt; wer über 90 Sekunden
           pro Zug braucht, altert schneller.</p>
         </div>
         <div class="card">
           <h3>Wirtschaft</h3>
-          <p class="small">Gebt dem Volk mehr als das nötige Korn — das lockt Einwanderer.
+          <p class="small">Gebt dem Volk mehr als das nötige Korn, das lockt Einwanderer.
           Kauft Korn und Land billig, verkauft teuer (10 % Provision). Märkte bringen
           Steuern und Miliz, Mühlen steigern die Ernte, Städte (5 Märkte + 3 Mühlen)
           kurbeln die Wirtschaft kräftig an. Achtung: Bebauung verringert die Anbaufläche,
@@ -5939,24 +5955,24 @@ const SCREENS = {
         <div class="card">
           <h3>Steuern & Volk</h3>
           <p class="small">Zölle, Einkommen- und Mehrwertsteuer füllen die Kasse, drücken aber
-          die Stimmung — unzufriedene Untertanen wandern ab, hungernde sterben. Die Justiz
+          die Stimmung, unzufriedene Untertanen wandern ab, hungernde sterben. Die Justiz
           wirkt ebenso auf die Stimmung. Hohe Stimmung bedeutet Geburten und Zuzug.</p>
         </div>
         <div class="card">
           <h3>Krieg & Diplomatie</h3>
           <p class="small">Ab Baron dürft Ihr Krieg führen. Unterhaltet ein stehendes Heer
-          (der Sold steigt mit dem Rang). Die Sitzreihenfolge ist der Nachbarschaftskreis —
+          (der Sold steigt mit dem Rang). Die Sitzreihenfolge ist der Nachbarschaftskreis.
           Nicht-Nachbarn erreicht Ihr nur mit Durchmarschrechten. Vor der Schlacht stellen
           beide Seiten ihre Truppen geheim auf fünf Abschnitten auf: Artillerie feuert aus
           der Tiefe, Kavallerie stürmt schneller, leere Abschnitte laden zum Flankendurchbruch
           ein. Mitspieler können Truppen leihen. Sinkt die Moral unter 30 %, flieht das Heer.
-          Je mehr Abschnitte der Angreifer räumt, desto tiefer dringt er ein — und plündert
+          Je mehr Abschnitte der Angreifer räumt, desto tiefer dringt er ein, und plündert
           Märkte, Mühlen, Korn und sogar Palast- und Dom-Teile des Verteidigers.
           Steuerung auch per Gamepad: Steuerkreuz wählt, A drückt.</p>
         </div>
         <div class="card">
           <h3>Baustoffe & Festungen</h3>
-          <p class="small">Bauwerke kosten neben Talern auch Holz 🪵 und Stein 🪨 — kauft sie im
+          <p class="small">Bauwerke kosten neben Talern auch Holz 🪵 und Stein 🪨, kauft sie im
           Handel oder betreibt Forsthöfe (+30 🪵/Jahr) und Steinbrüche (+20 🪨/Jahr). Stadtmauer
           (bis Stufe 3) und Burg (bis Stufe 2) stärken die Verteidiger im Kampf kräftig; eine hohe
           Mauer deckt zudem das Hinterland vor Plünderern. Angreifer müssen befestigte Reiche erst
@@ -5967,8 +5983,8 @@ const SCREENS = {
           <h3>Reichstag & Ereignisketten</h3>
           <p class="small">Alle zehn Jahre tritt der Reichstag 🏛️ zusammen: Abgestimmt wird mit
           Stimmgewicht nach Rang über Reichsfrieden (2 Jahre Kriegsverbot), Reichssteuer (5 % ans
-          ärmste Reich) oder Handelsprivileg (+50 % Routenzoll, 5 Jahre) — Gegenstimmen lassen sich
-          notfalls kaufen. Und Vorsicht bei Hof-Entscheidungen: Manche wirken Jahre später nach —
+          ärmste Reich) oder Handelsprivileg (+50 % Routenzoll, 5 Jahre). Gegenstimmen lassen sich
+          notfalls kaufen. Und Vorsicht bei Hof-Entscheidungen: Manche wirken Jahre später nach,
           geduldete Räuber verschanzen sich, gespeiste Bettler bringen Siedler, abgewiesene
           bringen Aufruhr.</p>
         </div>
@@ -5981,10 +5997,10 @@ const SCREENS = {
         </div>
         <div class="card">
           <h3>Routen, Ehen & Kampagne</h3>
-          <p class="small">Handelsrouten 🚚 (max. 3) bringen beiden Seiten jährlichen Zoll — eine
+          <p class="small">Handelsrouten 🚚 (max. 3) bringen beiden Seiten jährlichen Zoll, eine
           Kriegserklärung kappt die Route. Eine Vermählung 💍 stiftet 12 Jahre Frieden zwischen den
           Häusern; stirbt der vermählte Regent, erbt Euer Haus einen Teil seines Landes. Die
-          Kampagne 📖 führt in vier Kapiteln vom Bauernsohn zum Kaiser — ein Viertel des Vermögens
+          Kampagne 📖 führt in vier Kapiteln vom Bauernsohn zum Kaiser, ein Viertel des Vermögens
           reist jeweils mit. Online-Partien laufen asynchron: mit Raum-Code und Namen steigt Ihr
           jederzeit wieder ein. Das Statistik-Dashboard 📈 zeichnet alle Reiche über die Jahre auf.</p>
         </div>
@@ -5999,7 +6015,7 @@ const SCREENS = {
         <h1 style="font-size:30px;margin:12px 0">Die Lehrjahre</h1>
         <p style="max-width:580px;margin:14px auto;font-size:16px">
           Meister Konrad, ein alter Verwalter, nimmt Euch unter seine Fittiche: In zehn kleinen
-          Aufgaben lernt Ihr Kornausgabe, Handel, Steuern, Bauwesen, Diplomatie und Heerwerbung —
+          Aufgaben lernt Ihr Kornausgabe, Handel, Steuern, Bauwesen, Diplomatie und Heerwerbung,
           alles, was ein künftiger Kaiser können muss.</p>
         <p class="gold">Die aktuelle Aufgabe steht stets oben am Bildschirmrand.</p>
         <div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="zeige('handoff')">Die Lehre beginnt</button></div>
@@ -6013,7 +6029,7 @@ const SCREENS = {
         <span class="crown">🎓</span>
         <h1 class="green" style="font-size:28px;margin:12px 0">Die Lehrjahre sind vollendet!</h1>
         <p style="max-width:560px;margin:12px auto">Meister Konrad nickt zufrieden: „Mehr kann ich
-        Euch nicht beibringen. Korn, Handel, Steuern, Bauwerk, Freundschaft und Heer — nun
+        Euch nicht beibringen. Korn, Handel, Steuern, Bauwerk, Freundschaft und Heer, nun
         schreibt Eure eigene Geschichte."</p>
         <div style="margin-top:20px">
           <button class="btn-primary btn-lg" onclick="G.spieler=[];G.lehre=null;zeige('kampagne')">📖 Zur Kampagne</button>
@@ -6065,13 +6081,13 @@ const SCREENS = {
       const geschafft = k < frei;
       return `<div class="card" style="${offen?"":"opacity:.45"}">
         <h3>${geschafft?"✅":offen?K.ico:"🔒"} Kapitel ${k+1}: ${K.titel}</h3>
-        <p class="small" style="margin:6px 0">${offen?K.intro:"Noch verschlossen — meistert erst die vorigen Kapitel."}</p>
+        <p class="small" style="margin:6px 0">${offen?K.intro:"Noch verschlossen, meistert erst die vorigen Kapitel."}</p>
         ${offen?`<p class="gold small"><b>Ziel:</b> ${K.ziel}</p>
         <button class="btn-primary" onclick="kampagneStart(${k})">${geschafft?"Erneut antreten":"Antreten"}</button>`:""}
       </div>`;
     }).join("");
     return `
-      <h2>📖 Kampagne — Vom Bauernsohn zum Kaiser</h2>
+      <h2>📖 Kampagne. Vom Bauernsohn zum Kaiser</h2>
       <div class="card">
         <p class="small">Vier verkettete Kapitel mit eigenen Zielen. Wer ein Kapitel meistert, nimmt
         ein Viertel seines Vermögens (bis 20.000 Taler) mit ins nächste.</p>
@@ -6106,14 +6122,14 @@ const SCREENS = {
       <div class="hero" style="padding-top:36px">
         <span class="crown">${K.ico}</span>
         <h1 class="green" style="font-size:28px;margin:12px 0">Kapitel ${k+1} gemeistert!</h1>
-        <p style="max-width:580px;margin:12px auto">„${K.titel}" ist Geschichte — ${K.ziel.replace("Steigt","Ihr stiegt").replace("Erwirtschaftet","Ihr erwirtschaftetet").replace("Gewinnt","Ihr gewannt").replace("Werdet","Ihr wurdet")}</p>
+        <p style="max-width:580px;margin:12px auto">„${K.titel}" ist Geschichte · ${K.ziel.replace("Steigt","Ihr stiegt").replace("Erwirtschaftet","Ihr erwirtschaftetet").replace("Gewinnt","Ihr gewannt").replace("Werdet","Ihr wurdet")}</p>
         ${naechste
           ? `<p class="muted">Ein Viertel Eures Vermögens reist mit ins nächste Kapitel.</p>
              <div style="margin-top:20px">
                <button class="btn-primary btn-lg" onclick="kampagneStartDirekt(${k+1})">${naechste.ico} Weiter: ${naechste.titel}</button>
                <button class="btn-lg" onclick="G.kampagne=null;naechsterSpieler()">Erst weiterregieren</button>
              </div>`
-          : `<p class="gold" style="font-size:17px">Vom Bauernsohn zum Kaiser — die Kampagne ist vollendet!</p>
+          : `<p class="gold" style="font-size:17px">Vom Bauernsohn zum Kaiser, die Kampagne ist vollendet!</p>
              <div style="margin-top:20px"><button class="btn-primary btn-lg" onclick="zeige('ende')">Zur Schlusswertung</button></div>`}
       </div>`;
   },
@@ -6124,7 +6140,7 @@ const SCREENS = {
       <div class="hero" style="padding-top:36px">
         <span class="crown">🕯️</span>
         <h1 class="red" style="font-size:26px;margin:12px 0">Das Kapitel ist verloren …</h1>
-        <p style="max-width:560px;margin:12px auto">Anno ${G.jahr} — das Ziel „${K.ziel}" wurde nicht erreicht.
+        <p style="max-width:560px;margin:12px auto">Anno ${G.jahr}, das Ziel „${K.ziel}" wurde nicht erreicht.
         Doch jede Niederlage lehrt: Tretet erneut an!</p>
         <div style="margin-top:20px">
           <button class="btn-primary btn-lg" onclick="kampagneStartDirekt(${k})">📖 Kapitel erneut versuchen</button>
@@ -6136,7 +6152,7 @@ const SCREENS = {
 
   replay(){
     return `
-      <h2>🎞️ Partie-Replay — ${G._replayP ? G._replayP.j0 + "–" + G._replayP.j1 : ""}</h2>
+      <h2>🎞️ Partie-Replay · ${G._replayP ? G._replayP.j0 + "–" + G._replayP.j1 : ""}</h2>
       <div class="card">
         <canvas id="replayFeld" width="920" height="430"></canvas>
         <p class="muted small">Die Reiche wachsen und schrumpfen im Zeitraffer; unten läuft die
@@ -6162,7 +6178,7 @@ const SCREENS = {
         <td class="r">${(p.mauer||0)>0||(p.burg||0)>0?`🏰 ${p.mauer||0}/${p.burg||0}`:"—"}</td>
         <td class="r">${routenVon(G.spieler.indexOf(p)).length}</td></tr>`).join("");
     return `
-      <h2>📈 Statistik — Anno ${G.jahr}</h2>
+      <h2>📈 Statistik. Anno ${G.jahr}</h2>
       <p class="muted small" style="margin-bottom:8px">${legende}</p>
       <div class="grid g2">
         ${statChart("pop","👥 Untertanen","")}
@@ -6489,7 +6505,7 @@ function chronikExport(){
   ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
   ctx.strokeStyle = "#e0b458"; ctx.lineWidth = 3; ctx.strokeRect(8,8,W-16,H-16);
   ctx.fillStyle = "#e0b458"; ctx.font = "bold 30px Georgia, serif"; ctx.textAlign = "center";
-  ctx.fillText("👑 KAISER — Chronik der Partie", W/2, 52);
+  ctx.fillText("👑 KAISER. Chronik der Partie", W/2, 52);
   ctx.fillStyle = "#8b96a8"; ctx.font = "14px Georgia, serif";
   ctx.fillText(`1700–${G.jahr} · ${G.spieler.map(p=>p.name).join(" · ")}`, W/2, 78);
   ctx.strokeStyle = "#2a3446"; ctx.beginPath(); ctx.moveTo(40,94); ctx.lineTo(W-40,94); ctx.stroke();
@@ -6535,15 +6551,15 @@ function mpVerbinden(url, beiOffen){
     if(!MP || MP.abbruch) return;
     versuch++;
     if(versuch > 4){
-      alertMsg("Keine Verbindung zum Spielserver. Prüft die Server-Adresse (Standard: " + MP_STANDARD + ") — oder versucht es in einer Minute erneut.");
+      alertMsg("Keine Verbindung zum Spielserver. Prüft die Server-Adresse (Standard: " + MP_STANDARD + "), oder versucht es in einer Minute erneut.");
       MP = null;
       return;
     }
-    if(versuch > 1) toast(`🌐 Server wird geweckt — Versuch ${versuch}/4 …`, 6500);
+    if(versuch > 1) toast(`🌐 Server wird geweckt. Versuch ${versuch}/4 …`, 6500);
     let offen = false;
     let ws;
     try{ ws = new WebSocket(ziel); }
-    catch(e){ alertMsg("WebSocket nicht verfügbar — in dieser Umgebung ist Online-Spiel womöglich blockiert. Nutzt die Spiel-URL im Browser."); MP = null; return; }
+    catch(e){ alertMsg("WebSocket nicht verfügbar, in dieser Umgebung ist Online-Spiel womöglich blockiert. Nutzt die Spiel-URL im Browser."); MP = null; return; }
     ws.onopen = () => { offen = true; if(MP){ MP.ws = ws; beiOffen(ws); toast("🌐 Mit dem Spielserver verbunden."); } };
     ws.onmessage = ev => { try{ mpNachricht(JSON.parse(ev.data)); }catch(e){} };
     ws.onerror = () => {};
@@ -6597,7 +6613,7 @@ function partieFortsetzen(code){
 function partienAuf(){
   G._vorPartien = G.screen;
   G._partienListe = null;
-  /* Server-Adresse VOR dem Bildschirmwechsel lesen — danach ist das Feld weg */
+  /* Server-Adresse VOR dem Bildschirmwechsel lesen, danach ist das Feld weg */
   G._mpUrlMerk = ($("#mpUrl") && $("#mpUrl").value.trim()) || G._mpUrlMerk || "";
   zeige("partien");
   try{
@@ -6654,7 +6670,7 @@ function mpNachricht(m){
       for(const [idx, wer] of Object.entries(MP.zuordnung))
         if(wer === m.name && G.spieler[+idx] && !G.spieler[+idx].ki) MP.getrennt[+idx] = true;
     }
-    toast("⚠️ Ein Mitspieler hat die Verbindung verloren — er kann jederzeit mit Code und Namen zurückkehren." + (MP.host?" Oder Ihr übergebt sein Reich der KI.":""));
+    toast("⚠️ Ein Mitspieler hat die Verbindung verloren, er kann jederzeit mit Code und Namen zurückkehren." + (MP.host?" Oder Ihr übergebt sein Reich der KI.":""));
     if(G.screen === "warten" || G.screen === "lobby") render();
   }
   else if(m.t === "rangliste"){
@@ -6772,7 +6788,7 @@ function mpStartEmpfangen(m){
   G._pend = null;
   /* Intro läuft auf allen Geräten; der Weiter-Knopf routet dann über mpRoute() */
 }
-/* Sitz i gehört mir, wenn mein Regentenname dort eingetragen ist —
+/* Sitz i gehört mir, wenn mein Regentenname dort eingetragen ist,
    so überlebt die Zuordnung auch Trennung und Wiedereinstieg (asynchrone Partien). */
 const mpMein = i => !MP || !MP.aktiv || (MP.zuordnung && MP.zuordnung[i] === MP.name);
 let _mpTimer = null;
@@ -6905,7 +6921,7 @@ function animLoop(t){
 }
 requestAnimationFrame(animLoop);
 
-/* PWA: Installationshinweis — einmalig, wenn der Browser es anbietet */
+/* PWA: Installationshinweis, einmalig, wenn der Browser es anbietet */
 let _installEv = null;
 window.addEventListener("beforeinstallprompt", e => {
   e.preventDefault();
