@@ -6,3 +6,4 @@ shots.mjs
 shots*.mjs
 !icon-*.png
 package-lock.json
+shot_*.mjs
