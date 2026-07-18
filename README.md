@@ -260,3 +260,23 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
   hinterlassen bleibende Brandnarben im Boden
 - **Porträts**: drapierte Vorhänge mit Faltenwurf und goldener Kordel in der
   Hausfarbe, das Hauswappen als stilles Emblem, seidene Schärpe ab Fürstenrang
+
+## Version 3.0 — Charakterköpfe, Reichsaufträge und das eigene Wappen
+
+- **Charakterzüge**: jeder Regent — und jeder Erbe — bringt eine eigene Stärke
+  mit: Sparsam (−5 % Baukosten), Gelehrt (+1 Diplomatie), Kriegerisch (−5 % Sold),
+  Volksnah (+5 Grundstimmung) oder Händlerisch (−3 % Kornprovision); im Status
+  sichtbar, Erben würfeln neu — jede Generation regiert anders
+- **Reichsaufträge**: der Reichshof stellt immer wieder Aufgaben mit Frist und
+  Belohnung — Kornlieferung, Heerschau oder Aufbauwerk; als goldenes Banner im
+  Status, automatisch am Jahresende abgerechnet, Versäumnis verstimmt den Hof
+- **Klügere Feldherren-KI**: die Computer-Gegner stellen passend zu ihrer
+  Truppenmischung auf — Artillerie massiert das Zentrum, Reiterei geht auf die
+  Flanken, Fußvolk hält die breite Linie
+- **Eigenes Wappen & Hausfarbe**: im Setup frei wählbar (9 Wappen × 9 Farben)
+  mit Live-Vorschau auf dem Schild — die Wahl färbt Karten, Fahnen, Porträts
+  und Schlachtfeld
+- **Mini-Trends**: die Statuskacheln für Vermögen, Land und Untertanen tragen
+  winzige Verlaufskurven der letzten Jahre (grün steigend, rot fallend)
+- **Baustellen**: Neubauten stehen bis zum Zugende in einem Holzgerüst
+  mit Bauarbeiter, ehe der goldene Ring verblasst

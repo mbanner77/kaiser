@@ -410,7 +410,7 @@
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser v2.9 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.0 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -484,7 +484,7 @@ function neuerSpieler(name,w,idx,ki){
     name, w, ki:!!ki,
     farbe:FARBEN[idx%FARBEN.length], wappen:WAPPEN[idx%WAPPEN.length],
     gebaeude:[], chronik:[], startAlter:ri(22,30),
-    bez:{}, pakte:{}, kiTyp:null, gen:1, haefen:0,
+    bez:{}, pakte:{}, kiTyp:null, gen:1, haefen:0, zug:wuerfleZug(),
     berater:{}, spionage:{}, ehen:{},
     holz:120, stein:60, forst:0, bruch:0, mauer:0, burg:0,
     holzPreis:ri(8,16), steinPreis:ri(14,26),
@@ -586,7 +586,62 @@ function kannKrieg(p){
 const heerGroesse = h => h.inf + h.kav + h.art;
 const unterhalt = p => Math.round((p.heer.inf*10 + p.heer.kav*25 + p.heer.art*50)
   * (1 + p.titel*0.1) * (p.berater && p.berater.marschall ? 0.85 : 1)
-  * (hatPrivileg(p,5) ? 0.9 : 1));                      /* Herzogliche Heerfolge */
+  * (hatPrivileg(p,5) ? 0.9 : 1)                        /* Herzogliche Heerfolge */
+  * (p.zug==="kriegerisch" ? 0.95 : 1));
+
+/* Reichsaufträge: der Reichshof stellt Aufgaben mit Frist und Belohnung */
+const AUFTRAG_ARTEN = [
+  { id:"kornspeicher", ico:"🌾", n:"Kornlieferung",
+    txt:(z)=>`Der Reichshof erwartet volle Speicher: Haltet am Jahresende ${fmt(z)} Fuder Korn vor.`,
+    ziel:p=>Math.round(noetigKorn(p)*1.6/50)*50,
+    ok:(p,a)=>p.korn >= a.ziel,
+    lohn:p=>1200 + p.titel*300 },
+  { id:"heerschau", ico:"⚔️", n:"Heerschau",
+    txt:(z)=>`Das Reich ruft zur Heerschau: Habt am Jahresende ${fmt(z)} Mann unter Waffen.`,
+    ziel:p=>Math.max(60, Math.round((heerGroesse(p.heer)+60)/20)*20),
+    ok:(p,a)=>heerGroesse(p.heer) >= a.ziel,
+    lohn:p=>1500 + p.titel*300 },
+  { id:"bauboom", ico:"🏗️", n:"Aufbauwerk",
+    txt:(z)=>`Der Reichshof wünscht blühende Lande: Errichtet ${z} neue Bauwerke (Märkte oder Mühlen), ehe die Frist verstreicht.`,
+    ziel:p=>2,
+    ok:(p,a)=>(p.maerkte + p.muehlen) >= a.basis + a.ziel,
+    lohn:p=>1800 + p.titel*300 }
+];
+function auftragErteilen(p){
+  const art = AUFTRAG_ARTEN[ri(0, AUFTRAG_ARTEN.length-1)];
+  p.auftrag = { id:art.id, ziel:art.ziel(p), frist:G.jahr + 2, basis:p.maerkte + p.muehlen, lohn:art.lohn(p) };
+  if(!p.ki) toast(`${art.ico} <b>Reichsauftrag: ${art.n}</b><br><span class="small">${art.txt(p.auftrag.ziel)} Belohnung: ${fmt(p.auftrag.lohn)} Taler. Frist: Anno ${p.auftrag.frist}.</span>`, 9000);
+}
+const auftragArt = a => AUFTRAG_ARTEN.find(x=>x.id===a.id);
+/* Wird am Jahresende geprüft: erfüllt, offen oder verfallen */
+function auftragPruefen(p, r){
+  const a = p.auftrag;
+  if(!a) return;
+  const art = auftragArt(a);
+  if(!art){ p.auftrag = null; return; }
+  if(art.ok(p, a)){
+    p.geld += a.lohn;
+    p.stimmung = clamp(p.stimmung + 4, 5, 100);
+    r.auftragErfuellt = { n:art.n, ico:art.ico, lohn:a.lohn };
+    geschichte(art.ico, `${p.name} erfüllt den Reichsauftrag „${art.n}" (${fmt(a.lohn)} T).`);
+    p.auftrag = null;
+  } else if(G.jahr >= a.frist){
+    p.stimmung = clamp(p.stimmung - 4, 5, 100);
+    r.auftragVerfallen = { n:art.n, ico:art.ico };
+    p.auftrag = null;
+  }
+}
+
+/* Charakterzüge: jeder Regent bringt eine eigene Stärke mit — auch die Erben */
+const CHARAKTERZUEGE = [
+  { id:"sparsam",      ico:"🧮", n:"Sparsam",      d:"Baut 5 % günstiger." },
+  { id:"gelehrt",      ico:"📚", n:"Gelehrt",      d:"Eine zusätzliche Diplomatie-Aktion pro Jahr." },
+  { id:"kriegerisch",  ico:"🛡️", n:"Kriegerisch",  d:"−5 % Sold für das stehende Heer." },
+  { id:"volksnah",     ico:"🤝", n:"Volksnah",     d:"Die Grundstimmung des Volkes liegt 5 Punkte höher." },
+  { id:"haendlerisch", ico:"⚖️", n:"Händlerisch",  d:"3 % weniger Provision beim Kornverkauf." }
+];
+const zugVon = p => CHARAKTERZUEGE.find(z => z.id === p.zug) || null;
+const wuerfleZug = () => CHARAKTERZUEGE[ri(0, CHARAKTERZUEGE.length-1)].id;
 
 /* Titel-Privilegien: jeder Rang bringt einen dauerhaften Vorteil (Index = Titel) */
 const PRIVILEGIEN = [
@@ -602,7 +657,7 @@ const PRIVILEGIEN = [
 ];
 const hatPrivileg = (p, stufe) => (p.titel||0) >= stufe;
 /* Baukosten in Talern — Markgrafen bauen günstiger */
-const bauKosten = (p, was) => Math.round(KOSTEN[was] * (hatPrivileg(p,3) ? 0.9 : 1));
+const bauKosten = (p, was) => Math.round(KOSTEN[was] * (hatPrivileg(p,3) ? 0.9 : 1) * (p.zug==="sparsam" ? 0.95 : 1));
 
 /* Beförderungs-Bedingungen: Index = Ziel-Titel */
 const BEDINGUNGEN = [
@@ -960,7 +1015,8 @@ function zwischenbilanz(p){
 
   /* Grundstimmung aus Steuern, Justiz und Kornausgabe — Ereignis-Effekte
      (Feste, Aufruhr, Kriege …) hallen mit halber Stärke ins nächste Jahr nach */
-  const stimmungBasis = clamp(90 - (p.einkSt+p.mwSt)*0.8 - p.zoll*0.4 - (p.justiz-2)*10 + (f-1)*40, 5, 100);
+  const stimmungBasis = clamp(90 - (p.einkSt+p.mwSt)*0.8 - p.zoll*0.4 - (p.justiz-2)*10 + (f-1)*40
+    + (p.zug==="volksnah" ? 5 : 0), 5, 100);
   const nachhall = p._stimmungBasis !== undefined
     ? clamp(p.stimmung - p._stimmungBasis, -30, 30) * 0.5 : 0;
   p.stimmung = Math.round(clamp(stimmungBasis + nachhall, 5, 100));
@@ -1047,6 +1103,7 @@ function jahresschluss(p){
   r.ueberzeit = Math.max(0, dauer - 90);
   if(r.ueberzeit > 0) p.todesJahr -= r.ueberzeit/180;
 
+  auftragPruefen(p, r);
   if(G.jahr >= 1750 && !p.ki) erfolg("chronist");
   p.report = r;
   p.chronik = (p.chronik||[]).concat({ j:G.jahr, pop:p.pop, geld:Math.round(p.geld), land:p.land, heer:heerGroesse(p.heer) }).slice(-80);
@@ -1150,7 +1207,7 @@ function aufstellungPreset(k){
 }
 function aufstellungAFertig(){
   G._kr.aufA = [...G._aufW];
-  if(G.spieler[G._kr.d].ki){ G._kr.aufD = kiAufstellung(); schlachtStarten(); }
+  if(G.spieler[G._kr.d].ki){ G._kr.aufD = kiAufstellung(G.spieler[G._kr.d].heer); schlachtStarten(); }
   else if(mpMein(G._kr.d)){ G._aufW = [2,2,2,2,2]; zeige("aufstellungD"); }
   else mpPend("aufD", G._kr.d);
 }
@@ -2287,6 +2344,19 @@ function zeichneKarte(p, canvasId, t=0){
       ctx.beginPath(); ctx.arc(gx, gy-4, 17*puls, 0, 7); ctx.stroke();
       ctx.strokeStyle = "rgba(224,180,88,.35)";
       ctx.beginPath(); ctx.arc(gx, gy-4, 23*puls, 0, 7); ctx.stroke();
+      /* Baugerüst: Balken und Streben um den Neubau */
+      ctx.strokeStyle = "rgba(160,120,70,.85)"; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(gx-13, gy+6); ctx.lineTo(gx-13, gy-16);
+      ctx.moveTo(gx+13, gy+6); ctx.lineTo(gx+13, gy-16);
+      ctx.moveTo(gx-15, gy-16); ctx.lineTo(gx+15, gy-16);
+      ctx.moveTo(gx-15, gy-5);  ctx.lineTo(gx+15, gy-5);
+      ctx.moveTo(gx-13, gy-5);  ctx.lineTo(gx-6, gy-16);
+      ctx.stroke();
+      /* Winkender Bauarbeiter */
+      ctx.fillStyle = "#b5a37e";
+      ctx.beginPath(); ctx.arc(gx+15, gy-19, 1.6, 0, 7); ctx.fill();
+      ctx.fillRect(gx+14, gy-18, 2, 3.4);
     }
     if(g.t==="m") malMarkt(ctx, gx, gy);
     else if(g.t==="k") malMuehle(ctx, gx, gy, t);
@@ -3270,10 +3340,13 @@ function erben(p){
   p.land -= verlustLand;
   if(p.titel > 0) p.titel--;
   p.stimmung = clamp(p.stimmung-8, 5, 100);
+  p.zug = wuerfleZug();                              /* der Erbe bringt eine eigene Stärke mit */
   const roem = ["","II.","III.","IV.","V.","VI.","VII."][Math.min(p.gen-1,6)] || (p.gen+".");
   if(!/ (II\.|III\.|IV\.|V\.|VI\.|VII\.|\d+\.)$/.test(p.name)) p.name = p.name + " " + roem;
   else p.name = p.name.replace(/ (II\.|III\.|IV\.|V\.|VI\.|VII\.|\d+\.)$/, " " + roem);
-  geschichte("👶", `${alterName} stirbt — ${p.name} tritt das Erbe an (Erbstreit: −${fmt(verlustGeld)} T, −${fmt(verlustLand)} ha).`);
+  const zg = zugVon(p);
+  geschichte("👶", `${alterName} stirbt — ${p.name} (${zg?zg.n.toLowerCase():"?"}) tritt das Erbe an (Erbstreit: −${fmt(verlustGeld)} T, −${fmt(verlustLand)} ha).`);
+  if(!p.ki && zg) toast(`${zg.ico} Der neue Regent ist <b>${zg.n.toLowerCase()}</b>: ${zg.d}`, 7000);
   quicksave(); mpSync();
 }
 
@@ -3459,7 +3532,7 @@ function ereignisWahl(k){
 }
 
 /* ---------- Friedens-Diplomatie: Geschenke, Handel, Pakte ---------- */
-const diploLimit = p => ((p.berater && p.berater.kanzler) ? 2 : 1) + (hatPrivileg(p,4) ? 1 : 0);
+const diploLimit = p => ((p.berater && p.berater.kanzler) ? 2 : 1) + (hatPrivileg(p,4) ? 1 : 0) + (p.zug==="gelehrt" ? 1 : 0);
 function diploAktion(art){
   const p = cur();
   const ziel = G.spieler[+$("#dipZiel").value];
@@ -3688,11 +3761,20 @@ function wuerfleGelaende(){
     return r < 0.5 ? GELAENDE[0] : r < 0.68 ? GELAENDE[1] : r < 0.84 ? GELAENDE[2] : GELAENDE[3];
   });
 }
-const kiAufstellung = () => AUFSTELLUNGEN[ri(0,AUFSTELLUNGEN.length-1)].g;
+/* Die KI stellt passend zu ihrer Truppenmischung auf statt rein zufällig */
+function kiAufstellung(heer2){
+  if(!heer2 || Math.random() < 0.25) return AUFSTELLUNGEN[ri(0,AUFSTELLUNGEN.length-1)].g;
+  const ges = Math.max(1, heerGroesse(heer2));
+  const kavAnteil = heer2.kav / ges, artAnteil = heer2.art / ges;
+  if(artAnteil > 0.08) return AUFSTELLUNGEN[1].g;        /* massiertes Zentrum schützt die Kanonen */
+  if(kavAnteil > 0.18) return AUFSTELLUNGEN[4].g;        /* Doppelflanke für die Reiterei */
+  if(kavAnteil > 0.10) return Math.random()<0.5 ? AUFSTELLUNGEN[2].g : AUFSTELLUNGEN[3].g;
+  return AUFSTELLUNGEN[0].g;                             /* breite Linie fürs Fußvolk */
+}
 function kiSchlacht(a, d){
   if(routeAktiv(a, d)) routeTrennen(a, d, "durch die Kriegserklärung zerbrochen");
   const kr = { a, d, weg: wegZwischen(a,d), fragen: [], wahl: {},
-    aufA: kiAufstellung(), aufD: kiAufstellung(), gelaende: wuerfleGelaende() };
+    aufA: kiAufstellung(G.spieler[a].heer), aufD: kiAufstellung(G.spieler[d].heer), gelaende: wuerfleGelaende() };
   if(((G.spieler[d].mauer||0) + (G.spieler[d].burg||0)) > 0)
     belagerungAnwenden(kr, G.spieler[a].heer.art >= 2 ? "beschuss" : "sturm");
   /* übrige KI-Regenten entscheiden, Menschen bleiben bei KI-Kriegen neutral */
@@ -3932,6 +4014,7 @@ function ladeSpielstand(json){
     if(!p.spionage) p.spionage = {};
     if(!p.ehen) p.ehen = {};
     if(!p.folgen) p.folgen = [];
+    if(!p.zug) p.zug = wuerfleZug();
     if(p.holz===undefined) p.holz = 120;
     if(p.stein===undefined) p.stein = 60;
     if(p.forst===undefined) p.forst = 0;
@@ -4187,6 +4270,9 @@ function starteSpiel(anzahl, namen, geschlechter, tempo, kis, opts){
   G.tipps = {};
   for(let i=0;i<anzahl;i++)
     G.spieler.push(neuerSpieler(namen[i]||("Spieler "+(i+1)), geschlechter[i], i, kis && kis[i]));
+  /* Frei gewählte Wappen und Hausfarben aus dem Setup */
+  if(opts.wappen) G.spieler.forEach((p,i)=>{ if(opts.wappen[i]) p.wappen = opts.wappen[i]; });
+  if(opts.farben) G.spieler.forEach((p,i)=>{ if(opts.farben[i]) p.farbe = opts.farben[i]; });
   if(G.diff===1) for(const p of G.spieler){ p.geld = 25000; p.korn = 600; }
   if(G.diff===3) for(const p of G.spieler){ p.geld = 10000; p.korn = 300; }
   /* KI-Persönlichkeiten */
@@ -4233,6 +4319,7 @@ function beginneZug(){
   p.turnStart = Date.now();
   G._kiBerichte = [];
   G._donnerte = false;
+  if(!p.ki && !p.auftrag && !G.lehre && G.jahr > 1702 && Math.random() < 0.18) auftragErteilen(p);
   if(G.reichstag && G.reichstag.stimmen[G.aktiv] === undefined && !p.ki){ zeige("reichstag"); return; }
   beginneZugWeiter();
 }
@@ -4326,21 +4413,34 @@ function stepper(akt){
     `<span class="step ${j===i?'act':j<i?'done':''}">${j<i?'✓':PHASEN_ICON[ph]||''} ${ph}</span>`).join("") + `</div>`;
 }
 
+/* Mini-Trend: die letzten Chronikjahre als winzige Linie unter der Kachel */
+function miniTrend(p, key){
+  const c = (p.chronik||[]).slice(-12);
+  if(c.length < 3) return "";
+  const werte = c.map(e=>e[key]||0);
+  const min = Math.min(...werte), max = Math.max(...werte);
+  const sp = Math.max(1, max-min);
+  const steigt = werte[werte.length-1] >= werte[0];
+  const pts = werte.map((v,i)=>`${(i/(werte.length-1)*58).toFixed(1)},${(14-2-(v-min)/sp*10).toFixed(1)}`);
+  return `<svg viewBox="0 0 58 14" style="width:58px;height:14px;display:block;margin-top:5px;opacity:.8">
+    <polyline points="${pts.join(" ")}" fill="none" stroke="${steigt?'var(--green)':'var(--red)'}" stroke-width="1.6" stroke-linejoin="round"/>
+  </svg>`;
+}
 function statKarten(p){
   const d = p.delta || {};
   return `<div class="stats">
     <div class="stat"><span class="ico">💰</span><div class="lbl">Vermögen</div>
       <div class="val ${p.geld<0?'red':''}" data-cnt="${Math.round(p.geld)}" data-suf=" T">${fmt(p.geld)} T</div>
-      ${deltaBadge(d.geld," T")}</div>
+      ${deltaBadge(d.geld," T")}${miniTrend(p,"geld")}</div>
     <div class="stat"><span class="ico">🌍</span><div class="lbl">Land</div>
       <div class="val" data-cnt="${p.land}" data-suf=" ha">${fmt(p.land)} ha</div>
-      ${deltaBadge(d.land," ha")}</div>
+      ${deltaBadge(d.land," ha")}${miniTrend(p,"land")}</div>
     <div class="stat"><span class="ico">🌾</span><div class="lbl">Kornspeicher</div>
       <div class="val" data-cnt="${p.korn}" data-suf=" Fuder">${fmt(p.korn)} Fuder</div>
       ${deltaBadge(d.korn)}</div>
     <div class="stat"><span class="ico">👥</span><div class="lbl">Untertanen</div>
       <div class="val" data-cnt="${p.pop}">${fmt(p.pop)}</div>
-      ${deltaBadge(d.pop)}</div>
+      ${deltaBadge(d.pop)}${miniTrend(p,"pop")}</div>
     <div class="stat"><span class="ico">${p.stimmung>=60?'😊':p.stimmung>=35?'😐':'😠'}</span><div class="lbl">Stimmung</div>
       <div class="val">${p.stimmung}/100</div>
       <div class="bar"><div style="width:${p.stimmung}%;background:${p.stimmung>=60?'var(--green)':p.stimmung>=35?'var(--gold)':'var(--red)'}"></div></div></div>
@@ -4683,8 +4783,13 @@ const SCREENS = {
   setup(){
     let rows = "";
     for(let i=0;i<9;i++){
+      const wappenOpts = WAPPEN.map((w2,k)=>`<option value="${k}" ${k===i?'selected':''}>${w2}</option>`).join("");
+      const farbNamen = ["Himmelblau","Gold","Smaragd","Rubin","Veilchen","Bernstein","Seegrün","Rosenrot","Oliv"];
+      const farbOpts = FARBEN.map((f2,k)=>`<option value="${k}" ${k===i?'selected':''}>${farbNamen[k]}</option>`).join("");
       rows += `<tr id="prow${i}" style="${i>1?'opacity:.3':''}">
-        <td><span class="mini-schild" style="border-color:${FARBEN[i]};box-shadow:inset 0 0 9px ${FARBEN[i]}55">${WAPPEN[i]}</span></td>
+        <td><span class="mini-schild" id="pschild${i}" style="border-color:${FARBEN[i]};box-shadow:inset 0 0 9px ${FARBEN[i]}55">${WAPPEN[i]}</span></td>
+        <td><select id="pwap${i}" onchange="setupVorschau(${i})" ${i>1?'disabled':''} style="width:100%">${wappenOpts}</select></td>
+        <td><select id="pfarbe${i}" onchange="setupVorschau(${i})" ${i>1?'disabled':''} style="width:100%">${farbOpts}</select></td>
         <td><input type="text" id="pname${i}" maxlength="14" value="${NAMEN[i]}" ${i>1?'disabled':''}></td>
         <td><select id="pw${i}" ${i>1?'disabled':''}>
           <option value="0" ${i%2?'':'selected'}>Herr</option><option value="1" ${i%2?'selected':''}>Dame</option>
@@ -4703,8 +4808,9 @@ const SCREENS = {
               ${[1,2,3,4,5,6,7,8,9].map(n=>`<option ${n===2?'selected':''}>${n}</option>`).join("")}
             </select>
           </div>
+          <p class="muted small" style="margin:6px 0 2px">Schild · Wappen · Farbe · Name · Anrede · Regent</p>
           <table class="setup-tabelle">
-            <colgroup><col style="width:38px"><col><col style="width:88px"><col style="width:112px"></colgroup>
+            <colgroup><col style="width:38px"><col style="width:64px"><col style="width:118px"><col><col style="width:82px"><col style="width:106px"></colgroup>
             ${rows}
           </table>
           <p class="muted small" style="margin-top:8px">Die Reihenfolge bestimmt die Nachbarschaft:
@@ -5011,6 +5117,12 @@ const SCREENS = {
           <button class="btn-sm" onclick="statAuf()" style="margin-top:8px">📈 Statistik</button>
         </div>
       </div>
+      ${p.auftrag && auftragArt(p.auftrag) ? (()=>{ const art = auftragArt(p.auftrag); return `
+      <div class="card" style="border-color:rgba(224,180,88,.5)">
+        <p><b class="gold">${art.ico} Reichsauftrag: ${art.n}</b> — ${art.txt(p.auftrag.ziel)}</p>
+        <p class="muted small" style="margin-top:4px">Belohnung: ${fmt(p.auftrag.lohn)} Taler · Frist: Anno ${p.auftrag.frist}
+          ${art.ok(p, p.auftrag) ? ' · <span class="green">Bedingung derzeit erfüllt — am Jahresende wird abgerechnet.</span>' : ""}</p>
+      </div>`; })() : ""}
       ${statKarten(p)}
       <div class="grid g2">
         <div class="card">
@@ -5023,6 +5135,7 @@ const SCREENS = {
             <tr><td>Anbaufläche <span class="muted small">(Bebauung frisst Acker)</span></td><td class="r">${fmt(anbau(p))} ha</td></tr>
             <tr><td>Heer <span class="muted small">(Unterhalt ${fmt(unterhalt(p))} T/Jahr)</span></td><td class="r">${fmt(heerGroesse(p.heer))} Mann</td></tr>
             <tr><td>Befestigung</td><td class="r">${(p.mauer||0)>0||(p.burg||0)>0?`Mauer ${p.mauer||0}/${MAUER_MAX}${(p.burg||0)>0?` · Burg ${p.burg||0}/${BURG_MAX}`:""}`:"—"}</td></tr>
+            <tr><td>Charakterzug</td><td class="r">${zugVon(p)?`<span title="${zugVon(p).d}">${zugVon(p).ico} ${zugVon(p).n}</span>`:"—"}</td></tr>
             <tr><td>Privilegien <span class="muted small">(wachsen mit dem Rang)</span></td>
               <td class="r">${p.titel>=1 ? PRIVILEGIEN.slice(1, p.titel+1).filter(Boolean).map(pr=>`<span title="${pr.n}: ${pr.d}">${pr.ico}</span>`).join(" ") : "—"}</td></tr>
             <tr><td>Baustoffe <span class="muted small">(${p.forst||0} Forsthöfe, ${p.bruch||0} Steinbrüche)</span></td><td class="r">${fmt(p.holz||0)} 🪵 · ${fmt(p.stein||0)} 🪨</td></tr>
@@ -5646,6 +5759,8 @@ const SCREENS = {
             ${row("Kornspeicher jetzt", fmt(p.korn)+" Fuder")}
             ${r.holzErtrag||r.steinErtrag?row("Forst & Steinbruch", "+"+fmt(r.holzErtrag||0)+" 🪵, +"+fmt(r.steinErtrag||0)+" 🪨", "delta-pos"):""}
             ${r.erfindung?row("⚙️ Erfindung des Ingenieurs", "Ernte kräftig gesteigert", "delta-pos"):""}
+            ${r.auftragErfuellt?row(r.auftragErfuellt.ico+" Reichsauftrag „"+r.auftragErfuellt.n+"\u201C erfüllt", "+"+fmt(r.auftragErfuellt.lohn)+" Taler", "delta-pos"):""}
+            ${r.auftragVerfallen?row(r.auftragVerfallen.ico+" Reichsauftrag „"+r.auftragVerfallen.n+"\u201C", "Frist verstrichen — der Hof ist verstimmt", "delta-neg"):""}
             ${row("Steuern & Wirtschaft", "+"+fmt(r.steuern)+" Taler", "delta-pos")}
             ${r.routenGeld?row("Zoll aus "+routenVon(G.spieler.indexOf(p)).length+" Handelsroute"+(routenVon(G.spieler.indexOf(p)).length>1?"n":""), "+"+fmt(r.routenGeld)+" Taler", "delta-pos"):""}
             ${r.unterhalt?row("Heer-Unterhalt", "−"+fmt(r.unterhalt)+" Taler", "delta-neg"):""}
@@ -6128,15 +6243,29 @@ function setupAnzahl(){
     $("#pname"+i).disabled = !on;
     $("#pw"+i).disabled = !on;
     $("#pki"+i).disabled = !on;
+    if($("#pwap"+i)) $("#pwap"+i).disabled = !on;
+    if($("#pfarbe"+i)) $("#pfarbe"+i).disabled = !on;
   }
+}
+/* Live-Vorschau des Wappenschilds im Setup */
+function setupVorschau(i){
+  const schild = $("#pschild"+i);
+  if(!schild) return;
+  const w2 = WAPPEN[+($("#pwap"+i)?$("#pwap"+i).value:i)] || WAPPEN[i];
+  const f2 = FARBEN[+($("#pfarbe"+i)?$("#pfarbe"+i).value:i)] || FARBEN[i];
+  schild.textContent = w2;
+  schild.style.borderColor = f2;
+  schild.style.boxShadow = `inset 0 0 9px ${f2}55`;
 }
 function setupStart(){
   const n = +$("#anz").value;
-  const namen=[], w=[], kis=[];
+  const namen=[], w=[], kis=[], wapArr=[], farbArr=[];
   for(let i=0;i<n;i++){
     namen.push(($("#pname"+i).value.trim()||("Spieler "+(i+1))));
     w.push($("#pw"+i).value==="1");
     kis.push($("#pki"+i).value==="1");
+    wapArr.push(WAPPEN[+($("#pwap"+i)?$("#pwap"+i).value:i)] || WAPPEN[i]);
+    farbArr.push(FARBEN[+($("#pfarbe"+i)?$("#pfarbe"+i).value:i)] || FARBEN[i]);
   }
   if(kis.every(k=>k)){ alertMsg("Mindestens ein Reich braucht einen menschlichen Regenten."); return; }
   starteSpiel(n, namen, w, +$("#tempo").value, kis, {
@@ -6144,7 +6273,8 @@ function setupStart(){
     tutorial:  $("#optTutorial").checked,
     diff: +$("#diff").value,
     szenario: $("#szenario").value,
-    dynastie: $("#optDynastie").checked
+    dynastie: $("#optDynastie").checked,
+    wappen: wapArr, farben: farbArr
   });
 }
 function kornAusgeben(){
@@ -6177,7 +6307,8 @@ function handelKorn(dir){
   } else {
     const m = clamp(Math.floor(+$("#kverk").value||0),0,p.korn);
     if(m<=0) return;
-    const provision = p.haefen > 0 ? 0.95 : 0.9;   /* Häfen halbieren die Provision */
+    let provision = p.haefen > 0 ? 0.95 : 0.9;     /* Häfen halbieren die Provision */
+    if(p.zug === "haendlerisch") provision = Math.min(0.99, provision + 0.03);
     p.korn -= m; p.geld += Math.round(m*p.kornPreis*provision); sMuenze();
     G.marktDruck = (G.marktDruck||0) + m;
     p.stat.kornErloes += Math.round(m*p.kornPreis*provision);
@@ -6608,7 +6739,7 @@ function kiUebernehmen(idx){
       kr.frageIdx++;
       diploWeiter();
     } else if(pend.typ === "aufD"){
-      G._kr.aufD = kiAufstellung();
+      G._kr.aufD = kiAufstellung(G.spieler[G._kr.d].heer);
       if(mpMein(G._kr.a)) schlachtStarten(); else mpPend("schlacht", G._kr.a);
     } else if(pend.typ === "schlacht" || pend.typ === "schlachtplan" || pend.typ === "belagerung" || pend.typ === "kriegAbbruch"){
       G.spieler[G._kr.a].kriegGefuehrt = true;
