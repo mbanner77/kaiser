@@ -410,7 +410,7 @@
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser v2.8 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v2.9 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -585,7 +585,24 @@ function kannKrieg(p){
 }
 const heerGroesse = h => h.inf + h.kav + h.art;
 const unterhalt = p => Math.round((p.heer.inf*10 + p.heer.kav*25 + p.heer.art*50)
-  * (1 + p.titel*0.1) * (p.berater && p.berater.marschall ? 0.85 : 1));
+  * (1 + p.titel*0.1) * (p.berater && p.berater.marschall ? 0.85 : 1)
+  * (hatPrivileg(p,5) ? 0.9 : 1));                      /* Herzogliche Heerfolge */
+
+/* Titel-Privilegien: jeder Rang bringt einen dauerhaften Vorteil (Index = Titel) */
+const PRIVILEGIEN = [
+  null,
+  { ico:"🪙", n:"Baronale Steuerhoheit",   d:"+5 % auf alle Steuereinnahmen." },
+  { ico:"🌍", n:"Landgräfliches Marktrecht", d:"Nur noch 5 % Provision auf Landverkäufe." },
+  { ico:"🏗️", n:"Markgräfliches Baurecht",  d:"−10 % Talerkosten für alle Bauwerke." },
+  { ico:"📜", n:"Fürstliche Kanzlei",       d:"Eine zusätzliche Diplomatie-Aktion pro Jahr." },
+  { ico:"⚔️", n:"Herzogliche Heerfolge",    d:"−10 % Sold für das stehende Heer." },
+  { ico:"🏛️", n:"Kurfürstenwürde",          d:"+3 Stimmen im Reichstag." },
+  { ico:"🌾", n:"Königlicher Erntesegen",   d:"+10 % Ernte im ganzen Reich." },
+  { ico:"👑", n:"Kaiserliche Majestät",     d:"Das Reich gehört Euch — das Spiel ist gewonnen." }
+];
+const hatPrivileg = (p, stufe) => (p.titel||0) >= stufe;
+/* Baukosten in Talern — Markgrafen bauen günstiger */
+const bauKosten = (p, was) => Math.round(KOSTEN[was] * (hatPrivileg(p,3) ? 0.9 : 1));
 
 /* Beförderungs-Bedingungen: Index = Ziel-Titel */
 const BEDINGUNGEN = [
@@ -970,7 +987,9 @@ function jahresschluss(p){
   for(const w of WETTER){ roll -= w.w; if(roll<=0){ wetter = w; break; } }
   r.wetter = wetter;
   const bearbeitet = Math.min(p.pop*4, anbau(p));
-  const ertrag = rf(0.038,0.050) * wetter.f * (1 + Math.min(p.muehlen*0.05, 1.0));
+  let ertrag = rf(0.038,0.050) * wetter.f * (1 + Math.min(p.muehlen*0.05, 1.0));
+  if(hatPrivileg(p,7)) ertrag *= 1.10;                 /* Königlicher Erntesegen */
+  if(p._ernteBonus){ ertrag *= 1 + p._ernteBonus; r.erfindung = true; p._ernteBonus = 0; }
   r.ernte = Math.round(bearbeitet * ertrag);
   p.korn += r.ernte;
   /* Baustoff-Ertrag aus Forsthöfen und Steinbrüchen */
@@ -994,6 +1013,7 @@ function jahresschluss(p){
   r.steuern = Math.round(p.pop*(p.einkSt*0.08 + p.mwSt*0.05)/10)*10
             + p.zoll*p.maerkte*6 + p.maerkte*150 + staedte(p)*2000 + (p.haefen||0)*700;
   if(p.berater && p.berater.schatz) r.steuern = Math.round(r.steuern * 1.08);
+  if(hatPrivileg(p,1)) r.steuern = Math.round(r.steuern * 1.05);   /* Baronale Steuerhoheit */
   r.routenGeld = routenZoll(p);
   p.geld += r.routenGeld;
   p.geld += r.steuern;
@@ -1318,7 +1338,11 @@ function einTick(s, leise){
       gefA += laneVerlust(a, gA * stD/(stA+stD) * 0.15);
       if(!leise){
         s.partikel.push({ typ:"staub", lane:i, born:jetzt });
-        if(Math.random()<0.5) s.partikel.push({ typ:"boom", rx:0.5+rf(-0.03,0.03), ry, born:jetzt });
+        if(Math.random()<0.5){
+          const bx5 = 0.5+rf(-0.03,0.03);
+          s.partikel.push({ typ:"boom", rx:bx5, ry, born:jetzt });
+          s.krater = (s.krater||[]).concat({ x:bx5, y:ry+0.012 }).slice(-36);
+        }
         for(let k=0;k<2;k++)
           s.partikel.push({ typ:"gefallen", lane:i, off:rf(-0.05,0.05), seite:Math.random()<0.5?"A":"D", born:jetzt+rf(0,400) });
       }
@@ -1452,6 +1476,35 @@ function zeichnePortraet(cid, p){
   ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
   ctx.fillStyle = p.farbe + "26";
   ctx.beginPath(); ctx.arc(W/2, H*0.44, W*0.5, 0, 7); ctx.fill();
+  /* Drapierte Vorhänge mit Faltenwurf links und rechts */
+  for(const seite of [-1,1]){
+    const vx0 = W/2 + seite*W*0.5;
+    ctx.fillStyle = p.farbe + "33";
+    ctx.beginPath();
+    ctx.moveTo(vx0, 0);
+    ctx.quadraticCurveTo(W/2 + seite*W*0.30, H*0.16, W/2 + seite*W*0.38, H);
+    ctx.lineTo(vx0, H);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = p.farbe + "40"; ctx.lineWidth = 2;
+    for(let f2=0; f2<3; f2++){
+      ctx.beginPath();
+      ctx.moveTo(W/2 + seite*(W*0.40 + f2*W*0.045), 0);
+      ctx.quadraticCurveTo(W/2 + seite*(W*0.33 + f2*W*0.04), H*0.3,
+                           W/2 + seite*(W*0.40 + f2*W*0.035), H);
+      ctx.stroke();
+    }
+  }
+  /* Goldene Kordel mit Quaste */
+  ctx.strokeStyle = "rgba(224,180,88,.5)"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, H*0.09); ctx.quadraticCurveTo(W*0.14, H*0.13, W*0.16, 0); ctx.stroke();
+  ctx.fillStyle = "rgba(224,180,88,.6)";
+  ctx.beginPath(); ctx.arc(W*0.115, H*0.115, 3, 0, 7); ctx.fill();
+  /* Hauswappen als stilles Emblem im Hintergrund */
+  ctx.save();
+  ctx.globalAlpha = 0.13;
+  ctx.font = `${Math.round(W*0.22)}px sans-serif`; ctx.textAlign = "center";
+  ctx.fillText(p.wappen, W*0.82, H*0.2);
+  ctx.restore();
   ctx.strokeStyle = p.titel>=4 ? "#e0b458" : "#2a3446";
   ctx.lineWidth = p.titel>=7 ? 4 : 2.5;
   ctx.strokeRect(5,5,W-10,H-10);
@@ -1485,6 +1538,24 @@ function zeichnePortraet(cid, p){
   } else if(p.titel>=3){
     ctx.strokeStyle = "#d8d0bd"; ctx.lineWidth = 9; ctx.lineCap="round";
     ctx.beginPath(); ctx.moveTo(cx-W*0.16, H*0.66); ctx.quadraticCurveTo(cx, H*0.60, cx+W*0.16, H*0.66); ctx.stroke();
+  }
+  /* Seidene Schärpe quer über die Brust (ab Fürst) */
+  if(p.titel>=4){
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    const sgrad2 = ctx.createLinearGradient(cx-W*0.2, H*0.62, cx+W*0.2, H*0.95);
+    sgrad2.addColorStop(0, p.farbe);
+    sgrad2.addColorStop(1, "#8a2f3f");
+    ctx.fillStyle = sgrad2;
+    ctx.beginPath();
+    ctx.moveTo(cx-W*0.155, H*0.635);
+    ctx.lineTo(cx-W*0.085, H*0.625);
+    ctx.lineTo(cx+W*0.24, H*0.97);
+    ctx.lineTo(cx+W*0.15, H*0.99);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(224,180,88,.7)"; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(cx-W*0.145, H*0.633); ctx.lineTo(cx+W*0.235, H*0.972); ctx.stroke();
+    ctx.restore();
   }
   /* Amtskette + Medaillon */
   if(p.titel>=4){
@@ -2117,13 +2188,33 @@ function zeichneKarte(p, canvasId, t=0){
   });
   if(p.palast>0){ ctx.beginPath(); ctx.moveTo(cx,cy+12); ctx.quadraticCurveTo(cx-rr*0.24,cy-rr*0.1,cx-rr*0.5,cy-rr*0.30); ctx.stroke(); }
   if(p.dom>0){    ctx.beginPath(); ctx.moveTo(cx,cy+12); ctx.quadraticCurveTo(cx+rr*0.26,cy-rr*0.12,cx+rr*0.52,cy-rr*0.32); ctx.stroke(); }
-  /* Felder (Anbaufläche) */
+  /* Felder (Anbaufläche) — die Saat wächst mit der Jahreszeit */
   const felder = clamp(Math.round(Math.min(p.pop*4, anbau(p))/1800), 2, 16);
   for(let i=0;i<felder;i++){
     const a = rng()*6.2832, d = rr*(0.3+rng()*0.34);
     const fx = cx+Math.cos(a)*d*1.15, fyy = cy+Math.sin(a)*d*0.7;
     ctx.save(); ctx.translate(fx,fyy); ctx.rotate((rng()-0.5)*0.5);
     for(let s=0;s<4;s++){ ctx.fillStyle = s%2 ? sn.f1 : sn.f2; ctx.fillRect(-17, -10+s*5, 34, 5); }
+    if(sn.n === "Frühling"){
+      /* zarte Saatreihen */
+      ctx.strokeStyle = "rgba(150,190,90,.55)"; ctx.lineWidth = 1;
+      for(let hx=-15; hx<=15; hx+=4){ ctx.beginPath(); ctx.moveTo(hx,8); ctx.lineTo(hx,5.5); ctx.stroke(); }
+    } else if(sn.n === "Sommer"){
+      /* hochstehendes Korn, wiegt sich im Wind */
+      ctx.strokeStyle = "rgba(215,190,90,.7)"; ctx.lineWidth = 1.2;
+      for(let hx=-15; hx<=15; hx+=3.6){
+        const wieg = Math.sin(t/700 + hx + i)*1.1;
+        ctx.beginPath(); ctx.moveTo(hx,9); ctx.quadraticCurveTo(hx+wieg,4, hx+wieg*1.6,0); ctx.stroke();
+      }
+    } else if(sn.n === "Herbst"){
+      /* Stoppeln und aufgestellte Garben */
+      ctx.strokeStyle = "rgba(190,160,80,.5)"; ctx.lineWidth = 1;
+      for(let hx=-15; hx<=15; hx+=4){ ctx.beginPath(); ctx.moveTo(hx,9); ctx.lineTo(hx,6.5); ctx.stroke(); }
+      ctx.fillStyle = "#c8a04a";
+      for(const gx3 of [-9, 3, 11]){
+        ctx.beginPath(); ctx.moveTo(gx3-3, 4); ctx.lineTo(gx3, -3); ctx.lineTo(gx3+3, 4); ctx.closePath(); ctx.fill();
+      }
+    }
     ctx.restore();
   }
   /* Dorf/Häuser (Bevölkerung) */
@@ -2131,6 +2222,34 @@ function zeichneKarte(p, canvasId, t=0){
   for(let i=0;i<haeuser;i++){
     const a = rng()*6.2832, d = rng()*rr*0.24;
     malHaus(ctx, cx+Math.cos(a)*d*1.3, cy+10+Math.sin(a)*d*0.7, 9, "#b09877", "#8a4a35");
+  }
+  /* Dorfkirche und Brunnen im Herzen des Reiches */
+  {
+    const kx4 = cx + 18, ky4 = cy - 2;
+    ctx.fillStyle = "rgba(0,0,0,.2)";
+    ctx.beginPath(); ctx.ellipse(kx4+2, ky4+9, 12, 3.4, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#d8d2c2";                              /* Kirchenschiff */
+    ctx.fillRect(kx4-9, ky4-4, 14, 12);
+    ctx.fillStyle = "#8a4a35";
+    ctx.beginPath(); ctx.moveTo(kx4-11, ky4-4); ctx.lineTo(kx4-2, ky4-11); ctx.lineTo(kx4+7, ky4-4); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#cfc8b6";                              /* Turm */
+    ctx.fillRect(kx4+5, ky4-14, 6, 22);
+    ctx.fillStyle = "#6b4a35";
+    ctx.beginPath(); ctx.moveTo(kx4+3.5, ky4-14); ctx.lineTo(kx4+8, ky4-23); ctx.lineTo(kx4+12.5, ky4-14); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#e0b458"; ctx.lineWidth = 1.4;       /* Kreuz */
+    ctx.beginPath(); ctx.moveTo(kx4+8, ky4-23); ctx.lineTo(kx4+8, ky4-27);
+    ctx.moveTo(kx4+6.4, ky4-25.4); ctx.lineTo(kx4+9.6, ky4-25.4); ctx.stroke();
+    ctx.fillStyle = "#3a3630";                              /* Fenster */
+    ctx.fillRect(kx4-6, ky4-1, 2.5, 4); ctx.fillRect(kx4-1, ky4-1, 2.5, 4);
+    /* Brunnen mit Winde */
+    const bx4 = cx - 20, by4 = cy + 14;
+    ctx.fillStyle = "#8d8577";
+    ctx.beginPath(); ctx.arc(bx4, by4, 4.6, 0, 7); ctx.fill();
+    ctx.fillStyle = "#5c574e";
+    ctx.beginPath(); ctx.arc(bx4, by4, 2.6, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#6b4a35"; ctx.lineWidth = 1.3;
+    ctx.beginPath(); ctx.moveTo(bx4-4, by4-1); ctx.lineTo(bx4-4, by4-7); ctx.moveTo(bx4+4, by4-1); ctx.lineTo(bx4+4, by4-7);
+    ctx.moveTo(bx4-5.5, by4-7); ctx.lineTo(bx4+5.5, by4-7); ctx.stroke();
   }
   /* Schornsteinrauch aus dem Dorf */
   for(let r=0;r<3;r++){
@@ -2266,6 +2385,12 @@ function zeichneKarte(p, canvasId, t=0){
     ctx.fillStyle = "rgba(0,0,10,.07)";
     ctx.beginPath(); ctx.ellipse(wx2, cy + (w?rr*0.3:-rr*0.25), rr*0.5, rr*0.22, 0.3, 0, 7); ctx.fill();
   }
+  ctx.restore();
+  /* Sandiger Uferstreifen entlang der Grenze */
+  ctx.save();
+  malBlob(ctx, pts);
+  ctx.strokeStyle = sn.schnee ? "rgba(210,215,222,.35)" : "rgba(196,172,120,.38)";
+  ctx.lineWidth = 7; ctx.stroke();
   ctx.restore();
   /* Vogelschwarm zieht in V-Formation über das Land (nicht im Winter) */
   if(!sn.schnee){
@@ -2657,6 +2782,26 @@ function zeichneFeld(t=0){
     ctx.beginPath(); ctx.ellipse(hx, H*0.24, hw, 14+brng()*8, 0, Math.PI, 0); ctx.fill();
   }
   for(let b=0;b<6;b++) malBaum(ctx, brng()*W, H*(0.17+brng()*0.06), 4+brng()*3);
+  /* Himmelband: fahle Sonne und ziehende Wolken über dem Feld */
+  if(!s.regen){
+    const sonn = ctx.createRadialGradient(W*0.82, H*0.09, 3, W*0.82, H*0.09, 26);
+    sonn.addColorStop(0,"rgba(255,236,180,.7)"); sonn.addColorStop(1,"rgba(255,236,180,0)");
+    ctx.fillStyle = sonn; ctx.beginPath(); ctx.arc(W*0.82, H*0.09, 26, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = s.regen ? "rgba(150,155,168,.14)" : "rgba(220,222,232,.09)";
+  for(let wk=0; wk<3; wk++){
+    const wx4 = ((t/(120+wk*40) + wk*300) % (W+220)) - 110;
+    for(let b2=0;b2<4;b2++){
+      ctx.beginPath(); ctx.arc(wx4+b2*24, H*0.06+wk*H*0.045+(b2%2)*4, 12+(b2%3)*5, 0, 7); ctx.fill();
+    }
+  }
+  /* Brandnarben vergangener Einschläge bleiben im Boden */
+  for(const kt of (s.krater||[])){
+    ctx.fillStyle = "rgba(30,26,20,.30)";
+    ctx.beginPath(); ctx.ellipse(kt.x*W, kt.y*H, 7, 2.8, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "rgba(60,50,38,.22)";
+    ctx.beginPath(); ctx.ellipse(kt.x*W, kt.y*H, 3.6, 1.5, 0, 0, 7); ctx.fill();
+  }
   /* Grasbüschel und zertrampelte Erde */
   for(let g2=0; g2<70; g2++){
     const gx3 = brng()*W, gy3 = H*0.3 + brng()*H*0.66;
@@ -2777,6 +2922,27 @@ function zeichneFeld(t=0){
     ctx.save(); ctx.translate(0, -wippe);
     if(laneGroesse(lane.D)>0) malSeite2(lane.D, fD, frontD, -1);
     ctx.restore();
+    /* Kleine Frontfahnen zeigen, wie weit jede Linie vorgerückt ist */
+    if(laneGroesse(lane.A)>0 && lane.dist>0){
+      const fw2 = Math.sin(t/230+i)*2;
+      ctx.strokeStyle = "#5a4a30"; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(frontA+8, y0+4); ctx.lineTo(frontA+8, y0+15); ctx.stroke();
+      ctx.fillStyle = fA;
+      ctx.beginPath(); ctx.moveTo(frontA+8, y0+4);
+      ctx.quadraticCurveTo(frontA+14, y0+5+fw2*0.4, frontA+18, y0+6+fw2*0.4);
+      ctx.quadraticCurveTo(frontA+14, y0+8, frontA+8, y0+9);
+      ctx.closePath(); ctx.fill();
+    }
+    if(laneGroesse(lane.D)>0 && lane.dist>0){
+      const fw3 = Math.sin(t/230+i+2)*2;
+      ctx.strokeStyle = "#5a4a30"; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(frontD-8, y0+4); ctx.lineTo(frontD-8, y0+15); ctx.stroke();
+      ctx.fillStyle = fD;
+      ctx.beginPath(); ctx.moveTo(frontD-8, y0+4);
+      ctx.quadraticCurveTo(frontD-14, y0+5+fw3*0.4, frontD-18, y0+6+fw3*0.4);
+      ctx.quadraticCurveTo(frontD-14, y0+8, frontD-8, y0+9);
+      ctx.closePath(); ctx.fill();
+    }
     /* Truppenzahlen an den Rändern */
     ctx.font = "600 11px sans-serif";
     ctx.fillStyle = fA; ctx.textAlign = "left";
@@ -3150,6 +3316,32 @@ const EREIGNISSE = [
       { t:"Fest ausrichten (400 T)", fx:p=>{ p.geld-=400; p.stimmung=clamp(p.stimmung+8,5,100); folgePlanen(p,"maezen",1); return "Drei Tage Musik und Feuerschlucker — das Volk jubelt."; } },
       { t:"Wegschicken", fx:p=>"Die Gaukler ziehen zum Nachbarn weiter." }
     ]},
+  { id:"komet", ico:"☄️",
+    txt:p=>`Ein Schweifstern steht am Nachthimmel — das Volk raunt von Omen und Unheil, die Gelehrten streiten.`,
+    wahl:[
+      { t:"Hofastrologen deuten lassen (300 T)", fx:p=>{ p.geld-=300; p.stimmung=clamp(p.stimmung+6,5,100); return "Der Astrologe verkündet ein Zeichen des Aufstiegs — das Volk atmet auf."; } },
+      { t:"Als Naturschauspiel abtun", fx:p=>{ if(Math.random()<0.3){ p.stimmung=clamp(p.stimmung-6,5,100); return "Die Prediger nutzen Eure Gleichgültigkeit — Endzeitstimmung in den Gassen."; } return "Nach drei Nächten verblasst der Stern — und mit ihm das Gerede."; } }
+    ]},
+  { id:"ingenieur", ico:"⚙️",
+    txt:p=>`Ein reisender Ingenieur bietet an, Eure Mühlen mit einem neuartigen Kammrad zu versehen: „Nächstes Jahr mahlt Ihr das Anderthalbfache!"`,
+    wahl:[
+      { t:"Anheuern (1.200 T)", fx:p=>{ if(p.geld<1200) return "Eure Kasse gibt das nicht her — der Ingenieur zieht enttäuscht weiter."; p.geld-=1200; folgePlanen(p,"erfindung",1); return "Er macht sich sofort ans Werk. Kommendes Jahr wird sich zeigen, was sein Kammrad taugt."; } },
+      { t:"Scharlatan! Fortjagen", fx:p=>{ return "Der Mann zieht zum Nachbarn weiter. Vielleicht war es doch kein Schwindel …"; } }
+    ]},
+  { id:"turnier", ico:"🏇",
+    txt:p=>`Die Ritterschaft bittet Euch, ein großes Turnier auszurichten — Lanzenstechen, Gaukelei und ein Fest für das ganze Reich.`,
+    wahl:[
+      { t:"Prächtig ausrichten (800 T)", fx:p=>{ p.geld-=800; p.stimmung=clamp(p.stimmung+7,5,100); G.spieler.forEach(z=>{ if(z!==p&&!z.tot) bezAendern(p,z,5); }); return "Drei Tage Waffenspiel und Wein — Euer Name klingt in allen Reichen."; } },
+      { t:"Selbst in die Schranken reiten", fx:p=>{ if(Math.random()<0.5){ p.geld+=1500; p.stimmung=clamp(p.stimmung+9,5,100); return "Ihr werft den Champion aus dem Sattel! 1.500 Taler Siegprämie und tosender Jubel."; } p.stimmung=clamp(p.stimmung-3,5,100); p.todesJahr-=0.3; return "Eine Lanze trifft Euch hart — der Medicus schüttelt den Kopf, das Volk lacht verstohlen."; } },
+      { t:"Absagen", fx:p=>{ p.stimmung=clamp(p.stimmung-3,5,100); return "Die Ritterschaft zieht murrend ab."; } }
+    ]},
+  { id:"gesandtschaft", ico:"🐫",
+    txt:p=>`Eine Gesandtschaft einer fernen Großmacht erscheint mit Seide und Säbeln: Man fordert 1.000 Taler „Wegzoll" — oder bietet ein Handelsgeschäft.`,
+    wahl:[
+      { t:"Wegzoll zahlen (1.000 T)", fx:p=>{ p.geld-=1000; return "Die Gesandten verneigen sich kühl und ziehen weiter."; } },
+      { t:"Handel: 200 Fuder Korn teuer verkaufen", fx:p=>{ const m=Math.min(200,p.korn); const preis=Math.round((G.kornMarkt||100)*1.6); p.korn-=m; p.geld+=m*preis; return `Sie zahlen Fantasiepreise: ${fmt(m)} Fuder für ${fmt(m*preis)} Taler!`; } },
+      { t:"Stolz abweisen", fx:p=>{ if(Math.random()<0.35){ const k=Math.round(p.korn*0.08); p.korn-=k; return `In der Nacht verschwinden ${fmt(k)} Fuder aus den Grenzdörfern — ein Abschiedsgruß.`; } p.stimmung=clamp(p.stimmung+3,5,100); return "Die Gesandten ziehen ab. Euer Volk ist stolz auf Euren geraden Rücken."; } }
+    ]},
   { id:"grenzstein", ico:"🪨",
     txt:p=>{ const nb=nachbarn(G.spieler.indexOf(p)).map(i=>G.spieler[i]).filter(z=>!z.tot)[0]; return `Bauern melden: ${nb?nb.name+"s":"des Nachbarn"} Leute haben Grenzsteine versetzt — 300 Hektar sind strittig.`; },
     wahl:[
@@ -3157,6 +3349,18 @@ const EREIGNISSE = [
       { t:"Hart bleiben", fx:p=>{ const nb=nachbarn(G.spieler.indexOf(p)).map(i=>G.spieler[i]).filter(z=>!z.tot)[0]; if(nb) bezAendern(p,nb,-12); return "Die Grenzsteine werden zurückversetzt. Man wird sich das merken."; } }
     ]}
 ];
+const EREIGNIS_GOLDADER = { id:"goldader", ico:"✨",
+  txt:p=>`Eure Steinbrecher stoßen auf eine glitzernde Ader im Fels — Gold! Noch weiß es niemand außer dem Vorarbeiter.`,
+  wahl:[
+    { t:"Ordentlich verzollen und fördern", fx:p=>{ const g=ri(1500,2600); p.geld+=g; p.stimmung=clamp(p.stimmung+3,5,100); return `Die Ader gibt ${fmt(g)} Taler her — sauber verbucht, das Volk feiert Euer Glück.`; } },
+    { t:"Heimlich abschöpfen", fx:p=>{ const g=ri(2500,4000); p.geld+=g; if(Math.random()<0.35){ p.stimmung=clamp(p.stimmung-8,5,100); return `${fmt(g)} Taler — doch der Vorarbeiter plaudert im Wirtshaus. Man nennt Euch nun raffgierig.`; } return `${fmt(g)} Taler wandern still in Eure Schatulle. Niemand fragt nach.`; } }
+  ]};
+const EREIGNIS_WALDBRAND = { id:"waldbrand", ico:"🔥",
+  txt:p=>`Rauch über dem Forst! Ein Blitzschlag hat das Unterholz entzündet — die Flammen fressen sich auf Euren Forsthof zu.`,
+  wahl:[
+    { t:"Alle Männer zum Löschen!", fx:p=>{ const v=ri(5,20); p.pop-=v; const h=Math.round((p.holz||0)*0.1); p.holz-=h; return `Nach zwei Tagen ist der Brand erstickt — ${v} Helfer verletzt, ${fmt(h)} Holz verloren, der Forst gerettet.`; } },
+    { t:"Brennen lassen und Schneisen ziehen", fx:p=>{ const h=Math.round((p.holz||0)*0.35); p.holz-=h; if(Math.random()<0.3 && (p.forst||0)>0){ p.forst--; const idx=(p.gebaeude||[]).findIndex(g=>g.t==="f"); if(idx>=0) p.gebaeude.splice(idx,1); return `Das Feuer verschlingt ${fmt(h)} Holz — und einen ganzen Forsthof.`; } return `Die Schneisen halten. ${fmt(h)} Holz verbrennt, doch der Hof steht.`; } }
+  ]};
 const EREIGNIS_PIRATEN = { id:"piraten", ico:"🏴‍☠️",
   txt:p=>`Flusspiraten kapern Lastkähne vor Eurem Hafen und fordern Wegzoll.`,
   wahl:[
@@ -3203,6 +3407,12 @@ const FOLGEN = {
     wahl:[
       { t:"Mit Dank annehmen", fx:p=>{ const g=ri(1000,1800); p.geld+=g; return `${fmt(g)} Taler in Gold und Geschmeide — Großzügigkeit zahlt sich aus.`; } }
     ]},
+  erfindung: { id:"erfindung", ico:"⚙️",
+    txt:p=>`Der Ingenieur präsentiert stolz sein Werk: Alle Mühlen tragen nun das neue Kammrad. „Zur Ernte werdet Ihr staunen, ${titelName(p)}!"`,
+    wahl:[
+      { t:"Das Werk abnehmen", fx:p=>{ p._ernteBonus = 0.35; return "Die Räder greifen wie Zahnwerk einer Uhr — die kommende Ernte wird kräftig ausfallen (+35 %)."; } },
+      { t:"Zusätzlich eine Prämie zahlen (400 T)", fx:p=>{ p.geld-=400; p._ernteBonus = 0.45; return "Der Ingenieur, beflügelt vom Lohn, feilt noch eine Woche nach — die Ernte wird glänzen (+45 %)."; } }
+    ]},
   deichbruch: { id:"deichbruch", ico:"🌊",
     txt:p=>`Die Deiche, die Ihr im letzten Hochwasser dem Himmel überließt, sind mürbe geworden — die Flussmeister schlagen erneut Alarm.`,
     wahl:[
@@ -3212,7 +3422,9 @@ const FOLGEN = {
 };
 function ereignisWuerfeln(p){
   if(Math.random() >= 0.20) return null;
-  if((p.haefen||0) > 0 && Math.random() < 0.2) return EREIGNIS_PIRATEN;
+  if((p.haefen||0) > 0 && Math.random() < 0.16) return EREIGNIS_PIRATEN;
+  if((p.bruch||0) > 0 && Math.random() < 0.10) return EREIGNIS_GOLDADER;
+  if((p.forst||0) > 0 && Math.random() < 0.10) return EREIGNIS_WALDBRAND;
   return EREIGNISSE[ri(0, EREIGNISSE.length-1)];
 }
 function ereignisWahl(k){
@@ -3247,7 +3459,7 @@ function ereignisWahl(k){
 }
 
 /* ---------- Friedens-Diplomatie: Geschenke, Handel, Pakte ---------- */
-const diploLimit = p => (p.berater && p.berater.kanzler) ? 2 : 1;
+const diploLimit = p => ((p.berater && p.berater.kanzler) ? 2 : 1) + (hatPrivileg(p,4) ? 1 : 0);
 function diploAktion(art){
   const p = cur();
   const ziel = G.spieler[+$("#dipZiel").value];
@@ -3838,7 +4050,7 @@ function reichstagEinberufen(){
   geschichte("🏛️", `Der Reichstag tritt zusammen — beraten wird: ${v.n}.`);
 }
 const reichstagVorschlag = () => REICHSTAG_VORSCHLAEGE.find(v=>v.id===G.reichstag.vorschlag);
-const stimmgewicht = p => (p.titel||0) + 1;
+const stimmgewicht = p => (p.titel||0) + 1 + (hatPrivileg(p,6) ? 3 : 0);
 function reichstagOffen(){
   return G.reichstag && lebende().some(x => G.reichstag.stimmen[x.i] === undefined);
 }
@@ -4811,6 +5023,8 @@ const SCREENS = {
             <tr><td>Anbaufläche <span class="muted small">(Bebauung frisst Acker)</span></td><td class="r">${fmt(anbau(p))} ha</td></tr>
             <tr><td>Heer <span class="muted small">(Unterhalt ${fmt(unterhalt(p))} T/Jahr)</span></td><td class="r">${fmt(heerGroesse(p.heer))} Mann</td></tr>
             <tr><td>Befestigung</td><td class="r">${(p.mauer||0)>0||(p.burg||0)>0?`Mauer ${p.mauer||0}/${MAUER_MAX}${(p.burg||0)>0?` · Burg ${p.burg||0}/${BURG_MAX}`:""}`:"—"}</td></tr>
+            <tr><td>Privilegien <span class="muted small">(wachsen mit dem Rang)</span></td>
+              <td class="r">${p.titel>=1 ? PRIVILEGIEN.slice(1, p.titel+1).filter(Boolean).map(pr=>`<span title="${pr.n}: ${pr.d}">${pr.ico}</span>`).join(" ") : "—"}</td></tr>
             <tr><td>Baustoffe <span class="muted small">(${p.forst||0} Forsthöfe, ${p.bruch||0} Steinbrüche)</span></td><td class="r">${fmt(p.holz||0)} 🪵 · ${fmt(p.stein||0)} 🪨</td></tr>
             <tr><td>Nachbarreiche</td><td class="r">${nb}</td></tr>
           </table>
@@ -5431,6 +5645,7 @@ const SCREENS = {
             ${row("Ernte ("+fmt(Math.min(p.pop*4,anbau(p)))+" ha bestellt)", `+<span data-cnt="${r.ernte}"> </span> Fuder`, "delta-pos")}
             ${row("Kornspeicher jetzt", fmt(p.korn)+" Fuder")}
             ${r.holzErtrag||r.steinErtrag?row("Forst & Steinbruch", "+"+fmt(r.holzErtrag||0)+" 🪵, +"+fmt(r.steinErtrag||0)+" 🪨", "delta-pos"):""}
+            ${r.erfindung?row("⚙️ Erfindung des Ingenieurs", "Ernte kräftig gesteigert", "delta-pos"):""}
             ${row("Steuern & Wirtschaft", "+"+fmt(r.steuern)+" Taler", "delta-pos")}
             ${r.routenGeld?row("Zoll aus "+routenVon(G.spieler.indexOf(p)).length+" Handelsroute"+(routenVon(G.spieler.indexOf(p)).length>1?"n":""), "+"+fmt(r.routenGeld)+" Taler", "delta-pos"):""}
             ${r.unterhalt?row("Heer-Unterhalt", "−"+fmt(r.unterhalt)+" Taler", "delta-neg"):""}
@@ -5464,6 +5679,11 @@ const SCREENS = {
         </div>
         <p class="muted small">${titelName(p)} ${p.name}, ${alterJahre(p)} Jahre — im neuen Ornat</p>
         <h1 style="font-size:30px;margin:14px 0">${p.name} wird zu${p.w?"r":"m"} <span class="gold">${titelName(p)}</span> erhoben!</h1>
+        ${PRIVILEGIEN[p.titel] ? `
+        <div class="pergament" style="max-width:480px;margin:6px auto 0;padding:14px 18px">
+          <p class="gold" style="font-weight:700">${PRIVILEGIEN[p.titel].ico} Neues Privileg: ${PRIVILEGIEN[p.titel].n}</p>
+          <p class="small" style="margin-top:4px">${PRIVILEGIEN[p.titel].d}</p>
+        </div>` : ""}
         ${p.titel===8
           ? `<p class="green" style="font-size:16px">Die Kathedrale ist vollendet — das Reich hat einen neuen ${titelName(p)}!</p>
              <div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="zeige('sieg')">Zur Krönung</button></div>`
@@ -5978,7 +6198,8 @@ function handelLand(dir){
   } else {
     const m = clamp(Math.floor(+$("#lverk").value||0),0,freiLand(p));
     if(m<=0) return;
-    p.land -= m; p.geld += Math.round(m*p.landPreis*0.9); sMuenze();
+    const prov = hatPrivileg(p,2) ? 0.95 : 0.9;        /* Landgräfliches Marktrecht */
+    p.land -= m; p.geld += Math.round(m*p.landPreis*prov); sMuenze();
   }
   render();
 }
@@ -6022,7 +6243,7 @@ function karteKlick(ev){
   const dist = Math.sqrt(dx*dx + dy*dy);
   if(dist > 0.92){ toast("⚠️ Dieser Platz liegt außerhalb Eures Territoriums.", 3000); return; }
   const typ = G._bauModus === "markt" ? "m" : "k";
-  const kosten = G._bauModus === "markt" ? KOSTEN.markt : KOSTEN.muehle;
+  const kosten = bauKosten(p, G._bauModus);
   if(p.geld < kosten || !hatMaterial(p, G._bauModus)) { G._bauModus = null; render(); return; }
   p.geld -= kosten;
   zahleMaterial(p, G._bauModus);
@@ -6050,22 +6271,23 @@ function baue(was){
   const platz = (p.maerkte+p.muehlen) < bauplaetze(p);
   /* Markt & Mühle: erst wählen, dann auf die Karte klicken */
   if((was==="markt" || was==="muehle") && G.screen==="bauen" && !p.ki){
-    const kosten = was==="markt" ? KOSTEN.markt : KOSTEN.muehle;
+    const kosten = bauKosten(p, was);
     if(p.geld < kosten || !platz || !hatMaterial(p, was)) return;
     G._bauModus = (G._bauModus === was) ? null : was;
     if(G._bauModus) toast(`🏗️ Klickt auf die Karte, um den Bauplatz für ${was==="markt"?"den Markt":"die Mühle"} zu wählen.`, 3500);
     render();
     return;
   }
-  if(was==="markt"  && p.geld>=KOSTEN.markt  && platz && hatMaterial(p,"markt")){ p.geld-=KOSTEN.markt; zahleMaterial(p,"markt"); p.maerkte++; platziereGebaeude(p,"m"); }
-  if(was==="muehle" && p.geld>=KOSTEN.muehle && platz && hatMaterial(p,"muehle")){ p.geld-=KOSTEN.muehle; zahleMaterial(p,"muehle"); p.muehlen++; platziereGebaeude(p,"k"); }
-  if(was==="palast" && p.palast<PALAST_TEILE && p.geld>=KOSTEN.palastTeil && p.land>=LAND.palast && hatMaterial(p,"palastTeil")){ p.geld-=KOSTEN.palastTeil; zahleMaterial(p,"palastTeil"); p.palast++; p._neu="palast"; }
-  if(was==="dom"    && p.dom<DOM_TEILE && p.geld>=KOSTEN.domTeil && p.land>=LAND.dom && hatMaterial(p,"domTeil")){ p.geld-=KOSTEN.domTeil; zahleMaterial(p,"domTeil"); p.dom++; p._neu="dom"; }
-  if(was==="hafen"  && (p.haefen||0)<2 && p.geld>=KOSTEN.hafen && p.land>=12000 && hatMaterial(p,"hafen")){ p.geld-=KOSTEN.hafen; zahleMaterial(p,"hafen"); p.haefen=(p.haefen||0)+1; p._neu="hafen"; }
-  if(was==="forst"  && (p.forst||0)<FORST_MAX && p.geld>=KOSTEN.forst && p.land>=3000){ p.geld-=KOSTEN.forst; p.forst=(p.forst||0)+1; platziereGebaeude(p,"f"); }
-  if(was==="bruch"  && (p.bruch||0)<BRUCH_MAX && p.geld>=KOSTEN.bruch && p.land>=5000 && hatMaterial(p,"bruch")){ p.geld-=KOSTEN.bruch; zahleMaterial(p,"bruch"); p.bruch=(p.bruch||0)+1; platziereGebaeude(p,"s"); }
-  if(was==="mauer"  && (p.mauer||0)<MAUER_MAX && p.geld>=KOSTEN.mauer && p.maerkte>=2 && hatMaterial(p,"mauer")){ p.geld-=KOSTEN.mauer; zahleMaterial(p,"mauer"); p.mauer=(p.mauer||0)+1; p._neu="mauer"; if(p.mauer>=MAUER_MAX) erfolg("festung"); }
-  if(was==="burg"   && (p.burg||0)<BURG_MAX && p.geld>=KOSTEN.burg && (p.mauer||0)>=1 && p.land>=8000 && hatMaterial(p,"burg")){ p.geld-=KOSTEN.burg; zahleMaterial(p,"burg"); p.burg=(p.burg||0)+1; p._neu="burg"; erfolg("festung"); }
+  const bk = w2 => bauKosten(p, w2);
+  if(was==="markt"  && p.geld>=bk("markt")  && platz && hatMaterial(p,"markt")){ p.geld-=bk("markt"); zahleMaterial(p,"markt"); p.maerkte++; platziereGebaeude(p,"m"); }
+  if(was==="muehle" && p.geld>=bk("muehle") && platz && hatMaterial(p,"muehle")){ p.geld-=bk("muehle"); zahleMaterial(p,"muehle"); p.muehlen++; platziereGebaeude(p,"k"); }
+  if(was==="palast" && p.palast<PALAST_TEILE && p.geld>=bk("palastTeil") && p.land>=LAND.palast && hatMaterial(p,"palastTeil")){ p.geld-=bk("palastTeil"); zahleMaterial(p,"palastTeil"); p.palast++; p._neu="palast"; }
+  if(was==="dom"    && p.dom<DOM_TEILE && p.geld>=bk("domTeil") && p.land>=LAND.dom && hatMaterial(p,"domTeil")){ p.geld-=bk("domTeil"); zahleMaterial(p,"domTeil"); p.dom++; p._neu="dom"; }
+  if(was==="hafen"  && (p.haefen||0)<2 && p.geld>=bk("hafen") && p.land>=12000 && hatMaterial(p,"hafen")){ p.geld-=bk("hafen"); zahleMaterial(p,"hafen"); p.haefen=(p.haefen||0)+1; p._neu="hafen"; }
+  if(was==="forst"  && (p.forst||0)<FORST_MAX && p.geld>=bk("forst") && p.land>=3000){ p.geld-=bk("forst"); p.forst=(p.forst||0)+1; platziereGebaeude(p,"f"); }
+  if(was==="bruch"  && (p.bruch||0)<BRUCH_MAX && p.geld>=bk("bruch") && p.land>=5000 && hatMaterial(p,"bruch")){ p.geld-=bk("bruch"); zahleMaterial(p,"bruch"); p.bruch=(p.bruch||0)+1; platziereGebaeude(p,"s"); }
+  if(was==="mauer"  && (p.mauer||0)<MAUER_MAX && p.geld>=bk("mauer") && p.maerkte>=2 && hatMaterial(p,"mauer")){ p.geld-=bk("mauer"); zahleMaterial(p,"mauer"); p.mauer=(p.mauer||0)+1; p._neu="mauer"; if(p.mauer>=MAUER_MAX) erfolg("festung"); }
+  if(was==="burg"   && (p.burg||0)<BURG_MAX && p.geld>=bk("burg") && (p.mauer||0)>=1 && p.land>=8000 && hatMaterial(p,"burg")){ p.geld-=bk("burg"); zahleMaterial(p,"burg"); p.burg=(p.burg||0)+1; p._neu="burg"; erfolg("festung"); }
   p.stat.bauten++;
   if(staedte(p)>=1) erfolg("stadt");
   if(p.palast>=PALAST_TEILE) erfolg("palast");

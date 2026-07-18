@@ -239,3 +239,24 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
   und Ressourcen-Chips (aktueller Stand direkt beim Abwägen sichtbar)
 - **Bedienung**: nummerierte Wahl-Knöpfe, Auswahl auch per Zifferntaste 1–3,
   Pergament-Rascheln als Klang
+
+## Version 2.9 — Privilegien, neue Schicksale und die reiche Karte
+
+- **Titel-Privilegien**: jeder Rang bringt einen bleibenden Vorteil — Baron
+  (+5 % Steuern), Landgraf (5 % statt 10 % Provision auf Landverkäufe), Markgraf
+  (−10 % Baukosten), Fürst (+1 Diplomatie-Aktion), Herzog (−10 % Sold), Kurfürst
+  (+3 Reichstagsstimmen), König (+10 % Ernte); verkündet bei der Beförderung,
+  gesammelt im Status sichtbar
+- **Sechs neue Hof-Ereignisse**: Schweifstern-Omen, reisender Ingenieur (Kammrad-
+  Kette: +35–45 % Ernte im Folgejahr), Rittersturnier (selbst in die Schranken
+  reiten!), Gesandtschaft einer fernen Großmacht, Goldader im Steinbruch,
+  Waldbrand am Forsthof — die letzten drei nur, wenn die Voraussetzung besteht
+- **Reichskarte**: Dorfkirche mit goldenem Kreuz und Ziehbrunnen im Zentrum,
+  sandiger Uferstreifen entlang der Grenze, und die Felder leben mit der
+  Jahreszeit — zarte Saat im Frühling, im Wind wiegendes Korn im Sommer,
+  Stoppeln und Garben im Herbst
+- **Schlachtfeld**: fahle Sonne und ziehende Wolken über dem Feld, wehende
+  Frontfahnen in den Hausfarben an jeder vorrückenden Linie, und Einschläge
+  hinterlassen bleibende Brandnarben im Boden
+- **Porträts**: drapierte Vorhänge mit Faltenwurf und goldener Kordel in der
+  Hausfarbe, das Hauswappen als stilles Emblem, seidene Schärpe ab Fürstenrang
