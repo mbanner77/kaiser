@@ -210,3 +210,16 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
   (respektiert »Bewegung reduzieren«), feierliches Pulsleuchten hinter den
   Porträts bei Beförderung und Krönung, Kornkurs-Sparkline mit Füllverlauf
   und pulsierendem Endpunkt
+
+## Version 2.7 — Zeremonien & Jahreszeiten
+
+- **Feuerwerk zur Krönung**: Raketen steigen hinter dem Kaiserporträt auf und
+  zerplatzen in farbigen Funkengarben mit Schwerkraft und Glitzern
+- **Jahreszeiten-Band im Zugwechsel**: ein schmales Panorama zeigt die aktuelle
+  Saison — Schneetreiben im Winter, wirbelnde Blätter im Herbst, Vogelflug in
+  Frühling und Sommer
+- **Krähen über dem Feld**: nach geschlagener Schlacht kreisen Krähen mit
+  Flügelschlag über dem stillen Schlachtfeld
+- **Setup**: jede Spielerzeile trägt ihr farbiges Wappenschild
+- **Erfolge**: freigeschaltete Karten glänzen golden, verschlossene liegen im Grau
+- **Bilanz**: Ernte und Vermögen zählen weich hoch

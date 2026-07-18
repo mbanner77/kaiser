@@ -227,6 +227,10 @@
     background-size:250% 100%;animation:schildGlanz 5.5s ease-in-out infinite;}
   @keyframes schildGlanz{0%,55%{background-position:160% 0;}80%,100%{background-position:-70% 0;}}
   .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:baseline;}
+  .mini-schild{display:inline-flex;align-items:center;justify-content:center;
+    width:26px;height:30px;font-size:14px;border:2px solid var(--gold);
+    border-radius:5px 5px 44% 44%/5px 5px 52% 52%;
+    background:linear-gradient(180deg,var(--panel2),#0c1016);}
   .kiber{border-left:3px solid var(--cyan);}
   /* Feierliches Leuchten hinter den großen Porträts */
   #portraitB, #portraitK{animation:portraitGlanz 3.2s ease-in-out infinite;}
@@ -277,7 +281,14 @@
   @keyframes toastIn{from{opacity:0;transform:translateX(26px) scale(.96);}to{opacity:1;transform:none;}}
   .tut{border-color:var(--cyan) !important;background:rgba(95,184,212,.06);}
   .erfolg-k{display:flex;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--border);
-    border-radius:12px;background:var(--panel);}
+    border-radius:12px;background:var(--panel);position:relative;overflow:hidden;
+    transition:transform .15s, border-color .2s;}
+  .erfolg-k:hover{transform:translateY(-1px);}
+  .erfolg-k:not(.zu){border-color:rgba(224,180,88,.45);}
+  .erfolg-k:not(.zu)::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(115deg,transparent 40%,rgba(255,245,215,.10) 50%,transparent 60%);
+    background-size:260% 100%;animation:schildGlanz 7s ease-in-out infinite;}
+  .erfolg-k.zu{filter:grayscale(.6);opacity:.75;}
   .erfolg-k.zu{opacity:.35;filter:grayscale(.7);}
   .erfolg-k .ei{font-size:26px;}
   /* --- Zeremonien & Jahres-Vignette --- */
@@ -370,7 +381,7 @@
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser v2.6 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v2.7 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -1580,6 +1591,111 @@ function zeichnePortraet(cid, p){
   }
 }
 
+/* ---------- Feuerwerk über der Krönung ---------- */
+function zeichneFeuerwerk(t){
+  const c = document.getElementById("feuerwerk");
+  if(!c) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  const fw = G._fw = G._fw || { raketen:[], funken:[], letzt:0 };
+  ctx.clearRect(0,0,W,H);
+  /* Neue Raketen zünden */
+  if(t - fw.letzt > 550 + Math.random()*500 && fw.raketen.length < 3){
+    fw.letzt = t;
+    fw.raketen.push({ x: W*(0.12+Math.random()*0.76), y: H+8,
+      zielY: H*(0.12+Math.random()*0.4), v: 3.4+Math.random()*1.6,
+      farbe: ["#e0b458","#e5636f","#5fb8d4","#4cc38a","#e08ab8"][ri(0,4)] });
+  }
+  /* Raketen steigen */
+  for(const r of fw.raketen){
+    r.y -= r.v * 1.9;
+    ctx.strokeStyle = "rgba(255,235,180,.7)"; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x + rf(-1,1), r.y+11); ctx.stroke();
+    if(r.y <= r.zielY){
+      r.tot = true;
+      const n2 = ri(26,40);
+      for(let k=0;k<n2;k++){
+        const a2 = k/n2*6.2832 + rf(-0.1,0.1), sp2 = rf(0.7,2.4);
+        fw.funken.push({ x:r.x, y:r.y, vx:Math.cos(a2)*sp2, vy:Math.sin(a2)*sp2,
+          leben: 1, farbe: r.farbe, glitzer: Math.random()<0.3 });
+      }
+    }
+  }
+  fw.raketen = fw.raketen.filter(r=>!r.tot);
+  /* Funken fallen aus */
+  for(const f2 of fw.funken){
+    f2.x += f2.vx; f2.y += f2.vy;
+    f2.vy += 0.028;                          /* Schwerkraft */
+    f2.vx *= 0.985; f2.vy *= 0.985;
+    f2.leben -= 0.012;
+    if(f2.leben <= 0) continue;
+    const a3 = f2.glitzer ? f2.leben * (0.5+0.5*Math.sin(t/60 + f2.x)) : f2.leben;
+    ctx.globalAlpha = clamp(a3,0,1);
+    ctx.fillStyle = f2.farbe;
+    ctx.beginPath(); ctx.arc(f2.x, f2.y, f2.glitzer ? 1.6 : 2.1, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  fw.funken = fw.funken.filter(f2=>f2.leben>0);
+  if(fw.funken.length > 400) fw.funken.splice(0, fw.funken.length-400);
+}
+
+/* ---------- Jahreszeiten-Band: schmales Panorama im Zugwechsel ---------- */
+function zeichneSaisonband(t){
+  const c = document.getElementById("saisonband");
+  if(!c) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  const sn = saison();
+  ctx.clearRect(0,0,W,H);
+  const himmel = ctx.createLinearGradient(0,0,0,H);
+  if(sn.n==="Winter"){ himmel.addColorStop(0,"#2c3646"); himmel.addColorStop(1,"#55606e"); }
+  else if(sn.n==="Herbst"){ himmel.addColorStop(0,"#3a3448"); himmel.addColorStop(1,"#7a5638"); }
+  else if(sn.n==="Frühling"){ himmel.addColorStop(0,"#33445c"); himmel.addColorStop(1,"#6a7a58"); }
+  else { himmel.addColorStop(0,"#31527c"); himmel.addColorStop(1,"#7a8a52"); }
+  ctx.fillStyle = himmel; ctx.fillRect(0,0,W,H);
+  /* Hügelzug */
+  ctx.fillStyle = sn.g2;
+  ctx.beginPath(); ctx.moveTo(0,H);
+  ctx.quadraticCurveTo(W*0.22, H-26, W*0.48, H-14);
+  ctx.quadraticCurveTo(W*0.74, H-4, W, H-20);
+  ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+  /* Baumreihe */
+  const brng2 = mulberry(31);
+  for(let b=0;b<10;b++) malBaum(ctx, 30+b*(W-60)/9 + brng2()*18, H-10-brng2()*10, 5+brng2()*4, sn.b1, sn.b2, sn.schnee);
+  /* Saison-Partikel im Band */
+  if(sn.schnee){
+    ctx.fillStyle = "rgba(250,252,255,.85)";
+    for(let i=0;i<26;i++){
+      const seed = ((i*61)%97)/97;
+      const px2 = (seed*W + t/(28+seed*24)) % W;
+      const py2 = (t/(20+seed*20) + i*37) % H;
+      ctx.beginPath(); ctx.arc(px2, py2, 1+seed*1.3, 0, 7); ctx.fill();
+    }
+  } else if(sn.n==="Herbst"){
+    for(let i=0;i<12;i++){
+      const seed = ((i*53)%89)/89;
+      const px2 = (seed*W + t/(40+seed*30)) % W;
+      const py2 = (t/(34+seed*22) + i*29) % H;
+      ctx.save(); ctx.translate(px2,py2); ctx.rotate(t/300+i);
+      ctx.fillStyle = i%2 ? "rgba(190,120,50,.8)" : "rgba(160,90,40,.75)";
+      ctx.fillRect(-2.2,-1.4,4.4,2.8); ctx.restore();
+    }
+  } else {
+    /* Vögel */
+    ctx.strokeStyle = "rgba(220,226,238,.5)"; ctx.lineWidth = 1.3;
+    for(let i=0;i<3;i++){
+      const vx2 = ((t/(26+i*9) + i*280) % (W+60)) - 30;
+      const vy2 = 14 + i*9 + Math.sin(t/380+i)*4;
+      ctx.beginPath(); ctx.moveTo(vx2-5,vy2); ctx.quadraticCurveTo(vx2-1.5,vy2-3.5,vx2,vy2);
+      ctx.quadraticCurveTo(vx2+1.5,vy2-3.5,vx2+5,vy2); ctx.stroke();
+    }
+  }
+  /* Schriftzug */
+  ctx.fillStyle = "rgba(13,17,23,.55)"; ctx.fillRect(0, 0, 130, 22);
+  ctx.fillStyle = "#e8e6df"; ctx.font = "600 12px Georgia, serif"; ctx.textAlign = "left";
+  ctx.fillText(`${sn.n} Anno ${G.jahr}`, 10, 15);
+}
+
 /* ---------- Titelpanorama (prozedural gemalt, mit Tag-/Nachtwechsel) ---------- */
 function lerpFarbe(a, b, q){
   return `rgb(${Math.round(a[0]+(b[0]-a[0])*q)},${Math.round(a[1]+(b[1]-a[1])*q)},${Math.round(a[2]+(b[2]-a[2])*q)})`;
@@ -2741,6 +2857,19 @@ function zeichneFeld(t=0){
     }
   }
   if(s.partikel) s.partikel = s.partikel.filter(pk => jetzt - pk.born < (pk.typ==="gefallen" ? 4200 : 1900));
+  /* Krähen kreisen über dem stillen Feld */
+  if(s.fertig && !s.replayAktiv){
+    ctx.strokeStyle = "rgba(20,22,28,.7)"; ctx.lineWidth = 1.5; ctx.lineCap = "round";
+    for(let kv=0; kv<4; kv++){
+      const ka = t/1600 + kv*1.57;
+      const kxx = W*0.5 + Math.cos(ka)*(70+kv*22);
+      const kyy = H*0.13 + Math.sin(ka)*(13+kv*4);
+      const fl2 = Math.sin(t/130 + kv*2)*2.4;
+      ctx.beginPath();
+      ctx.moveTo(kxx-3.4, kyy - fl2); ctx.quadraticCurveTo(kxx, kyy+1.2, kxx+3.4, kyy - fl2);
+      ctx.stroke();
+    }
+  }
   /* Weisse Flagge + Sieger-Vignette */
   if(s.fertig && !s.replayAktiv){
     const sx5 = s.sieger==="A" ? 0 : W;
@@ -4286,7 +4415,7 @@ const SCREENS = {
     let rows = "";
     for(let i=0;i<9;i++){
       rows += `<tr id="prow${i}" style="${i>1?'opacity:.3':''}">
-        <td class="muted">${WAPPEN[i]}</td>
+        <td><span class="mini-schild" style="border-color:${FARBEN[i]};box-shadow:inset 0 0 9px ${FARBEN[i]}55">${WAPPEN[i]}</span></td>
         <td><input type="text" id="pname${i}" maxlength="14" value="${NAMEN[i]}" ${i>1?'disabled':''}></td>
         <td><select id="pw${i}" ${i>1?'disabled':''}>
           <option value="0" ${i%2?'':'selected'}>Herr</option><option value="1" ${i%2?'selected':''}>Dame</option>
@@ -4306,7 +4435,7 @@ const SCREENS = {
             </select>
           </div>
           <table class="setup-tabelle">
-            <colgroup><col style="width:26px"><col><col style="width:88px"><col style="width:112px"></colgroup>
+            <colgroup><col style="width:38px"><col><col style="width:88px"><col style="width:112px"></colgroup>
             ${rows}
           </table>
           <p class="muted small" style="margin-top:8px">Die Reihenfolge bestimmt die Nachbarschaft:
@@ -4581,6 +4710,8 @@ const SCREENS = {
         <p class="muted">Bitte an das Gerät treten. Der 90-Sekunden-Zähler startet mit dem Zug.</p>
         <div style="margin-top:20px"><button class="btn-primary btn-lg" onclick="beginneZug()">Zug beginnen</button></div>
       </div>
+      <canvas id="saisonband" width="920" height="64"
+        style="display:block;max-width:640px;width:100%;margin:0 auto 14px;border-radius:12px;border:1px solid var(--border)"></canvas>
       ${berichte.length?`
       <div class="card kiber" style="max-width:640px;margin:0 auto 14px">
         <h3>Derweil in den anderen Reichen …</h3>
@@ -5201,14 +5332,14 @@ const SCREENS = {
         <div class="card">
           <h3>Wirtschaft</h3>
           <table>
-            ${row("Ernte ("+fmt(Math.min(p.pop*4,anbau(p)))+" ha bestellt)", "+"+fmt(r.ernte)+" Fuder", "delta-pos")}
+            ${row("Ernte ("+fmt(Math.min(p.pop*4,anbau(p)))+" ha bestellt)", `+<span data-cnt="${r.ernte}"> </span> Fuder`, "delta-pos")}
             ${row("Kornspeicher jetzt", fmt(p.korn)+" Fuder")}
             ${r.holzErtrag||r.steinErtrag?row("Forst & Steinbruch", "+"+fmt(r.holzErtrag||0)+" 🪵, +"+fmt(r.steinErtrag||0)+" 🪨", "delta-pos"):""}
             ${row("Steuern & Wirtschaft", "+"+fmt(r.steuern)+" Taler", "delta-pos")}
             ${r.routenGeld?row("Zoll aus "+routenVon(G.spieler.indexOf(p)).length+" Handelsroute"+(routenVon(G.spieler.indexOf(p)).length>1?"n":""), "+"+fmt(r.routenGeld)+" Taler", "delta-pos"):""}
             ${r.unterhalt?row("Heer-Unterhalt", "−"+fmt(r.unterhalt)+" Taler", "delta-neg"):""}
             ${r.gehaelter?row("Berater-Gehälter", "−"+fmt(r.gehaelter)+" Taler", "delta-neg"):""}
-            ${row("Vermögen jetzt", fmt(p.geld)+" Taler", p.geld<0?"red":"")}
+            ${row("Vermögen jetzt", `<span data-cnt="${Math.round(p.geld)}" data-suf=" Taler">${fmt(p.geld)} Taler</span>`, p.geld<0?"red":"")}
           </table>
         </div>
         <div class="card">
@@ -5269,9 +5400,12 @@ const SCREENS = {
 
   sieg(){
     const p = G.sieger;
+    G._fw = null;
     setTimeout(()=>{ konfetti(160); sKroenung(); }, 600);
     return `
-      <div class="hero" style="padding-top:30px">
+      <canvas id="feuerwerk" width="920" height="500"
+        style="position:absolute;left:50%;transform:translateX(-50%);max-width:96vw;pointer-events:none;opacity:.9"></canvas>
+      <div class="hero" style="padding-top:30px;position:relative">
         <p class="gold zer z1" style="font-size:17px;letter-spacing:3px">DIE KRÖNUNG</p>
         <div class="zer z2" style="position:relative;width:240px;margin:14px auto 6px">
           <span class="krone-fall">👑</span>
@@ -6312,6 +6446,8 @@ function animLoop(t){
   else if(G.screen === "welt")    zeichneWelt(t);
   else if(G.screen === "bilanz")  zeichneWetter(t);
   else if(G.screen === "replay")  zeichnePartieReplay(t);
+  else if(G.screen === "sieg")    zeichneFeuerwerk(t);
+  else if(G.screen === "handoff") zeichneSaisonband(t);
 }
 requestAnimationFrame(animLoop);
 
