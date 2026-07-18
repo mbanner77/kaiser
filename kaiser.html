@@ -232,6 +232,35 @@
     border-radius:5px 5px 44% 44%/5px 5px 52% 52%;
     background:linear-gradient(180deg,var(--panel2),#0c1016);}
   .kiber{border-left:3px solid var(--cyan);}
+  /* Hof-Ereignisse: Pergament-Optik */
+  .pergament{
+    background:linear-gradient(175deg,#241f16 0%,#1c1812 55%,#211c13 100%);
+    border:1px solid rgba(224,180,88,.4);border-radius:var(--radius);
+    padding:22px 24px;position:relative;
+    box-shadow:inset 0 0 44px rgba(224,180,88,.05), 0 10px 30px rgba(0,0,0,.35);
+  }
+  .pergament::before, .pergament::after{
+    content:"";position:absolute;width:16px;height:16px;pointer-events:none;
+    border:2px solid rgba(224,180,88,.55);
+  }
+  .pergament::before{top:6px;left:6px;border-right:none;border-bottom:none;border-radius:6px 0 0 0;}
+  .pergament::after{bottom:6px;right:6px;border-left:none;border-top:none;border-radius:0 0 6px 0;}
+  .pergament h2::after{left:50%;transform:translateX(-50%);}
+  .ereignis-ico{font-size:44px;display:inline-block;filter:drop-shadow(0 4px 12px rgba(0,0,0,.5));
+    animation:ereignisPochen 2.4s ease-in-out infinite;}
+  @keyframes ereignisPochen{0%,100%{transform:scale(1) rotate(-2deg);}50%{transform:scale(1.09) rotate(2deg);}}
+  .zierlinie{height:1px;max-width:320px;margin:6px auto;
+    background:linear-gradient(90deg,transparent,rgba(224,180,88,.6),transparent);position:relative;}
+  .zierlinie::after{content:"❦";position:absolute;left:50%;top:-9px;transform:translateX(-50%);
+    color:rgba(224,180,88,.75);font-size:12px;background:transparent;padding:0 8px;}
+  .wahl-knopf{display:flex;align-items:center;gap:12px;width:100%;text-align:left;margin:7px 0;
+    border-color:rgba(224,180,88,.35);}
+  .wahl-knopf:hover:not(:disabled){transform:translateX(4px);box-shadow:0 0 16px rgba(224,180,88,.18);}
+  .wahl-nr{flex:0 0 auto;width:26px;height:26px;border-radius:50%;display:inline-flex;
+    align-items:center;justify-content:center;font-size:13px;font-weight:800;
+    background:rgba(224,180,88,.16);border:1px solid rgba(224,180,88,.5);color:var(--gold);}
+  .res-chip{display:inline-block;padding:5px 11px;border-radius:999px;font-size:13px;
+    border:1px solid var(--border);background:rgba(13,17,23,.5);font-variant-numeric:tabular-nums;}
   /* Feierliches Leuchten hinter den großen Porträts */
   #portraitB, #portraitK{animation:portraitGlanz 3.2s ease-in-out infinite;}
   @keyframes portraitGlanz{
@@ -381,7 +410,7 @@
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importSpielstand(this)">
 </header>
 <main><div id="screen"></div>
-<footer>Kaiser v2.7 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v2.8 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -684,6 +713,8 @@ function sVogel(){
 }
 const sWind = () => rausch(2.2, 0, 0.028, true);
 const sDonner = () => { rausch(1.4, 0, 0.2, true, true); beep(45, 1.1, 0.05, "sine", 0.14); };
+/* Pergament-Rascheln beim Entscheiden */
+const sPergament = () => { rausch(.14, 0, .06); rausch(.09, .10, .045); };
 /* Dumpfer Mauereinschlag bei Belagerungen */
 const sRumms  = () => { rausch(.5, 0, .2, true, true); beep(38, .5, 0, "sine", .18); rausch(.22, .1, .09); };
 /* Trauergeläut: tiefe Glocken in langsamer Folge */
@@ -910,8 +941,13 @@ function zwischenbilanz(p){
     r.ereignisse.push({t:`Ein Treck von Siedlern trifft ein: +${fmt(zuzug)} Einwohner.`,c:"good"});
   }
 
-  p.stimmung = Math.round(clamp(
-    90 - (p.einkSt+p.mwSt)*0.8 - p.zoll*0.4 - (p.justiz-2)*10 + (f-1)*40, 5, 100));
+  /* Grundstimmung aus Steuern, Justiz und Kornausgabe — Ereignis-Effekte
+     (Feste, Aufruhr, Kriege …) hallen mit halber Stärke ins nächste Jahr nach */
+  const stimmungBasis = clamp(90 - (p.einkSt+p.mwSt)*0.8 - p.zoll*0.4 - (p.justiz-2)*10 + (f-1)*40, 5, 100);
+  const nachhall = p._stimmungBasis !== undefined
+    ? clamp(p.stimmung - p._stimmungBasis, -30, 30) * 0.5 : 0;
+  p.stimmung = Math.round(clamp(stimmungBasis + nachhall, 5, 100));
+  p._stimmungBasis = Math.round(stimmungBasis);
 
   const g = G.tempo;
   r.geburten   = Math.round(p.pop * 0.04 * (0.5 + p.stimmung/100) * g);
@@ -3183,10 +3219,31 @@ function ereignisWahl(k){
   const p = cur(), e = G._ereignis;
   if(!e) { zeige("steuern"); return; }
   const w = e.wahl[k];
+  /* Zustand VOR der Entscheidung festhalten, um die Folgen zu beziffern */
+  const vor = { geld:p.geld, korn:p.korn, pop:p.pop, stimmung:p.stimmung,
+                land:p.land, holz:p.holz||0, stein:p.stein||0, heer:heerGroesse(p.heer),
+                folgen:(p.folgen||[]).length };
+  const label = typeof w.t === "function" ? w.t(p) : w.t;
   const ergebnis = w.fx(p);
+  const deltas = [];
+  const dRow = (ico2, name2, d2, einheit2) => { if(d2) deltas.push({ ico:ico2, name:name2, d:d2, einheit:einheit2||"" }); };
+  dRow("💰","Vermögen", Math.round(p.geld - vor.geld), " Taler");
+  dRow("🌾","Korn", Math.round(p.korn - vor.korn), " Fuder");
+  dRow("👥","Untertanen", Math.round(p.pop - vor.pop), "");
+  dRow("😊","Stimmung", p.stimmung - vor.stimmung, "");
+  dRow("🌍","Land", Math.round(p.land - vor.land), " ha");
+  dRow("🪵","Holz", Math.round((p.holz||0) - vor.holz), "");
+  dRow("🪨","Stein", Math.round((p.stein||0) - vor.stein), "");
+  dRow("⚔️","Heer", heerGroesse(p.heer) - vor.heer, " Mann");
+  G._ereignisErgebnis = {
+    ico: e.ico, txt: ergebnis, wahl: label, deltas,
+    folge: (p.folgen||[]).length > vor.folgen
+  };
   G._ereignis = null;
-  toast(`${e.ico} ${ergebnis}`, 6000);
-  zeige("steuern");
+  quicksave();
+  mpSync();
+  sPergament();
+  zeige("ereignisErgebnis");
 }
 
 /* ---------- Friedens-Diplomatie: Geschenke, Handel, Pakte ---------- */
@@ -4882,15 +4939,49 @@ const SCREENS = {
     if(!e){ setTimeout(()=>zeige("steuern"),10); return ""; }
     const knoepfe = e.wahl.map((w,k)=>{
       const label = typeof w.t === "function" ? w.t(p) : w.t;
-      return `<button class="btn-lg" onclick="ereignisWahl(${k})" style="display:block;width:100%;text-align:left;margin:6px 0">${label}</button>`;
+      return `<button class="btn-lg wahl-knopf" onclick="ereignisWahl(${k})">
+        <span class="wahl-nr">${k+1}</span> ${label}</button>`;
     }).join("");
     return `
       ${stepper("Zw.-Bilanz")}
-      <h2>${e.ico} Eine Entscheidung, ${titelName(p)}!</h2>
-      <div class="card" style="max-width:640px">
-        <p style="font-size:16px">${e.txt(p)}</p>
+      <div class="pergament" style="max-width:660px;margin:0 auto">
+        <div class="center"><span class="ereignis-ico">${e.ico}</span></div>
+        <h2 class="center" style="padding-bottom:4px">Eine Entscheidung, ${titelName(p)}!</h2>
+        <div class="zierlinie"></div>
+        <p style="font-size:16px;text-align:center;max-width:560px;margin:10px auto">${e.txt(p)}</p>
+        <div class="rowflex center" style="justify-content:center;margin-top:12px">
+          <span class="res-chip">💰 ${fmt(p.geld)} T</span>
+          <span class="res-chip">🌾 ${fmt(p.korn)} Fuder</span>
+          <span class="res-chip">👥 ${fmt(p.pop)}</span>
+          <span class="res-chip">${p.stimmung>=60?'😊':p.stimmung>=35?'😐':'😠'} ${p.stimmung}/100</span>
+        </div>
       </div>
-      <div style="max-width:640px">${knoepfe}</div>`;
+      <div style="max-width:660px;margin:12px auto 0">${knoepfe}</div>`;
+  },
+
+  ereignisErgebnis(){
+    const er = G._ereignisErgebnis;
+    if(!er){ setTimeout(()=>zeige("steuern"),10); return ""; }
+    const zeilen = er.deltas.map(d=>`
+      <tr><td>${d.ico} ${d.name}</td>
+        <td class="r ${d.d>0?'green':'red'}" style="font-weight:700">
+          ${d.d>0?"+":"−"}${fmt(Math.abs(d.d))}${d.einheit}</td></tr>`).join("");
+    return `
+      ${stepper("Zw.-Bilanz")}
+      <div class="pergament" style="max-width:660px;margin:0 auto">
+        <div class="center"><span class="ereignis-ico" style="animation:none">${er.ico}</span></div>
+        <h2 class="center" style="padding-bottom:4px">Die Folgen Eurer Entscheidung</h2>
+        <div class="zierlinie"></div>
+        <p class="muted small center" style="margin-top:8px">Ihr wähltet: „${er.wahl}"</p>
+        <p style="font-size:16px;text-align:center;max-width:560px;margin:10px auto">${er.txt}</p>
+        ${er.deltas.length
+          ? `<table style="max-width:340px;margin:14px auto 4px">${zeilen}</table>`
+          : `<p class="muted center" style="margin-top:12px">Diesmal bleibt Euer Reich unberührt — doch man wird sich Eure Wahl merken.</p>`}
+        ${er.folge ? `<p class="small center" style="margin-top:10px;color:var(--gold)">⏳ Diese Entscheidung wird in einigen Jahren Folgen haben …</p>` : ""}
+      </div>
+      <div class="center" style="margin-top:14px">
+        <button class="btn-primary btn-lg" onclick="G._ereignisErgebnis=null;zeige('steuern')">Weiter: Steuern</button>
+      </div>`;
   },
 
   steuern(){
@@ -5088,15 +5179,20 @@ const SCREENS = {
         : a.richtung==="kauf"
           ? `möchte <b>${fmt(a.menge)} Fuder Korn</b> von Euch kaufen — zu <b>${fmt(a.preis)} T/Fuder</b> (${fmt(a.menge*a.preis)} T gesamt).`
           : `bietet Euch <b>${fmt(a.menge)} Fuder Korn</b> an — zu <b>${fmt(a.preis)} T/Fuder</b> (${fmt(a.menge*a.preis)} T gesamt).`;
-      return `<div class="card">
-        <p>${von.wappen} <b>${titelName(von)} ${von.name}</b> ${txt}</p>
-        <p class="muted small">Marktpreis derzeit ${fmt(G.kornMarkt||100)} T/Fuder · Euer Verhältnis: ${bezWert(cur(),von)}</p>
-        <button class="btn-primary" onclick="angebotAntwort(${i}, true)">Annehmen</button>
-        <button onclick="angebotAntwort(${i}, false)">Ablehnen</button>
+      return `<div class="pergament" style="max-width:660px;margin:0 auto 14px">
+        <p style="font-size:15px">${von.wappen} <b>${titelName(von)} ${von.name}</b> ${txt}</p>
+        <div class="zierlinie" style="margin:10px auto"></div>
+        <p class="muted small center">Marktpreis derzeit ${fmt(G.kornMarkt||100)} T/Fuder · Euer Verhältnis: ${bezWert(cur(),von)>0?"+":""}${bezWert(cur(),von)}</p>
+        <div class="center" style="margin-top:8px">
+          <button class="btn-primary" onclick="angebotAntwort(${i}, true)">Annehmen</button>
+          <button onclick="angebotAntwort(${i}, false)">Ablehnen</button>
+        </div>
       </div>`;
     }).join("");
     return `
-      <h2>📜 Botschaften an Euren Hof</h2>
+      <div class="center"><span class="ereignis-ico">📜</span></div>
+      <h2 class="center" style="padding-bottom:4px">Botschaften an Euren Hof</h2>
+      <div class="zierlinie" style="margin-bottom:14px"></div>
       ${karten}`;
   },
 
@@ -6423,8 +6519,13 @@ setInterval(()=>{
   }catch(e){}
 }, 60);
 
-/* ---------- Tastatur: Enter = Hauptaktion ---------- */
+/* ---------- Tastatur: Enter = Hauptaktion, Ziffern wählen Entscheidungen ---------- */
 document.addEventListener("keydown", e => {
+  if(G.screen === "entscheidung" && ["1","2","3"].includes(e.key)){
+    const k = +e.key - 1;
+    if(G._ereignis && G._ereignis.wahl[k]){ e.preventDefault(); ereignisWahl(k); }
+    return;
+  }
   if(e.key !== "Enter") return;
   if(["INPUT","SELECT","TEXTAREA"].includes(document.activeElement.tagName) &&
      document.activeElement.type === "text") return;

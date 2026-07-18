@@ -223,3 +223,19 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Setup**: jede Spielerzeile trägt ihr farbiges Wappenschild
 - **Erfolge**: freigeschaltete Karten glänzen golden, verschlossene liegen im Grau
 - **Bilanz**: Ernte und Vermögen zählen weich hoch
+
+## Version 2.8 — Entscheidungen mit sichtbaren Folgen
+
+- **Ergebnis-Anzeige für Hof-Ereignisse**: nach jeder Entscheidung erscheint eine
+  eigene Folgen-Seite — mit der gewählten Option, dem Ausgang und einer Tabelle
+  der konkreten Veränderungen (Taler, Korn, Untertanen, Stimmung, Land,
+  Baustoffe, Heer) statt eines flüchtigen Hinweises; wirkungslose Ausgänge
+  werden ehrlich benannt, kommende Spätfolgen angekündigt
+- **Bugfix Stimmung**: Ereignis- und Kriegs-Effekte auf die Stimmung wurden
+  bislang im Folgejahr von der Grundformel überschrieben — jetzt hallen sie
+  mit halber Stärke ins nächste Jahr nach und haben echtes Gewicht
+- **Pergament-Optik**: Entscheidungen, Folgen-Seite und Botschaften an den Hof
+  erscheinen als Pergament mit Eckzier, Zierlinie ❦, pochendem Ereignis-Siegel
+  und Ressourcen-Chips (aktueller Stand direkt beim Abwägen sichtbar)
+- **Bedienung**: nummerierte Wahl-Knöpfe, Auswahl auch per Zifferntaste 1–3,
+  Pergament-Rascheln als Klang
