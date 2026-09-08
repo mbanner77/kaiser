@@ -426,7 +426,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.0 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.0.2 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -574,6 +574,24 @@ const routenZoll = p => {
 function eheAktiv(a, b){
   const ib = G.spieler.indexOf(b);
   return a.ehen && a.ehen[ib] && a.ehen[ib] >= G.jahr;
+}
+const eheSchwelle = ziel => ziel.kiTyp === "aggressor" ? 35 : 15;
+/* Live-Aussicht für den Heiratsantrag im Diplomatie-Bildschirm */
+function eheAussicht(){
+  const el = document.getElementById("eheChance");
+  if(!el) return;
+  const p = cur();
+  const ziel = G.spieler[+($("#dipZiel") ? $("#dipZiel").value : -1)];
+  if(!ziel || ziel === p || ziel.tot){ el.textContent = ""; return; }
+  const mitgift = Math.floor(+($("#dipMitgift") ? $("#dipMitgift").value : 0) || 0);
+  if(eheAktiv(p, ziel)){ el.innerHTML = '<span class="muted">bereits vermählt</span>'; return; }
+  if(!ziel.ki){ el.innerHTML = '<span class="muted">entscheidet selbst</span>'; return; }
+  const wert = bezWert(ziel, p) + mitgift/200;
+  const schwelle = eheSchwelle(ziel);
+  el.innerHTML = wert >= schwelle + 8 ? '<span class="green">Aussicht: sehr gut</span>'
+    : wert >= schwelle ? '<span class="green">Aussicht: gut</span>'
+    : wert >= schwelle - 8 ? '<span class="gold">Aussicht: unsicher, mehr Mitgift hilft</span>'
+    : '<span class="red">Aussicht: gering, erst Verhältnis pflegen</span>';
 }
 function eheSchliessen(von, an, mitgift){
   const iv = G.spieler.indexOf(von), ia = G.spieler.indexOf(an);
@@ -3602,17 +3620,24 @@ function diploAktion(art){
     if(mitgift < 2000){ alertMsg("Unter 2.000 Talern Mitgift gilt ein Antrag als Beleidigung."); return; }
     if(mitgift > p.geld){ alertMsg("So viel Mitgift gibt Eure Kasse nicht her."); return; }
     if(ziel.ki){
-      const schwelle = ziel.kiTyp === "aggressor" ? 40 : 20;
-      if(bezWert(ziel, p) + mitgift/300 >= schwelle){
+      const schwelle = eheSchwelle(ziel);
+      const wert = bezWert(ziel, p) + mitgift/200;
+      if(wert >= schwelle){
         eheSchliessen(p, ziel, mitgift);
         toast(`💍 ${ziel.name} nimmt den Heiratsantrag an, die Häuser sind vereint (12 Jahre Frieden).`);
-      } else toast(`❌ ${ziel.name} weist den Antrag zurück. Pflegt erst das Verhältnis.`);
+        p.diploZaehler++;
+      } else {
+        const fehltP = Math.ceil(schwelle - wert);
+        toast(`❌ ${ziel.name} weist den Antrag zurück. Es fehlen etwa <b>${fehltP} Punkte</b>:
+          verbessert das Verhältnis (Geschenke) oder bietet rund <b>${fmt(fehltP*200)} Taler mehr Mitgift</b>.
+          <span class="small muted">Der Antrag hat keine Diplomatie-Aktion verbraucht.</span>`, 9000);
+      }
     } else {
       G.angebote.push({ von:G.spieler.indexOf(p), an:G.spieler.indexOf(ziel), richtung:"ehe", menge:mitgift, preis:0, jahr:G.jahr });
       toast(`📜 Heiratsantrag an ${ziel.name} übermittelt.`);
       mpSync();
+      p.diploZaehler++;
     }
-    p.diploZaehler++;
   } else if(art === "pakt"){
     if(paktAktiv(p, ziel)){ alertMsg("Es besteht bereits ein Pakt."); return; }
     const angebot = { von:G.spieler.indexOf(p), an:G.spieler.indexOf(ziel), richtung:"pakt", menge:0, preis:0, jahr:G.jahr };
@@ -4745,13 +4770,13 @@ function deltaBadge(v, einheit=""){
   if(v===undefined || v===null || v===0 || !isFinite(v)) return "";
   return v>0 ? `<span class="up">▲ ${fmt(v)}${einheit}</span>` : `<span class="down">▼ ${fmt(Math.abs(v))}${einheit}</span>`;
 }
-function alertMsg(t){
+function alertMsg(t, ms){
   const el = $("#screen");
   const div = document.createElement("div");
   div.className = "card"; div.style.borderColor = "var(--red)";
   div.innerHTML = `<p class="red">${t}</p>`;
   el.prepend(div);
-  setTimeout(()=>div.remove(), 4000);
+  setTimeout(()=>div.remove(), ms || 4000);
 }
 
 const SCREENS = {
@@ -4904,8 +4929,24 @@ const SCREENS = {
   },
 
   online(){
+    setTimeout(serverPing, 50);
+    const ampel = G._srvStatus === "ok" ? '<span class="green">🟢 Spielserver erreichbar</span>'
+      : G._srvStatus === "fehler" ? '<span class="red">🔴 Spielserver nicht erreichbar (Netz prüfen)</span>'
+      : '<span class="muted">🟡 Spielserver wird geprüft/geweckt …</span>';
     return `
       <h2>🌐 Online spielen</h2>
+      ${inSandbox() ? `
+      <div class="card" style="border-color:var(--red);max-width:680px">
+        <p class="red"><b>⚠️ Online-Spiel ist in dieser eingebetteten Vorschau gesperrt.</b></p>
+        <p class="small" style="margin-top:6px">Ihr habt das Spiel in einer Vorschau-Umgebung geöffnet
+        (z. B. als Artefakt in Claude). Der Anbieter blockiert dort alle Verbindungen zum Spielserver.
+        <b>Öffnet stattdessen Eure Spiel-Adresse (Render) direkt im Browser</b>, dann klappt der Beitritt.</p>
+      </div>` : ""}
+      <div class="card" style="max-width:680px">
+        <p class="small">${ampel}
+        <span class="muted small" style="margin-left:10px">Wichtig: Alle Mitspieler nutzen dieselbe
+        Spiel-Adresse und <b>unterschiedliche Regentennamen</b>.</span></p>
+      </div>
       <div class="grid g2">
         <div class="card">
           <h3>Euer Name</h3>
@@ -5019,6 +5060,9 @@ const SCREENS = {
           <table>${zeilen}</table>
           <p class="muted small" style="margin-top:8px">Gebt den Code <b class="gold">${MP.code}</b>
           an Eure Mitspieler weiter. Die Reihenfolge hier ist die Sitzordnung (= Nachbarschaft).</p>
+          <button class="btn-sm" onclick="einladungKopieren()">📋 Einladung kopieren</button>
+          <p class="muted small" style="margin-top:4px">Eure Mitspieler öffnen ${location.protocol.indexOf("http")===0 ? "dieselbe Adresse" : "dieselbe Spieldatei oder Eure Online-Adresse"},
+          wählen „Online spielen" und tragen Code und einen <b>eigenen</b> Namen ein.</p>
         </div>
         <div class="card">
           <h3>Partie</h3>
@@ -5434,6 +5478,7 @@ const SCREENS = {
   },
 
   diplo(){
+    setTimeout(eheAussicht, 40);
     const p = cur();
     const ziele = lebende().filter(x=>x.i!==G.aktiv);
     const opts = ziele.map(z=>`<option value="${z.i}">${z.p.wappen} ${titelName(z.p)} ${z.p.name}${z.p.ki?` (${KI_TYP_NAMEN[z.p.kiTyp]||"KI"})`:""}</option>`).join("");
@@ -5457,7 +5502,7 @@ const SCREENS = {
         </div>
         <div class="card">
           <h3>${diploLimit(p)} Aktion${diploLimit(p)>1?"en":""} pro Jahr ${(p.diploZaehler||0)>=diploLimit(p)?'<span class="red small">(aufgebraucht)</span>':''}</h3>
-          <div class="rowflex">Partner: <select id="dipZiel">${opts}</select></div>
+          <div class="rowflex">Partner: <select id="dipZiel" onchange="eheAussicht()">${opts}</select></div>
           <div class="rowflex" style="margin-top:8px">
             <input type="number" id="dipGeschenk" min="100" step="100" value="500" style="width:100px">
             <button onclick="diploAktion('geschenk')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>🎁 Geschenk senden</button>
@@ -5479,8 +5524,10 @@ const SCREENS = {
             <span class="muted small">${routenVon(G.aktiv).length}/3 Routen</span>
           </div>
           <div class="rowflex">
-            <input type="number" id="dipMitgift" min="2000" step="500" value="3000" style="width:100px" title="Mitgift in Talern">
+            <input type="number" id="dipMitgift" min="2000" step="500" value="3000" style="width:100px" title="Mitgift in Talern"
+              oninput="eheAussicht()">
             <button onclick="diploAktion('ehe')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>💍 Vermählung anbieten</button>
+            <span id="eheChance" class="small"></span>
           </div>
           <p class="muted small">Eine Ehe stiftet 12 Jahre Frieden zwischen den Häusern, und beim Tod des
           vermählten Regenten erbt Euer Haus einen Teil seines Landes.</p>
@@ -6531,6 +6578,25 @@ function hilfeZu(){ zeige(G._vorHilfe || "title"); }
    Online-Mehrspieler: WebSocket-Relay, Räume mit Code,
    rundenbasierte Zustands-Synchronisation
    ============================================================ */
+/* Eingebettete Vorschauen (z. B. Artefakt-Sandbox) sperren WebSocket-Verbindungen */
+function inSandbox(){
+  try{
+    const h = location.hostname || "";
+    return /claudeusercontent|claude\.ai|sandpack|webcontainer/i.test(h);
+  }catch(e){ return false; }
+}
+/* Erreichbarkeits-Ampel für den Online-Bildschirm */
+function serverPing(){
+  const jetzt = Date.now();
+  if(G._srvPingZeit && jetzt - G._srvPingZeit < 30000) return;
+  G._srvPingZeit = jetzt;
+  const url = ($("#mpUrl") && $("#mpUrl").value.trim()) || G._mpUrlMerk || MP_STANDARD;
+  if(url.indexOf("wss://") !== 0){ G._srvStatus = "ok"; return; }
+  G._srvStatus = "weckt";
+  fetch(url.replace("wss://","https://"), { mode:"no-cors" })
+    .then(()=>{ G._srvStatus = "ok"; if(G.screen === "online") render(); })
+    .catch(()=>{ G._srvStatus = "fehler"; if(G.screen === "online") render(); });
+}
 const MP_STANDARD = (location.protocol.indexOf("http")===0 &&
   ["localhost","127.0.0.1"].includes(location.hostname))
   ? "ws://localhost:8081"
@@ -6551,7 +6617,13 @@ function mpVerbinden(url, beiOffen){
     if(!MP || MP.abbruch) return;
     versuch++;
     if(versuch > 4){
-      alertMsg("Keine Verbindung zum Spielserver. Prüft die Server-Adresse (Standard: " + MP_STANDARD + "), oder versucht es in einer Minute erneut.");
+      alertMsg(
+        `<b>Keine Verbindung zum Spielserver.</b><br><span class="small">Checkliste:
+        1) Habt Ihr Internet? ·
+        ${inSandbox() ? "2) <b>Ihr seid in einer eingebetteten Vorschau, dort sind Verbindungen gesperrt. Öffnet die Spiel-Adresse direkt im Browser!</b> ·" : ""}
+        3) Alle nutzen dieselbe Server-Adresse (Standard: ${MP_STANDARD}) ·
+        4) Der Gratis-Server braucht nach längerer Pause bis zu einer Minute zum Aufwachen, gleich noch einmal versuchen ·
+        5) Jeder Mitspieler braucht einen eigenen Regentennamen.</span>`, 15000);
       MP = null;
       return;
     }
@@ -6635,6 +6707,18 @@ function partieBeitreten(code, zuschauer){
   if(!name){ alertMsg("Bitte erst Euren Regentennamen eintragen."); return; }
   mpBeitritt(zuschauer, code, name);
 }
+function einladungKopieren(){
+  if(!MP || !MP.code) return;
+  const istWeb = location.protocol.indexOf("http") === 0;
+  const adresse = istWeb ? (location.origin + location.pathname) : "eure Kaiser-Spieladresse";
+  const text = `Spielt Kaiser mit mir! Öffnet ${adresse} im Browser, wählt „Online spielen" und tretet mit dem Raum-Code ${MP.code} bei. Wählt einen eigenen Regentennamen.`;
+  const fallback = () => { try{ window.prompt("Einladung zum Kopieren:", text); }catch(e){} };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text)
+      .then(()=>toast("📋 Einladung kopiert! Schickt sie Euren Mitspielern."))
+      .catch(fallback);
+  } else fallback();
+}
 function mpVerlassen(){
   if(MP){ MP.abbruch = true; MP.aktiv = false; if(MP.ws){ try{ MP.ws.close(); }catch(e){} } }
   MP = null;
@@ -6661,7 +6745,7 @@ function mpNachricht(m){
     }
     if(G.screen === "lobby" || G.screen === "warten") render();
   }
-  else if(m.t === "fehler"){ alertMsg(m.text); }
+  else if(m.t === "fehler"){ alertMsg("<b>Der Spielserver meldet:</b> " + m.text, 9000); }
   else if(m.t === "start"){ mpStartEmpfangen(m); }
   else if(m.t === "sync"){ mpSyncEmpfangen(m); }
   else if(m.t === "weg"){
