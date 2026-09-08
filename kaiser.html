@@ -435,7 +435,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.2 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.3 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -453,6 +453,11 @@ const TITEL = [
 const NAMEN = ["Friedrich","Anna","Wilhelm","Luise","Karl","Sophie","Otto","Marie","Georg"];
 const FARBEN = ["#5fb8d4","#e0b458","#4cc38a","#e5636f","#b58fd4","#d9973f","#7fd4c1","#e08ab8","#a8c46a"];
 const WAPPEN = ["🦅","🦁","🐺","🌹","⚔️","⭐","🐉","🛡️","🌙"];
+/* Bonus-Wappen, freigeschaltet über gesammelte Erfolge */
+const BONUS_WAPPEN = [
+  { ab:4,  w:"👑" }, { ab:8,  w:"🦄" }, { ab:12, w:"🔥" }, { ab:16, w:"⚜️" }
+];
+const wappenFrei = () => WAPPEN.concat(BONUS_WAPPEN.filter(b=>erfolge().size >= b.ab).map(b=>b.w));
 const KOSTEN = { markt:1000, muehle:2000, hafen:3000, palastTeil:5000, domTeil:9000, inf:100, kav:250, art:500,
   forst:800, bruch:1200, mauer:4000, burg:9000 };
 /* Baustoff-Bedarf der Bauwerke (Holz / Stein) */
@@ -532,7 +537,20 @@ const bauplaetze = p => Math.floor(p.land/1000);
 const minLand = p => Math.max((p.maerkte+p.muehlen)*1000, p.palast>0?LAND.palast:0, p.dom>0?LAND.dom:0);
 const freiLand  = p => Math.max(0, p.land - minLand(p));
 const staedte   = p => Math.min(Math.floor(p.maerkte/5), Math.floor(p.muehlen/3));
-const noetigKorn = p => Math.ceil(p.pop/10);
+/* Jahreszeiten wirken aufs Spiel: Bedarf, Preise, Ernte, Feldzüge */
+const SAISON_FX = {
+  "Frühling": { korn:0.85, txt:"Saatzeit: Korn ist am Markt rund 15 % günstiger." },
+  "Sommer":   { ernte:1.05, txt:"Hochsommer: die Ernte fällt 5 % reicher aus." },
+  "Herbst":   { schwank:1.7, txt:"Erntemarkt: die Kornpreise schwanken heftig." },
+  "Winter":   { bedarf:1.15, txt:"Winter: das Volk braucht 15 % mehr Korn, Feldzüge zahlen Frost-Tribut." }
+};
+const saisonFx = () => SAISON_FX[saison().n] || {};
+const noetigKorn = p => Math.ceil(p.pop/10 * (saisonFx().bedarf || 1));
+function saisonKornPreis(){
+  const fx = saisonFx();
+  const sw = fx.schwank || 1;
+  return clamp(Math.round((G.kornMarkt||100) * rf(1 - 0.07*sw, 1 + 0.07*sw) * (fx.korn || 1)), 20, 430);
+}
 const miliz     = p => p.maerkte*50;
 /* Bebauung konkurriert mit Anbaufläche (Original-Zielkonflikt) */
 const bebautFarm = p => (p.maerkte+p.muehlen)*250
@@ -548,6 +566,24 @@ function bezAendern(a, b, delta){
   a.bez = a.bez || {}; b.bez = b.bez || {};
   a.bez[ib] = clamp((a.bez[ib]||0) + delta, -100, 100);
   b.bez[ia] = clamp((b.bez[ia]||0) + delta, -100, 100);
+}
+function buendnisAktiv(a, b){
+  const ib = G.spieler.indexOf(b);
+  return a.buendnisse && a.buendnisse[ib] && a.buendnisse[ib] >= G.jahr;
+}
+function buendnisSchliessen(a, b){
+  const ia = G.spieler.indexOf(a), ib = G.spieler.indexOf(b);
+  a.buendnisse = a.buendnisse || {}; b.buendnisse = b.buendnisse || {};
+  a.buendnisse[ib] = G.jahr + 8; b.buendnisse[ia] = G.jahr + 8;
+  bezAendern(a, b, 15);
+  geschichte("🛡️", `${a.name} und ${b.name} schmieden ein Bündnis mit Beistandspflicht (8 Jahre).`);
+}
+function buendnisBrechen(a, b, grund){
+  const ia = G.spieler.indexOf(a), ib = G.spieler.indexOf(b);
+  if(a.buendnisse) delete a.buendnisse[ib];
+  if(b.buendnisse) delete b.buendnisse[ia];
+  bezAendern(a, b, -25);
+  geschichte("🪓", `Das Bündnis zwischen ${a.name} und ${b.name} zerbricht${grund ? " · " + grund : ""}.`);
 }
 function paktAktiv(a, b){
   const ib = G.spieler.indexOf(b);
@@ -575,6 +611,7 @@ function routeTrennen(i, j, grund){
     geschichte("🪓", `Die Handelsroute zwischen ${G.spieler[i].name} und ${G.spieler[j].name} ist ${grund||"unterbrochen"}.`);
 }
 const routenZoll = p => {
+  if(p._routenPause === G.jahr) return 0;                /* Raubritter: Karawanen bleiben aus */
   const i = G.spieler.indexOf(p);
   const basis = routenVon(i).length * (350 + staedte(p)*80 + ((p.haefen||0)>0 ? 150 : 0));
   return Math.round(basis * (G.handelsprivileg && G.handelsprivileg >= G.jahr ? 1.5 : 1));
@@ -621,7 +658,7 @@ function botKriegserklaerung(ai, di){
   const p = G.spieler[ai], ziel = G.spieler[di];
   if(G.lehre || p.tot || ziel.tot) return false;
   if(G.reichsfrieden && G.reichsfrieden >= G.jahr) return false;
-  if(paktAktiv(p, ziel) || eheAktiv(p, ziel)) return false;
+  if(paktAktiv(p, ziel) || eheAktiv(p, ziel) || buendnisAktiv(p, ziel)) return false;
   if(p.titel < 1 || heerStaerke(p.heer) + miliz(p)*0.8 < 150) return false;
   if((G._angriffe||[]).some(x=>x.kr.a===ai && x.kr.d===di)) return false;
   const kr = { a:ai, d:di, weg:wegZwischen(ai,di), fragen:[], wahl:{},
@@ -630,7 +667,7 @@ function botKriegserklaerung(ai, di){
   kr.fragen = lebende().map(x=>x.i).filter(i2=>i2!==ai && i2!==di);
   for(const i2 of kr.fragen){
     const s2 = G.spieler[i2];
-    kr.wahl[i2] = s2.ki ? kiDiploWahl(s2, kr) : "frei";
+    kr.wahl[i2] = buendnisAktiv(s2, ziel) ? "def" : s2.ki ? kiDiploWahl(s2, kr) : "frei";
   }
   if(kr.weg.some(i2=>!["atk","frei"].includes(kr.wahl[i2]))) return false;
   if(routeAktiv(ai, di)) routeTrennen(ai, di, "durch die Kriegserklärung zerbrochen");
@@ -782,7 +819,7 @@ const heerGroesse = h => h.inf + h.kav + h.art;
 const unterhalt = p => Math.round((p.heer.inf*10 + p.heer.kav*25 + p.heer.art*50)
   * (1 + p.titel*0.1) * (p.berater && p.berater.marschall ? 0.85 : 1)
   * (hatPrivileg(p,5) ? 0.9 : 1)                        /* Herzogliche Heerfolge */
-  * (p.zug==="kriegerisch" ? 0.95 : 1));
+  * (p.zug==="kriegerisch" ? 0.95 : 1)) + (p.feldherr ? 500 : 0);
 
 /* Reichsaufträge: der Reichshof stellt Aufgaben mit Frist und Belohnung */
 const AUFTRAG_ARTEN = [
@@ -1238,7 +1275,7 @@ function jahresschluss(p){
   for(const w of WETTER){ roll -= w.w; if(roll<=0){ wetter = w; break; } }
   r.wetter = wetter;
   const bearbeitet = Math.min(p.pop*4, anbau(p));
-  let ertrag = rf(0.038,0.050) * wetter.f * (1 + Math.min(p.muehlen*0.05, 1.0));
+  let ertrag = rf(0.038,0.050) * wetter.f * (1 + Math.min(p.muehlen*0.05, 1.0)) * (saisonFx().ernte || 1);
   if(hatPrivileg(p,7)) ertrag *= 1.10;                 /* Königlicher Erntesegen */
   if(p._ernteBonus){ ertrag *= 1 + p._ernteBonus; r.erfindung = true; p._ernteBonus = 0; }
   r.ernte = Math.round(bearbeitet * ertrag);
@@ -1365,6 +1402,12 @@ function diploWeiter(){
 }
 function diploWahl(wahl){
   const kr = G._kr;
+  const frag = G.spieler[kr.fragen[kr.frageIdx]];
+  const ver = G.spieler[kr.d];
+  if(wahl !== "def" && buendnisAktiv(frag, ver)){
+    buendnisBrechen(frag, ver, "der Beistand wurde verweigert");
+    toast(`🪓 Ihr habt den Beistand verweigert, das Bündnis mit ${ver.name} ist zerbrochen.`, 7000);
+  }
   kr.wahl[kr.fragen[kr.frageIdx]] = wahl;
   kr.frageIdx++;
   diploWeiter();
@@ -1477,6 +1520,38 @@ function verteileEinheiten(einheiten, gewichte){
   }
   return lanes;
 }
+/* Kampferfahrung des stehenden Heeres: Rekruten -> Kämpen -> Veteranen */
+const RANG_NAMEN = ["Rekruten","Kämpen","Veteranen"];
+const RANG_ICO = ["🪖","⚔️","🎖️"];
+const heerRang = p => (p.heerXp||0) >= 60 ? 2 : (p.heerXp||0) >= 25 ? 1 : 0;
+const xpFaktor = stufe => 1 + stufe*0.05;
+/* Anwerbbare Feldherren mit eigenen Stärken */
+const FELDHERREN = [
+  { id:"flanke",     ico:"🐎", n:"Ritter Falk von Sturmfels",  t:"Flankenmeister",
+    d:"Kavallerie +10 %, Durchbrüche reißen größere Lücken in die Front." },
+  { id:"belagerung", ico:"💣", n:"Meister Balthasar Krumm",    t:"Belagerungskünstler",
+    d:"Artillerie +15 %, feindliche Festungswerke wirken beim Angriff schwächer." },
+  { id:"defensiv",   ico:"🛡️", n:"Marschall Gerold der Fels",  t:"Defensivgenie",
+    d:"In der Verteidigung +10 % Nahkampfkraft und zähere Moral." },
+  { id:"sturm",      ico:"⚡", n:"Hauptmann Jörg Hitzfeld",    t:"Sturmherr",
+    d:"Schnellerer Vormarsch und ein härterer erster Zusammenprall (+8 % Nahkampf)." }
+];
+const feldherrArt = p => p.feldherr ? FELDHERREN.find(f=>f.id===p.feldherr.id) : null;
+const feldherrSkala = p => p.feldherr ? 1 + Math.min(p.feldherr.ruhm||0, 5)*0.06 : 1;
+/* Kampf-Faktoren einer Seite aus Feldherr und Erfahrung */
+function seitenFaktoren(p, verteidigt){
+  const fx = { kav:1, art:1, nah:1, tempo:1, durch:0.3, zaeh:false };
+  fx.nah *= xpFaktor(heerRang(p)); fx.art *= xpFaktor(heerRang(p));
+  const fa = feldherrArt(p);
+  if(fa){
+    const sk = feldherrSkala(p);
+    if(fa.id==="flanke"){ fx.kav *= 1 + 0.10*sk; fx.durch = 0.3 + 0.15*sk; }
+    if(fa.id==="belagerung"){ fx.art *= 1 + 0.15*sk; }
+    if(fa.id==="defensiv" && verteidigt){ fx.nah *= 1 + 0.10*sk; fx.zaeh = true; }
+    if(fa.id==="sturm" && !verteidigt){ fx.tempo *= 1 + 0.25*sk; fx.nah *= 1 + 0.08*sk; }
+  }
+  return fx;
+}
 const laneGroesse = u => u.inf+u.kav+u.art+u.miliz+u.auf;
 const resGroesse = r => r ? (r.inf||0)+(r.kav||0)+(r.miliz||0)+(r.auf||0) : 0;
 /* Zieht den Reserve-Anteil (ohne Artillerie) aus einer Armee heraus */
@@ -1566,6 +1641,14 @@ function schlachtStarten(){
     moralA:100, moralD:100, routA:false, routD:false,
     tick:0, maxTicks:40, log:[], partikel:[], fertig:false, sieger:null, iv:null, still:false
   };
+  G._s.fxA = seitenFaktoren(G.spieler[kr.a], false);
+  G._s.fxD = seitenFaktoren(G.spieler[kr.d], true);
+  if(feldherrArt(G.spieler[kr.a]) && feldherrArt(G.spieler[kr.a]).id==="belagerung" && G._s.festung > 1)
+    G._s.festung = 1 + (G._s.festung - 1) * 0.75;
+  G._s.winter = saison().n === "Winter";
+  const fhA0 = feldherrArt(G.spieler[kr.a]), fhD0 = feldherrArt(G.spieler[kr.d]);
+  if(fhA0) G._s.log.unshift(`${fhA0.ico} ${fhA0.n} führt die Angreifer (${fhA0.t}).`);
+  if(fhD0) G._s.log.unshift(`${fhD0.ico} ${fhD0.n} befehligt die Verteidigung (${fhD0.t}).`);
   G._s.nebel = !G._s.regen && Math.random() < 0.2;
   if(G._s.nebel) G._s.log.unshift("🌫️ Dichter Morgennebel liegt über dem Feld, die Kanoniere zielen blind.");
   if(G._s.resA) G._s.log.unshift(`🥁 Die Angreifer halten ${fmt(resGroesse(G._s.resA))} Mann in Reserve.`);
@@ -1588,6 +1671,11 @@ function einTick(s, leise){
     s.lanes.forEach(l => { sturmTote += laneVerlust(l.A, laneGroesse(l.A)*0.06); });
     if(sturmTote > 0) s.log.unshift(`Der Sturm auf die Mauern kostet die Angreifer ${fmt(sturmTote)} Mann.`);
   }
+  if(s.tick === 1 && s.winter){
+    let frost = 0;
+    s.lanes.forEach(l => { frost += laneVerlust(l.A, laneGroesse(l.A)*0.04); });
+    if(frost > 0) s.log.unshift(`❄️ Der Wintermarsch fordert ${fmt(frost)} Mann, noch ehe die Schlacht beginnt.`);
+  }
   const jetzt = performance.now();
   /* Verlauf für das Zeitraffer-Replay aufzeichnen */
   s.verlauf = s.verlauf || [];
@@ -1603,13 +1691,14 @@ function einTick(s, leise){
     if(lane.dist > 0 && gA > 0 && gD > 0){
       /* Vormarsch. Kavallerie beschleunigt, Furten bremsen */
       const distVorher = lane.dist;
-      lane.dist = Math.max(0, lane.dist - (9 + (a.kav/Math.max(1,gA))*16) * (gel.tempo || 1) * (s.nebel ? 1.3 : 1));
+      lane.dist = Math.max(0, lane.dist - (9 + (a.kav/Math.max(1,gA))*16) * (gel.tempo || 1)
+        * (s.nebel ? 1.3 : 1) * ((s.fxA && s.fxA.tempo) || 1));
       if(!leise && distVorher > 0 && lane.dist === 0 && (a.kav + d.kav) > 2)
         s.partikel.push({ typ:"sturmritt", lane:i, born:jetzt });
       /* Artillerie-Fernkampf beider Seiten. Regen macht das Pulver feucht */
       const artFx = (gel.artFaktor || 1) * (s.regen ? 0.65 : 1) * (s.nebel ? 0.55 : 1);
-      const feuerA = a.art * rf(0.7,1.3) * artFx;
-      const feuerD = d.art * rf(0.7,1.3) * 1.15 * artFx;
+      const feuerA = a.art * rf(0.7,1.3) * artFx * ((s.fxA && s.fxA.art) || 1);
+      const feuerD = d.art * rf(0.7,1.3) * 1.15 * artFx * ((s.fxD && s.fxD.art) || 1);
       gefD += laneVerlust(d, feuerA*0.30);
       gefA += laneVerlust(a, feuerD*0.30);
       if(!leise){
@@ -1624,9 +1713,9 @@ function einTick(s, leise){
     } else if(gA > 0 && gD > 0){
       /* Nahkampf im Abschnitt. Hügel schützen, Wald bremst die Reiterei */
       const kavFx = gel.kavFaktor || 1;
-      const nah = u => u.inf + u.kav*2.5*kavFx + u.art*0.4 + u.miliz*0.8 + u.auf*0.5;
-      const stA = nah(a) * rf(0.85,1.15);
-      const stD = nah(d) * 1.15 * (gel.defBonus || 1) * (s.festung || 1) * rf(0.85,1.15);
+      const nah = (u, fx) => u.inf + u.kav*2.5*kavFx*((fx && fx.kav)||1) + u.art*0.4 + u.miliz*0.8 + u.auf*0.5;
+      const stA = nah(a, s.fxA) * ((s.fxA && s.fxA.nah) || 1) * rf(0.85,1.15);
+      const stD = nah(d, s.fxD) * ((s.fxD && s.fxD.nah) || 1) * 1.15 * (gel.defBonus || 1) * (s.festung || 1) * rf(0.85,1.15);
       gefD += laneVerlust(d, gD * stA/(stA+stD) * 0.15);
       gefA += laneVerlust(a, gA * stD/(stA+stD) * 0.15);
       if(!leise){
@@ -1648,8 +1737,9 @@ function einTick(s, leise){
       if(laneGroesse(lane[gegner])===0 && laneGroesse(lane[mein])>4 && !lane["durch"+mein]){
         lane["durch"+mein] = true;
         const nachbarn = [i-1,i+1].filter(k=>k>=0 && k<LANES);
+        const durchQ = ((mein==="A" ? s.fxA : s.fxD) || {}).durch || 0.3;
         for(const typ of ["inf","kav","miliz","auf"]){
-          const abgabe = Math.floor(lane[mein][typ]*0.3);
+          const abgabe = Math.floor(lane[mein][typ]*durchQ);
           lane[mein][typ] -= abgabe*nachbarn.length;
           for(const k of nachbarn) s.lanes[k][mein][typ] += abgabe;
         }
@@ -1663,8 +1753,8 @@ function einTick(s, leise){
   const lossD = 1 - sRest(s,"D")/s.startG.D;
   const leerA = s.lanes.filter(l=>laneGroesse(l.A)===0).length;
   const leerD = s.lanes.filter(l=>laneGroesse(l.D)===0).length;
-  s.moralA = clamp(100 - lossA*150 - leerA*7 + rf(-2,2), 0, 100);
-  s.moralD = clamp(100 - lossD*140 - leerD*7 + rf(-2,2), 0, 100);
+  s.moralA = clamp(100 - lossA*(s.fxA && s.fxA.zaeh ? 135 : 150) - leerA*7 + rf(-2,2), 0, 100);
+  s.moralD = clamp(100 - lossD*(s.fxD && s.fxD.zaeh ? 125 : 140) - leerD*7 + rf(-2,2), 0, 100);
   /* Reserven rücken ein, sobald die eigene Linie wankt (oder spätestens Tick 14) */
   for(const seite of ["A","D"]){
     const res = s["res"+seite];
@@ -3608,6 +3698,22 @@ function zeichneAufstellung(cid, einheiten, gewichte, farbe, rechts){
 function schlachtAbschliessen(){
   const s = G._s, kr = G._kr;
   const ang = G.spieler[kr.a], ver = G.spieler[kr.d];
+  /* Kampferfahrung: Überlebende lernen, Sieger mehr als Verlierer */
+  ang.heerXp = clamp((ang.heerXp||0) + (s.sieger==="A" ? 16 : 8), 0, 100);
+  ver.heerXp = clamp((ver.heerXp||0) + (s.sieger==="D" ? 16 : 8), 0, 100);
+  /* Feldherren: Ruhm für den Sieger, Todesrisiko für den Verlierer */
+  for(const [seite, p2] of [["A",ang],["D",ver]]){
+    if(!p2.feldherr) continue;
+    const fa = feldherrArt(p2);
+    if(s.sieger === seite){
+      p2.feldherr.ruhm = (p2.feldherr.ruhm||0) + 1;
+      if(p2.feldherr.ruhm === 3) geschichte("🎖️", `${fa.n} in ${p2.name}s Diensten wird als großer Feldherr gerühmt.`);
+    } else if(Math.random() < 0.06){
+      geschichte("🕯️", `${fa.n} fällt in der Schlacht, ${p2.name} verliert seinen Feldherrn.`);
+      if(!p2.ki) toast(`🕯️ Euer Feldherr ${fa.n} ist in der Schlacht gefallen.`, 8000);
+      p2.feldherr = null;
+    }
+  }
   /* Verluste anteilig in die stehenden Heere zurückschreiben (Leihtruppen kehren dezimiert heim) */
   verlusteZurueck(s);
   if(s.sieger === "A"){
@@ -3879,8 +3985,26 @@ const FOLGEN = {
       { t:"Wieder riskieren", fx:p=>{ if(Math.random()<0.5){ const k=Math.round(p.korn*0.2); p.korn-=k; p.stimmung=clamp(p.stimmung-8,5,100); return `Der Deich bricht! ${fmt(k)} Fuder versinken in den Fluten.`; } return "Noch einmal gutgegangen, der Fluss bleibt in seinem Bett."; } }
     ]}
 };
+const EREIGNIS_RAUBRITTER = { id:"raubritter", ico:"🏴",
+  txt:p=>`Raubritter haben sich an Eurer Handelsstraße festgesetzt und pressen den Karawanen Wegzoll ab. Die Kaufleute verlangen Schutz.`,
+  wahl:[
+    { t:"Geleitschutz bezahlen (600 T)", fx:p=>{ p.geld-=600;
+        return "Bewaffnete Reiter sichern fortan die Straße, die Karawanen rollen unbehelligt."; } },
+    { t:"Strafexpedition entsenden", fx:p=>{
+        if(heerGroesse(p.heer) < 60){ p._routenPause = G.jahr; p.stimmung=clamp(p.stimmung-3,5,100);
+          return "Euer Häuflein wird verlacht und zieht unverrichteter Dinge ab. Die Route liegt dieses Jahr brach."; }
+        const v = ri(4,14); p.heer.inf = Math.max(0, p.heer.inf - v);
+        if(Math.random() < 0.75){ const beute = ri(500,1100); p.geld += beute; p.stimmung=clamp(p.stimmung+3,5,100);
+          geschichte("🏴", `${p.name} hebt ein Raubritter-Nest aus.`);
+          return `Das Raubnest wird gestürmt! ${v} Mann fallen, doch ${fmt(beute)} Taler Beute und freie Straßen sind der Lohn.`; }
+        p._routenPause = G.jahr;
+        return `Die Raubritter entkommen in die Wälder, ${v} Mann fallen. Die Karawanen meiden die Straße dieses Jahr.`; } },
+    { t:"Ignorieren", fx:p=>{ p._routenPause = G.jahr; p.stimmung=clamp(p.stimmung-2,5,100);
+        return "Die Kaufleute zahlen den Wegzoll selbst und bleiben künftig fort. Dieses Jahr bringt Euch keine Route Zoll."; } }
+  ]};
 function ereignisWuerfeln(p){
   if(Math.random() >= 0.20) return null;
+  if(routenVon(G.spieler.indexOf(p)).length > 0 && Math.random() < 0.18) return EREIGNIS_RAUBRITTER;
   if((p.haefen||0) > 0 && Math.random() < 0.16) return EREIGNIS_PIRATEN;
   if((p.bruch||0) > 0 && Math.random() < 0.10) return EREIGNIS_GOLDADER;
   if((p.forst||0) > 0 && Math.random() < 0.10) return EREIGNIS_WALDBRAND;
@@ -3948,6 +4072,29 @@ function diploAktion(art){
       mpSync();
     }
     p.diploZaehler++;
+  } else if(art === "buendnis"){
+    if(buendnisAktiv(p, ziel)){ alertMsg("Zwischen Euren Häusern besteht bereits ein Bündnis."); return; }
+    if(p.geld < 1000){ alertMsg("Die Bündnisurkunde samt Gesandtschaft kostet 1.000 Taler."); return; }
+    if(bezWert(p, ziel) < 25){ alertMsg("Für ein Bündnis ist das Verhältnis zu kühl (mindestens +25), sendet erst Geschenke."); return; }
+    if(ziel.ki){
+      const bedroht = nachbarn(G.spieler.indexOf(ziel)).some(i=>{
+        const z2 = G.spieler[i];
+        return z2 !== p && !z2.tot && heerStaerke(z2.heer) > heerStaerke(ziel.heer)*1.3;
+      });
+      if(bezWert(ziel, p) >= 30 || (bedroht && bezWert(ziel, p) >= 15)){
+        p.geld -= 1000;
+        buendnisSchliessen(p, ziel);
+        toast(`🛡️ ${ziel.name} besiegelt das Bündnis, Eure Heere stehen füreinander ein (8 Jahre).`);
+        p.diploZaehler++;
+      } else {
+        toast(`❌ ${ziel.name} zögert. Ein Bündnis braucht mehr Vertrauen (Verhältnis derzeit ${bezWert(ziel,p)}).`);
+      }
+    } else {
+      G.angebote.push({ von:G.spieler.indexOf(p), an:G.spieler.indexOf(ziel), richtung:"buendnis", menge:0, preis:0, jahr:G.jahr });
+      toast(`📜 Bündnis-Angebot an ${ziel.name} übermittelt.`);
+      p.diploZaehler++;
+      mpSync();
+    }
   } else if(art === "route"){
     const pi = G.spieler.indexOf(p), zi = G.spieler.indexOf(ziel);
     if(routeAktiv(pi, zi)){ alertMsg("Zwischen Euren Reichen verkehren bereits Karawanen."); return; }
@@ -4078,6 +4225,12 @@ function angebotAusfuehren(a){
     routeEroeffnen(a.von, a.an);
     return;
   }
+  if(a.richtung === "buendnis"){
+    if(von.geld < 1000) return;
+    von.geld -= 1000;
+    buendnisSchliessen(von, an);
+    return;
+  }
   if(a.richtung === "pakt"){
     von.pakte[a.an] = G.jahr + 5;
     an.pakte[a.von] = G.jahr + 5;
@@ -4127,6 +4280,8 @@ function angebotAntwort(idx, ja){
 function kiDiploWahl(p, kr){
   const aufWeg = kr.weg.includes(G.spieler.indexOf(p));
   const ang = G.spieler[kr.a], ver = G.spieler[kr.d];
+  if(buendnisAktiv(p, ver)) return "def";               /* Beistandspflicht */
+  if(buendnisAktiv(p, ang) && heerGroesse(p.heer) > 50 && Math.random() < 0.5) return "atk";
   const bezA = bezWert(p, ang), bezV = bezWert(p, ver);
   const kampfbereit = heerGroesse(p.heer) > 50;
   /* Freunden beistehen, Feinden schaden, je nach Charakter */
@@ -4174,7 +4329,7 @@ function kiSchlacht(a, d){
   kr.fragen = lebende().map(x=>x.i).filter(i=>i!==a && i!==d);
   for(const i of kr.fragen){
     const s = G.spieler[i];
-    kr.wahl[i] = s.ki ? kiDiploWahl(s, kr) : "frei";
+    kr.wahl[i] = buendnisAktiv(s, G.spieler[d]) ? "def" : s.ki ? kiDiploWahl(s, kr) : "frei";
   }
   if(kr.weg.some(i => !["atk","frei"].includes(kr.wahl[i]))) return null;
   const helferA = kr.fragen.filter(i=>kr.wahl[i]==="atk");
@@ -4196,7 +4351,11 @@ function kiSchlacht(a, d){
     mauerStufe: G.spieler[d].mauer || 0, burgStufe: G.spieler[d].burg || 0,
     mauerBruch: !!kr.mauerBruch,
     moralA:100, moralD:100, routA:false, routD:false,
+    fxA: seitenFaktoren(G.spieler[a], false), fxD: seitenFaktoren(G.spieler[d], true),
+    winter: saison().n === "Winter",
     tick:0, maxTicks:40, log:[], partikel:[], fertig:false, sieger:null, still:true };
+  if(feldherrArt(G.spieler[a]) && feldherrArt(G.spieler[a]).id==="belagerung" && s.festung > 1)
+    s.festung = 1 + (s.festung - 1) * 0.75;
   if(kr.hunger){ /* Hunger schwächt Miliz und Aufgebot auch im KI-Krieg */ }
   G._kr = kr; G._s = s;
   while(!s.fertig) einTick(s, true);
@@ -4207,7 +4366,7 @@ function kiZug(p){
   const idx = G.spieler.indexOf(p);
   const bericht = [];
   /* Preise wie im normalen Zug */
-  p.kornPreis = clamp(Math.round((G.kornMarkt||100) * rf(0.93,1.07)), 20, 430);
+  p.kornPreis = saisonKornPreis();
   p.landPreis = ri(16,70);
   p.holzPreis = ri(8,16); p.steinPreis = ri(14,26);
   p.kornHist = (p.kornHist||[]).concat(p.kornPreis).slice(-32);
@@ -4233,6 +4392,12 @@ function kiZug(p){
     if(m>0){ p.geld -= m*p.landPreis; p.land += m; bericht.push(`kauft ${fmt(m)} ha Land`); }
   }
   zwischenbilanz(p);
+  /* Feldherr: wer es sich leisten kann, holt sich einen passenden Kopf */
+  if(!p.feldherr && p.titel >= 2 && p.geld > 15000){
+    const id = p.kiTyp==="aggressor" ? "sturm" : p.heer.art >= 4 ? "belagerung" : "defensiv";
+    p.geld -= 2500; p.feldherr = { id, ruhm:0 };
+    bericht.push(`nimmt den Feldherrn ${feldherrArt(p).n} in Dienst`);
+  }
   /* Fällige Folge-Ereignisse: die KI entscheidet nach Kassenlage */
   let folgeKI;
   while((folgeKI = faelligeFolge(p))){
@@ -4337,7 +4502,7 @@ function kiZug(p){
     const eigen = heerStaerke(p.heer) + miliz(p)*0.8;
     const schwelle = p.kiTyp==="aggressor" ? 1.3 : 1.6;
     const ziel = nb.map(i=>G.spieler[i])
-      .filter(z => !paktAktiv(p,z) && bezWert(p,z) < 35
+      .filter(z => !paktAktiv(p,z) && !buendnisAktiv(p,z) && bezWert(p,z) < 35
                 && eigen > (heerStaerke(z.heer) + miliz(z)*0.8 + z.pop*0.025)*schwelle)
       .sort((x,y)=>heerStaerke(x.heer)-heerStaerke(y.heer))[0];
     if(ziel && eigen > 150){
@@ -4356,7 +4521,7 @@ function kiZug(p){
         kr.fragen = lebende().map(x=>x.i).filter(i2=>i2!==idx && i2!==di);
         for(const i2 of kr.fragen){
           const s2 = G.spieler[i2];
-          kr.wahl[i2] = s2.ki ? kiDiploWahl(s2, kr) : "frei";
+          kr.wahl[i2] = buendnisAktiv(s2, ziel) ? "def" : s2.ki ? kiDiploWahl(s2, kr) : "frei";
         }
         if(!kr.weg.some(i2=>!["atk","frei"].includes(kr.wahl[i2]))){
           if(routeAktiv(idx, di)) routeTrennen(idx, di, "durch die Kriegserklärung zerbrochen");
@@ -4366,6 +4531,35 @@ function kiZug(p){
           G._angriffe = (G._angriffe||[]).concat({ kr });
           geschichte("⚔️", `${p.name} erklärt ${ziel.name} den Krieg, die Heere marschieren!`);
           bericht.push(`erklärt ${ziel.name} den Krieg!`);
+        }
+      }
+    }
+  }
+  /* Eigeninitiative: Botschaften und Forderungen an menschliche Höfe */
+  if(!G.lehre && Math.random() < 0.30){
+    const menschen = lebende().map(x=>x.p).filter(z=>!z.ki);
+    const zielM = menschen.length ? menschen[ri(0, menschen.length-1)] : null;
+    if(zielM){
+      const mi = G.spieler.indexOf(zielM);
+      const bez = bezWert(p, zielM);
+      const meineS = heerStaerke(p.heer) + miliz(p)*0.8;
+      const seineS = heerStaerke(zielM.heer) + miliz(zielM)*0.8;
+      G.botschaften = G.botschaften || [];
+      if(G.botschaften.filter(b=>b.an===mi).length < 2){
+        if(p.kiTyp==="aggressor" && meineS > seineS*1.3 && bez < 5 && p.titel >= 1
+           && !paktAktiv(p,zielM) && !eheAktiv(p,zielM) && !buendnisAktiv(p,zielM)){
+          const betrag = Math.max(400, Math.round(Math.max(0,zielM.geld)*0.06/100)*100);
+          G.botschaften.push({ von:idx, an:mi, jahr:G.jahr, art:"forderung", betrag,
+            text:`„Euer Reich gedeiht nur, weil meine Heere es dulden. ${fmt(betrag)} Taler, und Ihr habt ein weiteres Jahr Ruhe.“` });
+          bericht.push(`sendet ${zielM.name} eine Tributforderung`);
+        } else if(bez > 40 && Math.random() < 0.5){
+          G.botschaften.push({ von:idx, an:mi, jahr:G.jahr, text: botAntwortText(p, "freundlich") });
+          bezAendern(p, zielM, 2);
+        } else if(bez < -30){
+          G.botschaften.push({ von:idx, an:mi, jahr:G.jahr, text: botAntwortText(p, "trotzig") });
+        } else if(p.kiTyp==="haendler" && !routeAktiv(idx, mi) && bez >= 10 && Math.random() < 0.5){
+          G.botschaften.push({ von:idx, an:mi, jahr:G.jahr,
+            text:"„Zwischen unseren Reichen läge eine gute Straße. Bietet mir eine Handelsroute an, und beide Kassen klingen.“" });
         }
       }
     }
@@ -4721,7 +4915,7 @@ function starteSpiel(anzahl, namen, geschlechter, tempo, kis, opts){
 const diffFaktor = () => G.diff===1 ? 0.6 : G.diff===3 ? 1.35 : 1;
 function beginneZug(){
   const p = cur();
-  p.kornPreis = clamp(Math.round((G.kornMarkt||100) * rf(0.93,1.07)), 20, 430);
+  p.kornPreis = saisonKornPreis();
   p.landPreis = ri(16,70);
   p.holzPreis = ri(8,16); p.steinPreis = ri(14,26);
   p.kornHist = (p.kornHist||[]).concat(p.kornPreis).slice(-32);
@@ -4742,8 +4936,35 @@ function beginneZug(){
   beginneZugFortsetzen();
 }
 /* Zugbeginn nach einer Verteidigungsschlacht (oder direkt) fortsetzen */
+function forderungZahlen(i){
+  const b = (G.botschaften||[])[i];
+  if(!b || b.an !== G.aktiv || b.art !== "forderung") return;
+  const p = cur(), von = G.spieler[b.von];
+  const betrag = Math.min(b.betrag, Math.max(0, p.geld));
+  p.geld -= betrag; von.geld += betrag;
+  bezAendern(p, von, 4);
+  geschichte("💰", `${p.name} zahlt ${von.name} ${fmt(betrag)} Taler Tribut.`);
+  toast(`💰 Ihr zahlt ${fmt(betrag)} Taler. ${von.name} gibt Ruhe, vorerst.`);
+  G.botschaften.splice(i,1); mpSync(); render();
+}
+function forderungAblehnen(i){
+  const b = (G.botschaften||[])[i];
+  if(!b || b.an !== G.aktiv || b.art !== "forderung") return;
+  const p = cur(), von = G.spieler[b.von];
+  G.botschaften.splice(i,1);
+  bezAendern(p, von, -8);
+  if(von.ki && Math.random() < 0.4 && botKriegserklaerung(b.von, G.aktiv)){
+    toast(`⚔️ ${von.name} nimmt die Absage nicht hin und erklärt Euch den Krieg!`, 8000);
+    sTrommel();
+  } else {
+    toast(`😠 ${von.name} tobt über Eure Absage, doch die Heere bleiben vorerst daheim.`);
+  }
+  mpSync(); render();
+}
 function beginneZugFortsetzen(){
   if((G.botschaften||[]).some(b=>b.an===G.aktiv)){
+    for(const b of G.botschaften.filter(x=>x.an===G.aktiv && x.art==="forderung"))
+      bezAendern(cur(), G.spieler[b.von], -4);          /* ignorierte Forderung kränkt */
     G.botschaften = G.botschaften.filter(b=>b.an!==G.aktiv);
   }
   const p = cur();
@@ -4931,6 +5152,7 @@ function render(){
     if(f <= 0.85 && f > 0.6 && !G._donnerte){ G._donnerte = true; setTimeout(sDonner, 600); }
     if(f > 0.85 || f <= 0.6) G._donnerte = false;
   }
+  if(G.screen === "statistik" || G.screen === "ende") zeichneZeitstrahl("zeitstrahl");
   if(G.screen === "befoerderung") zeichnePortraet("portraitB", cur());
   if(G.screen === "sieg" && G.sieger) zeichnePortraet("portraitK", G.sieger);
   if(G.screen === "tod") zeichnePortraet("portraitT", cur());
@@ -4951,6 +5173,71 @@ function zaehlerAnimieren(){
     requestAnimationFrame(step);
   });
 }
+/* Die Reichsgeschichte als gezeichneter Zeitstrahl */
+function zeichneZeitstrahl(cid){
+  const c = document.getElementById(cid);
+  if(!c) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  ctx.clearRect(0,0,W,H);
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,"#1b212b"); bg.addColorStop(1,"#141922");
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+  const ev = G.geschichte || [];
+  const j0 = 1700, j1 = Math.max(G.jahr, j0 + 4);
+  const x = j => 44 + (j - j0)/(j1 - j0) * (W - 88);
+  const y0 = H * 0.56;
+  /* Achse mit Jahresmarken */
+  ctx.strokeStyle = "rgba(224,180,88,.55)"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(32, y0); ctx.lineTo(W-32, y0); ctx.stroke();
+  ctx.font = "11px Georgia, serif"; ctx.textAlign = "center";
+  const schritt = (j1 - j0) > 40 ? 10 : 5;
+  for(let j = j0; j <= j1; j += schritt){
+    ctx.strokeStyle = "rgba(219,226,238,.3)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x(j), y0-4); ctx.lineTo(x(j), y0+4); ctx.stroke();
+    ctx.fillStyle = "rgba(219,226,238,.6)";
+    ctx.fillText(j, x(j), y0 + 18);
+  }
+  /* Ereignisse je Jahr stapeln, abwechselnd über und unter der Achse */
+  const proJahr = {};
+  ev.forEach(e => { (proJahr[e.j] = proJahr[e.j] || []).push(e); });
+  ctx.font = "13px sans-serif";
+  Object.keys(proJahr).map(Number).sort((a,b)=>a-b).forEach((j, ji) => {
+    const liste = proJahr[j].slice(0, 5);
+    const obenSeite = ji % 2 === 0;
+    const xx = x(j);
+    ctx.strokeStyle = "rgba(224,180,88,.3)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xx, y0 + (obenSeite ? -5 : 5));
+    ctx.lineTo(xx, obenSeite ? y0 - 14 : y0 + 24); ctx.stroke();
+    ctx.fillStyle = "#dbe2ee";
+    liste.forEach((e, k) => {
+      const yy = obenSeite ? y0 - 22 - k*16 : y0 + 34 + k*16;
+      if(yy > 8 && yy < H - 4) ctx.fillText(e.ico || "•", xx, yy);
+    });
+  });
+  ctx.fillStyle = "#e0b458"; ctx.font = "600 13px Georgia, serif"; ctx.textAlign = "left";
+  ctx.fillText(`📜 Chronik des Reiches · Anno ${j0} bis ${G.jahr}`, 12, 18);
+}
+function zeitstrahlSpeichern(){
+  const c = document.getElementById("zeitstrahl");
+  if(!c) return;
+  try{
+    const a = document.createElement("a");
+    a.download = `kaiser-chronik-${G.jahr}.png`;
+    a.href = c.toDataURL("image/png");
+    a.click();
+  }catch(e){ alertMsg("Das Bild konnte nicht erzeugt werden."); }
+}
+const zeitstrahlKarte = () => `
+      <div class="card">
+        <h3>📜 Chronik-Zeitstrahl</h3>
+        <canvas id="zeitstrahl" width="920" height="190" style="width:100%;border-radius:10px;border:1px solid var(--border)"></canvas>
+        ${(G.geschichte||[]).length ? `
+        <div style="max-height:130px;overflow-y:auto;margin-top:8px">
+          ${[...(G.geschichte||[])].reverse().slice(0,14).map(e=>`<p class="small" style="padding:1px 0"><span class="muted">${e.j}</span> ${e.ico} ${e.t}</p>`).join("")}
+        </div>` : '<p class="muted small">Noch schweigt die Chronik, die Geschichte beginnt erst.</p>'}
+        <button class="btn-sm" style="margin-top:8px" onclick="zeitstrahlSpeichern()">🖼️ Als Bild speichern</button>
+      </div>`;
 /* Kornkurs-Verlauf als Mini-Chart */
 function sparkline(hist){
   if(!hist || hist.length<2) return "";
@@ -5225,8 +5512,20 @@ const SCREENS = {
         <div><b>${e.n}</b><br><span class="muted small">${e.d}</span></div>
       </div>`;
     }).join("");
+    const q = Math.round(erfolge().size / ERFOLGE.length * 100);
     return `
       <h2>🏅 Erfolge · ${erfolge().size} von ${ERFOLGE.length}</h2>
+      <div class="moral" style="max-width:420px;margin:4px 0 10px"><div style="width:${q}%;background:var(--gold)"></div></div>
+      <div class="card" style="margin-bottom:12px">
+        <h3>Wappen-Kabinett</h3>
+        <p class="muted small">Gesammelte Erfolge schalten Prunk-Wappen für neue Partien frei:</p>
+        <p style="font-size:26px;letter-spacing:8px;margin-top:6px">
+          ${BONUS_WAPPEN.map(b=>erfolge().size>=b.ab
+            ? `<span title="freigeschaltet">${b.w}</span>`
+            : `<span style="opacity:.35" title="ab ${b.ab} Erfolgen">🔒</span>`).join("")}
+        </p>
+        <p class="muted small">${BONUS_WAPPEN.map(b=>`${b.w} ab ${b.ab}`).join(" · ")} Erfolgen.</p>
+      </div>
       <div class="grid g2">${karten}</div>
       <p class="muted small">Erfolge gelten für menschliche Regenten und bleiben auf diesem Gerät erhalten.</p>
       <button class="btn-primary btn-lg" onclick="zeige(G._vorErf || (G.spieler.length?'handoff':'title'))">Zurück</button>`;
@@ -5235,7 +5534,9 @@ const SCREENS = {
   setup(){
     let rows = "";
     for(let i=0;i<9;i++){
-      const wappenOpts = WAPPEN.map((w2,k)=>`<option value="${k}" ${k===i?'selected':''}>${w2}</option>`).join("");
+      const alleW = wappenFrei();
+      const wappenOpts = alleW.map((w2,k)=>`<option value="${k}" ${k===i?'selected':''}>${w2}</option>`).join("")
+        + BONUS_WAPPEN.filter(b=>erfolge().size < b.ab).map(b=>`<option disabled>🔒 ${b.w} ab ${b.ab} Erfolgen</option>`).join("");
       const farbNamen = ["Himmelblau","Gold","Smaragd","Rubin","Veilchen","Bernstein","Seegrün","Rosenrot","Oliv"];
       const farbOpts = FARBEN.map((f2,k)=>`<option value="${k}" ${k===i?'selected':''}>${farbNamen[k]}</option>`).join("");
       rows += `<tr id="prow${i}" style="${i>1?'opacity:.3':''}">
@@ -5563,6 +5864,7 @@ const SCREENS = {
           <div style="font-family:Georgia,serif;font-weight:bold;font-size:clamp(26px,6vw,42px);letter-spacing:2px;color:#f2ecd9">${SAISON_DEKO[saison().n].ico} ${saison().n}</div>
           <div style="font-family:Georgia,serif;font-size:clamp(15px,3.2vw,20px);color:var(--gold);margin-top:2px">Anno ${G.jahr}</div>
           <div style="font-size:clamp(12px,2.6vw,15px);color:rgba(240,236,220,.85);margin-top:6px">${SAISON_DEKO[saison().n].t}</div>
+          <div style="font-size:clamp(11px,2.4vw,14px);color:var(--gold);margin-top:4px;text-align:center;padding:0 10px">⚖️ ${saisonFx().txt||""}</div>
         </div>
       </div>
       ${(G.botschaften||[]).filter(b=>b.an===G.aktiv).length?`
@@ -5570,7 +5872,11 @@ const SCREENS = {
         <h3>📨 Botschaften an Euren Hof</h3>
         ${(G.botschaften||[]).filter(b=>b.an===G.aktiv).map(b=>`
           <p class="small" style="padding:3px 0"><b>${G.spieler[b.von]?G.spieler[b.von].wappen+" "+G.spieler[b.von].name:"?"}</b>
-          <span class="muted">(Anno ${b.jahr}):</span> ${b.text}</p>`).join("")}
+          <span class="muted">(Anno ${b.jahr}):</span> ${b.text}</p>
+          ${b.art==="forderung"?`<div style="margin:2px 0 6px">
+            <button class="btn-sm btn-primary" onclick="forderungZahlen(${G.botschaften.indexOf(b)})">💰 ${fmt(b.betrag)} T zahlen</button>
+            <button class="btn-sm" onclick="forderungAblehnen(${G.botschaften.indexOf(b)})">Ablehnen</button>
+          </div>`:""}`).join("")}
       </div>`:""}
       ${berichte.length?`
       <div class="card kiber" style="max-width:640px;margin:0 auto 14px">
@@ -5886,12 +6192,36 @@ const SCREENS = {
             <tr><td>Miliz <span class="muted small">aus ${p.maerkte} Märkten, gratis</span></td>
                 <td class="r">${fmt(miliz(p))}</td><td></td></tr>
           </table>
+          ${heerGroesse(p.heer)>0?`
+          <div style="margin-top:8px">
+            <p class="small">${RANG_ICO[heerRang(p)]} Kampferfahrung: <b>${RANG_NAMEN[heerRang(p)]}</b>
+              <span class="muted small">(${Math.round(p.heerXp||0)}/100 · +5 % Kampfkraft je Rang)</span></p>
+            <div class="moral" style="margin-top:4px"><div style="width:${Math.round(p.heerXp||0)}%;background:var(--gold)"></div></div>
+            <p class="muted small">Überstandene Schlachten härten das Heer, frische Rekruten verwässern die Erfahrung.</p>
+          </div>`:""}
           <p class="muted small" style="margin-top:6px">Unterhalt: <b>${fmt(unterhalt(p))} T/Jahr</b>
-           , der Sold steigt mit Eurem Rang (+10 % je Titel).</p>
+           , der Sold steigt mit Eurem Rang (+10 % je Titel)${p.feldherr?" · darin 500 T Feldherren-Sold":""}.</p>
           ${p.titel<1?`<div class="event bad" style="margin-top:8px">⚠️ Als einfache${p.w?"":"r"} ${titelName(p)} dürft
             Ihr noch keinen Krieg erklären, erst ab dem Rang <b>Baron</b> (${BEDINGUNGEN[1].txt}).
             Söldner kosten bis dahin nur Sold!</div>`:""}
           ${heerGroesse(p.heer)>0?`<button class="btn-sm" onclick="entlassen()">Heer auflösen</button>`:""}
+        </div>
+        <div class="card">
+          <h3>🎖️ Feldherr</h3>
+          ${p.feldherr ? (()=>{ const fa = feldherrArt(p); return `
+            <p><b>${fa.ico} ${fa.n}</b> · ${fa.t}
+              ${"⭐".repeat(Math.min(p.feldherr.ruhm||0,5)) || '<span class="muted small">noch ohne Ruhm</span>'}</p>
+            <p class="muted small" style="margin-top:4px">${fa.d}
+              ${p.feldherr.ruhm?` · Jeder Siegesruhm (bis 5) verstärkt seine Boni.`:""}</p>
+            <p class="muted small">Sold: 500 T/Jahr · fällt er in einer verlorenen Schlacht, ist er verloren.</p>
+            <button class="btn-sm" onclick="feldherrEntlassen()">Aus dem Dienst entlassen</button>`; })() : `
+            <p class="muted small">Ein Feldherr führt Eure Truppen mit eigener Handschrift.
+              Antrittsgeld 2.500 T, Sold 500 T/Jahr. Siege mehren seinen Ruhm und seine Wirkung.</p>
+            ${FELDHERREN.map(f=>`
+              <div class="rowflex" style="justify-content:space-between;margin-top:6px">
+                <span>${f.ico} <b>${f.n}</b> · ${f.t}<br><span class="muted small">${f.d}</span></span>
+                <button class="btn-sm" onclick="feldherrAnwerben('${f.id}')" ${p.geld>=2500?'':'disabled'}>Anwerben</button>
+              </div>`).join("")}`}
         </div>
       </div>
       <div class="card"><b>Vermögen: <span class="${p.geld<0?'red':'gold'}">${fmt(p.geld)} Taler</span></b></div>
@@ -5913,7 +6243,7 @@ const SCREENS = {
       const lbl = w>40?"freundschaftlich":w>10?"wohlwollend":w>-10?"neutral":w>-40?"kühl":"feindselig";
       return `<tr><td>${z.p.wappen} ${z.p.name}</td>
         <td class="r ${w>10?'green':w<-10?'red':''}">${w>0?"+":""}${w} · ${lbl}</td>
-        <td class="r">${routeAktiv(G.aktiv,z.i)?"🚚 ":""}${eheAktiv(p,z.p)?`💍 Ehe bis ${p.ehen[z.i]}`:paktAktiv(p,z.p)?`🕊️ Pakt bis ${p.pakte[z.i]}`:"—"}</td></tr>`;
+        <td class="r">${routeAktiv(G.aktiv,z.i)?"🚚 ":""}${buendnisAktiv(p,z.p)?`🛡️ Bündnis bis ${p.buendnisse[z.i]}`:eheAktiv(p,z.p)?`💍 Ehe bis ${p.ehen[z.i]}`:paktAktiv(p,z.p)?`🕊️ Pakt bis ${p.pakte[z.i]}`:"—"}</td></tr>`;
     }).join("");
     return `
       ${stepper("Bauen")}
@@ -5943,7 +6273,11 @@ const SCREENS = {
           </div>
           <div class="rowflex">
             <button onclick="diploAktion('pakt')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>🕊️ Nichtangriffspakt anbieten (5 Jahre)</button>
+            <button onclick="diploAktion('buendnis')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>🛡️ Bündnis anbieten (8 Jahre, 1.000 T)</button>
           </div>
+          <p class="muted small">Ein Bündnis verpflichtet zum Beistand: Wird ein Partner angegriffen,
+          kämpft das Heer des anderen automatisch mit. Wer den Beistand verweigert, bricht das Bündnis
+          und verliert viel Ansehen. Verbündete können einander nicht angreifen.</p>
           <div class="rowflex">
             <button onclick="diploAktion('route')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>🚚 Handelsroute anbieten (1.500 T)</button>
             <span class="muted small">${routenVon(G.aktiv).length}/3 Routen</span>
@@ -6012,6 +6346,8 @@ const SCREENS = {
         ? `bittet um die <b>Vermählung Eurer Häuser</b>, mit einer Mitgift von <b>${fmt(a.menge)} Talern</b> (12 Jahre Frieden, Erbanspruch bei Todesfällen).`
         : a.richtung==="pakt"
         ? `bietet Euch einen <b>Nichtangriffspakt</b> über 5 Jahre an.`
+        : a.richtung==="buendnis"
+        ? `bietet Euch ein <b>Bündnis mit Beistandspflicht</b> über 8 Jahre an: Wird einer angegriffen, kämpft der andere automatisch mit.`
         : a.richtung==="kauf"
           ? `möchte <b>${fmt(a.menge)} Fuder Korn</b> von Euch kaufen, zu <b>${fmt(a.preis)} T/Fuder</b> (${fmt(a.menge*a.preis)} T gesamt).`
           : `bietet Euch <b>${fmt(a.menge)} Fuder Korn</b> an, zu <b>${fmt(a.preis)} T/Fuder</b> (${fmt(a.menge*a.preis)} T gesamt).`;
@@ -6035,8 +6371,8 @@ const SCREENS = {
   kriegPlan(){
     const p = cur();
     const nb = nachbarn(G.aktiv);
-    const ziele = lebende().filter(x=>x.i!==G.aktiv && !paktAktiv(p, x.p));
-    const pakte = lebende().filter(x=>x.i!==G.aktiv && paktAktiv(p, x.p));
+    const ziele = lebende().filter(x=>x.i!==G.aktiv && !paktAktiv(p, x.p) && !buendnisAktiv(p, x.p));
+    const pakte = lebende().filter(x=>x.i!==G.aktiv && (paktAktiv(p, x.p) || buendnisAktiv(p, x.p)));
     const vorwahl = G._zielVorwahl;
     G._zielVorwahl = undefined;
     const opts = ziele.map(z=>{
@@ -6050,7 +6386,7 @@ const SCREENS = {
       <h2>⚔️ Feldzug planen</h2>
       <div class="card">
         <div class="rowflex">Gegner: <select id="ziel" style="max-width:100%">${opts}</select></div>
-        ${pakte.length?`<p class="muted small">🕊️ Durch Pakte geschützt: ${pakte.map(x=>x.p.name+" (bis "+p.pakte[x.i]+")").join(", ")}</p>`:""}
+        ${pakte.length?`<p class="muted small">🕊️ Durch Pakte oder Bündnisse geschützt: ${pakte.map(x=>x.p.name).join(", ")}</p>`:""}
         ${ziele.map(z=>spionBericht(p, z.i)).join("")}
         <table>
           <tr><th>Eure Streitmacht</th><th class="r">Stärke</th></tr>
@@ -6084,6 +6420,9 @@ const SCREENS = {
           <b class="cyan">${titelName(ver)} ${ver.name}</b> in den Krieg.
           ${aufWeg?"Der Heerzug führt durch <b>Euer</b> Gebiet.":""}
           Wie haltet Ihr es, ${titelName(frag)} ${frag.name}?</p>
+        ${buendnisAktiv(frag, ver)?`<div class="event bad" style="max-width:560px;margin:0 auto 10px">🛡️ Ihr seid
+          mit ${ver.name} <b>verbündet</b>. Der Beistand ist Pflicht, jede andere Wahl bricht das Bündnis
+          und kostet viel Ansehen!</div>`:""}
         <p class="muted small" style="margin-bottom:18px">Unterstützt Ihr eine Seite, kämpft Euer
         stehendes Heer (${fmt(heerGroesse(frag.heer))} Mann) mit. Eure Miliz bleibt daheim.</p>
         <div>
@@ -6211,7 +6550,8 @@ const SCREENS = {
       <h2>🗡️ Aufstellung · ${titelName(p)} ${p.name} gegen ${titelName(gegner)} ${gegner.name}</h2>
       <div class="card"><p class="small">${text}</p>
       <p class="muted small" style="margin-top:6px">Erkundetes Gelände:
-        ⛰️ Hügel schützen den Verteidiger · 🌊 Furten bremsen den Vormarsch · 🌲 Wald behindert Kavallerie und Artillerie.</p></div>
+        ⛰️ Hügel schützen den Verteidiger · 🌊 Furten bremsen den Vormarsch · 🌲 Wald behindert Kavallerie und Artillerie.</p>
+      ${saison().n==="Winter"?`<p class="small" style="margin-top:4px;color:var(--red)">❄️ Winterfeldzug: der Anmarsch durch Schnee kostet die Angreifer vorab rund 4 % der Truppen.</p>`:""}</div>
       <div class="grid g2">
         <div class="card">
           <h3>Gewichtung der Abschnitte</h3>
@@ -6242,9 +6582,10 @@ const SCREENS = {
     const restA = sRest(s,"A"), restD = sRest(s,"D");
     const pctA = clamp(restA/s.startG.A*100,0,100);
     const pctD = clamp(restD/s.startG.D*100,0,100);
-    const seite = (key, t, helfer, moral) => `
+    const seite = (key, t, helfer, moral, wer) => `
       <div class="armee ${s.tick>0 && !s.fertig ? 'shake':''}">
         <h4>${t}</h4>
+        <p class="muted small" style="margin:2px 0 6px">${RANG_ICO[heerRang(wer)]} ${RANG_NAMEN[heerRang(wer)]}${feldherrArt(wer)?` · ${feldherrArt(wer).ico} ${feldherrArt(wer).n}`:""}</p>
         <div class="u"><span>⚔️ Infanterie</span><b>${fmt(sRestTyp(s,key,"inf"))}</b></div>
         <div class="u"><span>🐎 Kavallerie</span><b>${fmt(sRestTyp(s,key,"kav"))}</b></div>
         <div class="u"><span>💣 Artillerie</span><b>${fmt(sRestTyp(s,key,"art"))}</b></div>
@@ -6261,13 +6602,13 @@ const SCREENS = {
       <canvas id="feld" width="900" height="380"></canvas>
       <div class="battlefield">
         <div>
-          ${seite("A", `Angreifer: ${ang.name}`, s.helferA, s.moralA)}
+          ${seite("A", `Angreifer: ${ang.name}`, s.helferA, s.moralA, ang)}
           <div class="strbar a"><div style="width:${pctA}%"></div></div>
           <p class="muted small center">Truppenstärke ${Math.round(pctA)} %</p>
         </div>
         <div class="vs">⚔️</div>
         <div>
-          ${seite("D", `Verteidiger: ${ver.name}`, s.helferD, s.moralD)}
+          ${seite("D", `Verteidiger: ${ver.name}`, s.helferD, s.moralD, ver)}
           <div class="strbar d"><div style="width:${pctD}%"></div></div>
           <p class="muted small center">Truppenstärke ${Math.round(pctD)} %</p>
         </div>
@@ -6726,6 +7067,7 @@ const SCREENS = {
         ${statChart("heer","⚔️ Heeresstärke","")}
       </div>
       ${marktChart()}
+      ${zeitstrahlKarte()}
       <div class="card">
         <h3>Kriegs- und Handelsbilanz</h3>
         <table>
@@ -6758,6 +7100,7 @@ const SCREENS = {
       <div class="card"><h3>${p.wappen} ${titelName(p)} ${p.name}</h3>${chronikChart(p)}</div>`).join("");
     return `
       <h2>Schlusswertung Anno ${G.jahr}</h2>
+      ${zeitstrahlKarte()}
       <div class="card">
         <table>
           <tr><th></th><th>Name</th><th class="r">Untertanen</th><th class="r">Land (ha)</th><th class="r">Taler</th><th class="r">Punkte</th></tr>
@@ -6806,7 +7149,7 @@ function setupAnzahl(){
 function setupVorschau(i){
   const schild = $("#pschild"+i);
   if(!schild) return;
-  const w2 = WAPPEN[+($("#pwap"+i)?$("#pwap"+i).value:i)] || WAPPEN[i];
+  const w2 = wappenFrei()[+($("#pwap"+i)?$("#pwap"+i).value:i)] || WAPPEN[i];
   const f2 = FARBEN[+($("#pfarbe"+i)?$("#pfarbe"+i).value:i)] || FARBEN[i];
   schild.textContent = w2;
   schild.style.borderColor = f2;
@@ -6819,7 +7162,7 @@ function setupStart(){
     namen.push(($("#pname"+i).value.trim()||("Spieler "+(i+1))));
     w.push($("#pw"+i).value==="1");
     kis.push($("#pki"+i).value==="1");
-    wapArr.push(WAPPEN[+($("#pwap"+i)?$("#pwap"+i).value:i)] || WAPPEN[i]);
+    wapArr.push(wappenFrei()[+($("#pwap"+i)?$("#pwap"+i).value:i)] || WAPPEN[i]);
     farbArr.push(FARBEN[+($("#pfarbe"+i)?$("#pfarbe"+i).value:i)] || FARBEN[i]);
   }
   if(kis.every(k=>k)){ alertMsg("Mindestens ein Reich braucht einen menschlichen Regenten."); return; }
@@ -6985,7 +7328,26 @@ function werbe(art, n){
   const p = cur();
   const kosten = KOSTEN[art]*n;
   if(p.geld < kosten) return;
+  const alt = heerGroesse(p.heer);
   p.geld -= kosten; p.heer[art] += n; sMuenze();
+  /* Frische Rekruten verwässern die Kampferfahrung des Heeres */
+  if(alt > 0) p.heerXp = (p.heerXp||0) * alt / (alt + n);
+  render();
+}
+function feldherrAnwerben(id){
+  const p = cur();
+  if(p.feldherr || p.geld < 2500) return;
+  p.geld -= 2500;
+  p.feldherr = { id, ruhm:0 };
+  const fa = feldherrArt(p);
+  toast(`${fa.ico} ${fa.n} tritt in Eure Dienste (${fa.t}).`); sFanfare();
+  geschichte("🎖️", `${p.name} nimmt den Feldherrn ${fa.n} in Dienst.`);
+  render();
+}
+function feldherrEntlassen(){
+  const p = cur();
+  if(!p.feldherr) return;
+  p.feldherr = null;
   render();
 }
 function entlassen(){
