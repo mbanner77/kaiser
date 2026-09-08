@@ -372,6 +372,15 @@
     .monu{transform:scale(.85);transform-origin:left top;}
     #toasts{left:8px;right:8px;} .toast{max-width:none;}
     .setup-tabelle select{padding:8px 2px;font-size:13px;}
+    /* Schlacht: kompakte Armee-Karten, lesbares Protokoll */
+    #feld{border-radius:10px;}
+    .phasebadge{display:block;text-align:center;margin-bottom:6px;}
+    .armee h4{font-size:13.5px;margin-bottom:4px;}
+    .armee .u{font-size:13px;padding:2px 0;}
+    .battlefield{gap:8px;}
+    .battlelog{max-height:120px;font-size:12.5px;}
+    .vs{display:none;}
+    .sliderrow input[type=range]{min-height:34px;}
   }
   @media (max-width:400px){
     .stats{grid-template-columns:1fr 1fr;}
@@ -426,7 +435,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.0.2 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.1 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -1228,12 +1237,24 @@ function diploFertig(){
   if(mpMein(kr.a)){ G._aufW = [2,2,2,2,2]; zeige("aufstellungA"); }
   else mpPend("schlachtplan", kr.a);
 }
+function gewichtText(i){
+  const summe = G._aufW.reduce((a,b)=>a+b,0) || 1;
+  return `${G._aufW[i]} · ${Math.round(G._aufW[i]/summe*100)} %`;
+}
 function aufstellungGewicht(i, v){
   G._aufW[i] = +v;
   const feld = document.getElementById("aufVorschau");
   if(feld && G._aufE) zeichneAufstellung("aufVorschau", G._aufE, G._aufW, G._aufFarbe, G._aufRechts);
-  const lbl = document.getElementById("gw"+i);
-  if(lbl) lbl.textContent = v;
+  /* Alle Anteile ändern sich, wenn ein Regler bewegt wird */
+  for(let k=0; k<LANES; k++){
+    const lbl = document.getElementById("gw"+k);
+    if(lbl) lbl.textContent = gewichtText(k);
+  }
+  /* Preset-Hervorhebung nachführen */
+  document.querySelectorAll("[data-preset]").forEach(b=>{
+    const g = AUFSTELLUNGEN[+b.dataset.preset].g;
+    b.classList.toggle("btn-primary", g.join() === G._aufW.join());
+  });
 }
 function aufstellungPreset(k){
   G._aufW = [...AUFSTELLUNGEN[k].g];
@@ -1247,7 +1268,7 @@ function aufstellungAFertig(){
 }
 function aufstellungDFertig(){
   G._kr.aufD = [...G._aufW];
-  if(mpMein(G._kr.a)) schlachtStarten();
+  if(G.spieler[G._kr.a].ki || mpMein(G._kr.a)) schlachtStarten();
   else mpPend("schlacht", G._kr.a);
 }
 
@@ -1276,12 +1297,12 @@ const seiteStaerke = s =>
    Durchbrüche in die Nachbarabschnitte, Moral und Flucht.
    ============================================================ */
 const LANES = 5;
-const LANE_NAMEN = ["Linker Flügel","Halblinks","Zentrum","Halbrechts","Rechter Flügel"];
+const LANE_NAMEN = ["Nordflanke","Halbnord","Zentrum","Halbsüd","Südflanke"];
 const AUFSTELLUNGEN = [
   { n:"Breite Linie",       g:[2,2,2,2,2] },
   { n:"Massiertes Zentrum", g:[1,2,4,2,1] },
-  { n:"Schwerpunkt links",  g:[4,3,2,1,1] },
-  { n:"Schwerpunkt rechts", g:[1,1,2,3,4] },
+  { n:"Schwerpunkt Nord",   g:[4,3,2,1,1] },
+  { n:"Schwerpunkt Süd",    g:[1,1,2,3,4] },
   { n:"Doppelflanke",       g:[3,1,1,1,3] }
 ];
 function verteileEinheiten(einheiten, gewichte){
@@ -1375,7 +1396,7 @@ function schlachtStarten(){
   if(kr.belagerung === "sturm") G._s.log.unshift("⚔️ Sturmangriff auf die Festungswerke, die ersten Reihen zahlen den Blutzoll!");
   if(kr.belagerung === "beschuss") G._s.log.unshift(`💣 Die Artillerie hat Breschen geschossen${kr.mauerZerstoert?", ein Mauerring liegt in Trümmern":""}.`);
   if(kr.belagerung === "aushungern") G._s.log.unshift(`⏳ Nach langer Belagerung: ${fmt(kr.hungerKorn||0)} Fuder verdorben, die Verteidiger sind entkräftet.`);
-  cur().kriegGefuehrt = true;
+  G.spieler[kr.a].kriegGefuehrt = true;
   sTrommel();
   zeige("schlacht");
   G._s.iv = setInterval(schlachtTick, 600);
@@ -2867,6 +2888,8 @@ function zeichneFeld(t=0){
   if(!c || !s || !s.lanes) return;
   const ctx = c.getContext("2d");
   const W = c.width, H = c.height;
+  /* Auf schmalen Screens wird der Canvas stark verkleinert: Schrift vergrößern */
+  const M = (c.clientWidth > 0 && c.clientWidth < 560) ? 1.5 : 1;
   ctx.clearRect(0,0,W,H);
   /* Boden mit Tiefe: Himmelstreifen oben, dunkler werdendes Feld nach vorn */
   const boden = ctx.createLinearGradient(0,0,0,H);
@@ -2925,7 +2948,7 @@ function zeichneFeld(t=0){
   for(let i=0;i<=LANES;i++){
     ctx.beginPath(); ctx.moveTo(0,oben+i*laneH); ctx.lineTo(W,oben+i*laneH); ctx.stroke();
   }
-  ctx.font = "10px sans-serif"; ctx.textAlign = "left"; ctx.fillStyle = "rgba(219,226,238,.4)";
+  ctx.font = `${Math.round(10*M)}px sans-serif`; ctx.textAlign = "left"; ctx.fillStyle = `rgba(219,226,238,${M>1?.6:.4})`;
   for(let i=0;i<LANES;i++){
     const gel = (s.gelaende && s.gelaende[i]) || GELAENDE[0];
     ctx.fillText(`${LANE_NAMEN[i]}${gel.ico?" "+gel.ico:""}`, 8, oben+i*laneH+12);
@@ -3048,16 +3071,16 @@ function zeichneFeld(t=0){
       ctx.closePath(); ctx.fill();
     }
     /* Truppenzahlen an den Rändern */
-    ctx.font = "600 11px sans-serif";
+    ctx.font = `600 ${Math.round(11*M)}px sans-serif`;
     ctx.fillStyle = fA; ctx.textAlign = "left";
     ctx.fillText(fmt(laneGroesse(lane.A)), 8, y0 + laneH - 8);
     ctx.fillStyle = fD; ctx.textAlign = "right";
     ctx.fillText(fmt(laneGroesse(lane.D)), W-8, y0 + laneH - 8);
     if(laneGroesse(lane.A)===0 && laneGroesse(lane.D)===0){
-      ctx.fillStyle = "rgba(219,226,238,.18)"; ctx.font = "11px sans-serif"; ctx.textAlign="center";
+      ctx.fillStyle = "rgba(219,226,238,.18)"; ctx.font = `${Math.round(11*M)}px sans-serif`; ctx.textAlign="center";
       ctx.fillText("verwaist", W/2, y0+laneH/2);
     } else if(laneGroesse(lane.D)===0 && laneGroesse(lane.A)>0){
-      ctx.fillStyle = "rgba(224,180,88,.5)"; ctx.font = "600 10px sans-serif"; ctx.textAlign="center";
+      ctx.fillStyle = "rgba(224,180,88,.6)"; ctx.font = `600 ${Math.round(10*M)}px sans-serif`; ctx.textAlign="center";
       ctx.fillText("⚡ Durchbruch", W*0.72, y0+12);
     }
   });
@@ -3990,10 +4013,31 @@ function kiZug(p){
       .sort((x,y)=>heerStaerke(x.heer)-heerStaerke(y.heer))[0];
     if(ziel && eigen > 150){
       const di = G.spieler.indexOf(ziel);
-      const s = kiSchlacht(idx, di);
-      if(s) bericht.push(s.sieger==="A"
-        ? `führt siegreich Krieg gegen ${ziel.name}` + (s.tiefe>=2 ? ` und plündert das Hinterland` : "")
-        : `verliert einen Feldzug gegen ${ziel.name}`);
+      if(ziel.ki){
+        const s = kiSchlacht(idx, di);
+        if(s) bericht.push(s.sieger==="A"
+          ? `führt siegreich Krieg gegen ${ziel.name}` + (s.tiefe>=2 ? ` und plündert das Hinterland` : "")
+          : `verliert einen Feldzug gegen ${ziel.name}`);
+      } else if(!G.lehre && !(G._angriffe||[]).some(x=>x.kr.a===idx && x.kr.d===di)){
+        /* Menschlicher Verteidiger: Krieg wird erklärt, die Schlacht schlägt
+           der Verteidiger selbst zu Beginn seines nächsten Zuges */
+        const kr = { a:idx, d:di, weg:wegZwischen(idx,di), fragen:[], wahl:{},
+                     aufA: kiAufstellung(p.heer), gelaende: wuerfleGelaende() };
+        kr.fragen = lebende().map(x=>x.i).filter(i2=>i2!==idx && i2!==di);
+        for(const i2 of kr.fragen){
+          const s2 = G.spieler[i2];
+          kr.wahl[i2] = s2.ki ? kiDiploWahl(s2, kr) : "frei";
+        }
+        if(!kr.weg.some(i2=>!["atk","frei"].includes(kr.wahl[i2]))){
+          if(routeAktiv(idx, di)) routeTrennen(idx, di, "durch die Kriegserklärung zerbrochen");
+          if(((ziel.mauer||0) + (ziel.burg||0)) > 0)
+            belagerungAnwenden(kr, p.heer.art >= 2 ? "beschuss" : "sturm");
+          p.kriegGefuehrt = true;
+          G._angriffe = (G._angriffe||[]).concat({ kr });
+          geschichte("⚔️", `${p.name} erklärt ${ziel.name} den Krieg, die Heere marschieren!`);
+          bericht.push(`erklärt ${ziel.name} den Krieg!`);
+        }
+      }
     }
   }
   jahresschluss(p);
@@ -4014,7 +4058,7 @@ function storageOK(){
   try{ const t="__kaiser_t"; window.localStorage.setItem(t,"1"); window.localStorage.removeItem(t); return true; }
   catch(e){ return false; }
 }
-function spielstand(){ return JSON.stringify({v:8, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler, opt:G.opt||{vergleich:true}, diff:G.diff||2, tipps:G.tipps||{}, kornMarkt:G.kornMarkt||100, marktDruck:G.marktDruck||0, angebote:G.angebote||[], szenario:G.szenario||"frei", geschichte:G.geschichte||[], routen:G.routen||[], marktHist:G.marktHist||[], kampagne:G.kampagne||null, reichstag:G.reichstag||null, reichsfrieden:G.reichsfrieden||0, handelsprivileg:G.handelsprivileg||0, lehre:G.lehre||null}); }
+function spielstand(){ return JSON.stringify({v:8, jahr:G.jahr, tempo:G.tempo, aktiv:G.aktiv, spieler:G.spieler, opt:G.opt||{vergleich:true}, diff:G.diff||2, tipps:G.tipps||{}, kornMarkt:G.kornMarkt||100, marktDruck:G.marktDruck||0, angebote:G.angebote||[], szenario:G.szenario||"frei", geschichte:G.geschichte||[], routen:G.routen||[], marktHist:G.marktHist||[], kampagne:G.kampagne||null, reichstag:G.reichstag||null, reichsfrieden:G.reichsfrieden||0, handelsprivileg:G.handelsprivileg||0, lehre:G.lehre||null, angriffe:G._angriffe||[]}); }
 function ladeSpielstand(json){
   const d = JSON.parse(json);
   if(!d || !Array.isArray(d.spieler) || !d.spieler.length) throw new Error("ungültig");
@@ -4035,6 +4079,7 @@ function ladeSpielstand(json){
   G.reichsfrieden = d.reichsfrieden || 0;
   G.handelsprivileg = d.handelsprivileg || 0;
   G.lehre = d.lehre || null;
+  G._angriffe = d.angriffe || [];
   G._kiBerichte = [];
   G.spieler.forEach((p,i)=>{
     if(!p.heer) p.heer = {inf:0,kav:0,art:0};
@@ -4338,6 +4383,7 @@ function starteSpiel(anzahl, namen, geschlechter, tempo, kis, opts){
   G.jahr = 1700; G.aktiv = 0; G.sieger = null; G._kiBerichte = []; G._ruhmFertig = false;
   G.kampagne = null; G.marktHist = [];
   G.reichstag = null; G.reichsfrieden = 0; G.handelsprivileg = 0; G.lehre = null;
+  G._angriffe = []; G._nachSchlacht = null;
   if(cur().ki){ G.aktiv = -1; naechsterSpieler(); }
   else zeige("intro");
 }
@@ -4360,9 +4406,38 @@ function beginneZug(){
   p.turnStart = Date.now();
   G._kiBerichte = [];
   G._donnerte = false;
+  /* Feindliche Heere im Anmarsch? Erst wird verteidigt! */
+  if(!p.ki && (G._angriffe||[]).some(x=>x.kr.d === G.aktiv)){ sTrommel(); zeige("verteidigung"); return; }
+  beginneZugFortsetzen();
+}
+/* Zugbeginn nach einer Verteidigungsschlacht (oder direkt) fortsetzen */
+function beginneZugFortsetzen(){
+  const p = cur();
   if(!p.ki && !p.auftrag && !G.lehre && G.jahr > 1702 && Math.random() < 0.18) auftragErteilen(p);
   if(G.reichstag && G.reichstag.stimmen[G.aktiv] === undefined && !p.ki){ zeige("reichstag"); return; }
   beginneZugWeiter();
+}
+function naechsterAngriff(){
+  return (G._angriffe||[]).find(x => x.kr.d === G.aktiv) || null;
+}
+function verteidigungStarten(){
+  const idx = (G._angriffe||[]).findIndex(x => x.kr.d === G.aktiv);
+  if(idx < 0){ beginneZugFortsetzen(); return; }
+  G._kr = G._angriffe.splice(idx, 1)[0].kr;
+  G._nachSchlacht = "zugstart";
+  G._aufW = [2,2,2,2,2];
+  mpSync();
+  zeige("aufstellungD");
+}
+/* Nach der Schlacht: zurück in die Bauphase oder weiter im eigenen Zugbeginn */
+function schlachtWeiter(){
+  if(G._nachSchlacht === "zugstart"){
+    G._nachSchlacht = null;
+    if((G._angriffe||[]).some(x => x.kr.d === G.aktiv)){ zeige("verteidigung"); return; }
+    beginneZugFortsetzen();
+    return;
+  }
+  zeige("bauen");
 }
 function beginneZugWeiter(){
   if((G.angebote||[]).some(a => a.an === G.aktiv)) zeige("angebote");
@@ -5690,6 +5765,35 @@ const SCREENS = {
       </div>`;
   },
 
+  verteidigung(){
+    const a = naechsterAngriff();
+    if(!a){ setTimeout(()=>beginneZugFortsetzen(), 10); return ""; }
+    const ang = G.spieler[a.kr.a], ver = cur();
+    const eigen = heerGroesse(ver.heer) + miliz(ver) + Math.round(ver.pop*0.02);
+    const feind = heerGroesse(ang.heer);
+    return `
+      <div class="hero" style="padding-top:26px;padding-bottom:8px">
+        <span class="crown">🚨</span>
+        <h1 class="red" style="font-size:26px;margin:10px 0">Feindliche Heere im Anmarsch!</h1>
+      </div>
+      <div class="pergament" style="max-width:640px;margin:0 auto">
+        <p style="font-size:16px;text-align:center"><b style="color:${ang.farbe}">${ang.wappen} ${titelName(ang)} ${ang.name}</b>
+        ${ang.kiTyp ? `<span class="muted small">(${KI_TYP_NAMEN[ang.kiTyp]||"KI"})</span>` : ""}
+        hat Euch den Krieg erklärt, seine Truppen stehen an Eurer Grenze.</p>
+        <div class="zierlinie" style="margin:10px auto"></div>
+        <table style="max-width:380px;margin:8px auto">
+          <tr><td>Feindliches Heer</td><td class="r red">${fmt(feind)} Mann</td></tr>
+          <tr><td>Eure Verteidiger <span class="muted small">(Heer + Miliz + Aufgebot)</span></td><td class="r">${fmt(eigen)} Mann</td></tr>
+          ${(ver.mauer||0)>0 ? `<tr><td>Eure Festungswerke</td><td class="r green">🏰 +${Math.round((festungsBonus(ver)-1)*100)} % ${a.kr.mauerBruch ? '<span class="red small">(Breschen geschossen!)</span>' : a.kr.hunger ? '<span class="red small">(ausgehungert)</span>' : ""}</td></tr>` : ""}
+        </table>
+        <p class="muted small center" style="margin-top:6px">Stellt Eure Verteidiger auf die fünf Abschnitte,
+        Ihr habt Heimvorteil, Miliz und Volksaufgebot an Eurer Seite.</p>
+      </div>
+      <div class="center" style="margin-top:14px">
+        <button class="btn-danger btn-lg" onclick="verteidigungStarten()">🛡️ Zur Verteidigung!</button>
+      </div>`;
+  },
+
   aufstellungA(){
     const kr = G._kr;
     const p = G.spieler[kr.a];
@@ -5726,10 +5830,11 @@ const SCREENS = {
         <span>${n}${gel[i]&&gel[i].ico?` <span title="${gel[i].n}">${gel[i].ico}</span>`:""}</span>
         <input type="range" min="0" max="4" step="1" value="${G._aufW[i]}"
           oninput="aufstellungGewicht(${i}, this.value)">
-        <span class="v" id="gw${i}">${G._aufW[i]}</span>
+        <span class="v" id="gw${i}" style="min-width:64px">${gewichtText(i)}</span>
       </div>`).join("");
     const presets = AUFSTELLUNGEN.map((a,k)=>
-      `<button class="btn-sm" onclick="aufstellungPreset(${k})">${a.n}</button>`).join("");
+      `<button class="btn-sm ${a.g.join()===G._aufW.join()?'btn-primary':''}" data-preset="${k}"
+        onclick="aufstellungPreset(${k})">${a.n}</button>`).join("");
     setTimeout(()=>zeichneAufstellung("aufVorschau", G._aufE, G._aufW, G._aufFarbe, G._aufRechts), 30);
     return `
       <h2>🗡️ Aufstellung · ${titelName(p)} ${p.name} gegen ${titelName(gegner)} ${gegner.name}</h2>
@@ -5744,6 +5849,8 @@ const SCREENS = {
         </div>
         <div class="card">
           <h3>Vorschau Eurer Schlachtordnung</h3>
+          <p class="muted small">Die Vorschau zeigt das Schlachtfeld wie im Gefecht:
+          oberste Zeile = Nordflanke, unterste = Südflanke. Beide Seiten sehen dieselben Abschnitte.</p>
           <canvas id="aufVorschau" width="440" height="330" style="width:100%;border-radius:10px;border:1px solid var(--border)"></canvas>
           <p class="muted small">⚔️ Infanterie · große Punkte Kavallerie · blasse Punkte Miliz/Aufgebot · Quadrate Artillerie</p>
         </div>
@@ -5799,7 +5906,7 @@ const SCREENS = {
                    <td class="r red">${fmt(s.startG.D-restD)}</td></tr>
              </table>
            </div>
-           <button class="btn-primary btn-lg" onclick="zeige('bauen')">Weiter</button>
+           <button class="btn-primary btn-lg" onclick="schlachtWeiter()">Weiter</button>
            <button class="btn-lg" onclick="replayStarten()">🎞️ Replay ansehen</button>`
         : `<button class="btn-lg" onclick="schlachtUeberspringen()">Schlacht überspringen ⏩</button>`}`;
   },
@@ -6828,6 +6935,10 @@ function kiUebernehmen(idx){
   if(!p || p.ki) return;
   p.ki = true;
   p.kiTyp = "baumeister";
+  /* Offene Angriffe gegen diesen Sitz werden still ausgefochten */
+  const offene = (G._angriffe||[]).filter(x => x.kr.d === idx);
+  G._angriffe = (G._angriffe||[]).filter(x => x.kr.d !== idx);
+  for(const a of offene){ try{ kiSchlacht(a.kr.a, idx); }catch(e){} }
   if(MP){ MP.zuordnung[idx] = null; if(MP.getrennt) delete MP.getrennt[idx]; }
   toast(`🤖 ${titelName(p)} ${p.name} wird fortan von der KI regiert.`);
   const pend = G._pend;
@@ -6905,6 +7016,7 @@ function mpSyncEmpfangen(m){
     G.routen = d.routen || []; G.marktHist = d.marktHist || [];
     G.reichstag = d.reichstag || null; G.reichsfrieden = d.reichsfrieden || 0;
     G.handelsprivileg = d.handelsprivileg || 0;
+    G._angriffe = d.angriffe || [];
     G.spieler.forEach((p,i)=>{
       if(!p.heer) p.heer = {inf:0,kav:0,art:0};
       if(!p.gebaeude) p.gebaeude = [];

@@ -280,3 +280,18 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
   winzige Verlaufskurven der letzten Jahre (grün steigend, rot fallend)
 - **Baustellen**: Neubauten stehen bis zum Zugende in einem Holzgerüst
   mit Bauarbeiter, ehe der goldene Ring verblasst
+
+## Version 3.1 — Die Bots schlagen zurück
+
+- **Interaktive Verteidigung**: Computer-Regenten erklären menschlichen Nachbarn
+  jetzt aktiv den Krieg. Zu Beginn des nächsten Zuges heißt es „Feindliche Heere
+  im Anmarsch!": Kräftevergleich auf Pergament, dann stellt der Verteidiger
+  selbst seine Truppen auf und schlägt die Schlacht am Bildschirm — mit
+  Heimvorteil, Miliz, Volksaufgebot und Festungswerken; danach geht der eigene
+  Zug normal weiter (der Feldzug des Verteidigers bleibt unverbraucht)
+- **Aufstellungs-Auswahl eindeutig**: Abschnitte heißen jetzt Nordflanke bis
+  Südflanke (beide Seiten sehen dieselben Zeilen), das aktive Preset ist golden
+  hervorgehoben, jeder Regler zeigt Gewicht und Prozentanteil live, und die
+  Vorschau erklärt die Blickrichtung
+- **Schlacht auf dem Handy**: größere Schrift auf dem Schlachtfeld,
+  kompakte Armee-Karten, zentrierte Gefechtsanzeige, lesbares Protokoll
