@@ -465,7 +465,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.4 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.4.1 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -2991,6 +2991,47 @@ function zeichneWelt(t=0){
   }
   ctx.fillStyle = "rgba(46,70,56,.16)";
   for(let i=0;i<30;i++){ ctx.beginPath(); ctx.arc(wr()*W, wr()*H, wr()*30+8, 0, 7); ctx.fill(); }
+  /* Wal: taucht periodisch auf und bläst eine Fontäne */
+  {
+    const walP = (t % 16000) / 16000;
+    if(walP > 0.1 && walP < 0.4){
+      const q = (walP - 0.1) / 0.3;
+      const auf = Math.sin(q * Math.PI);
+      const wx3 = W*0.16, wy3 = H*0.82;
+      ctx.save(); ctx.globalAlpha = Math.min(1, auf*1.6);
+      ctx.fillStyle = "#2c3a4a";
+      ctx.beginPath(); ctx.ellipse(wx3, wy3 - auf*4, 16, 5.5*auf + 1, 0, Math.PI, 0); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(wx3+15, wy3-2); ctx.quadraticCurveTo(wx3+24, wy3-9*auf, wx3+27, wy3-2);
+      ctx.quadraticCurveTo(wx3+23, wy3-1, wx3+15, wy3-1); ctx.fill();
+      if(q > 0.3 && q < 0.75){
+        const fq = (q-0.3)/0.45;
+        ctx.strokeStyle = `rgba(200,230,250,${0.7*(1-fq)})`; ctx.lineWidth = 1.4;
+        for(const sw of [-1,0,1]){
+          ctx.beginPath(); ctx.moveTo(wx3-6, wy3 - auf*4 - 2);
+          ctx.quadraticCurveTo(wx3-6 + sw*5, wy3 - auf*4 - 8 - fq*7, wx3-6 + sw*8, wy3 - auf*4 - 5 - fq*10);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+  }
+  /* Seeschlange nach Art alter Karten, samt Warnung */
+  {
+    const sx6 = W*0.845, sy6 = H*0.155;
+    ctx.save();
+    ctx.strokeStyle = "rgba(120,160,150,.5)"; ctx.lineWidth = 2.6; ctx.lineCap = "round";
+    for(let b3=0; b3<3; b3++){
+      const ph3 = t/900 + b3*1.1;
+      ctx.beginPath();
+      ctx.arc(sx6 + b3*15 - 15, sy6 + Math.sin(ph3)*1.5, 6, Math.PI*1.1, Math.PI*1.9);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(120,160,150,.55)";
+    ctx.beginPath(); ctx.moveTo(sx6+24, sy6-3); ctx.lineTo(sx6+31, sy6-7); ctx.lineTo(sx6+30, sy6+1); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(139,150,168,.55)"; ctx.font = "italic 10px Georgia, serif"; ctx.textAlign = "center";
+    ctx.fillText("Hic sunt dracones", sx6 + 5, sy6 + 18);
+    ctx.restore();
+  }
   const n = G.spieler.length;
   const cx = W/2, cy = H/2 + 4, ex = W*0.36, ey = H*0.32;
   const pos = G.spieler.map((_,i)=>{
@@ -3026,6 +3067,49 @@ function zeichneWelt(t=0){
     ctx.beginPath(); ctx.arc(kx-2.5, ky+3, 1.6, 0, 7); ctx.fill();
     ctx.beginPath(); ctx.arc(kx+2.5, ky+3, 1.6, 0, 7); ctx.fill();
   }
+  /* Ehen und Bündnisse als Verbindungslinien mit Siegel in der Mitte */
+  const siegel = [];
+  for(let a2=0; a2<n; a2++) for(let b2=a2+1; b2<n; b2++){
+    const A2 = G.spieler[a2], B2 = G.spieler[b2];
+    if(A2.tot || B2.tot) continue;
+    const ehe = eheAktiv(A2, B2), bnd = buendnisAktiv(A2, B2);
+    if(!ehe && !bnd) continue;
+    const mx2 = (pos[a2][0]+pos[b2][0])/2*0.62 + cx*0.38;
+    const my2 = (pos[a2][1]+pos[b2][1])/2*0.62 + cy*0.38;
+    ctx.strokeStyle = bnd ? "rgba(140,180,220,.5)" : "rgba(220,140,170,.45)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash(bnd ? [] : [2,5]);
+    ctx.beginPath(); ctx.moveTo(pos[a2][0], pos[a2][1]);
+    ctx.quadraticCurveTo(mx2, my2, pos[b2][0], pos[b2][1]); ctx.stroke();
+    ctx.setLineDash([]);
+    const qm = 0.5;
+    const zx = (1-qm)*(1-qm)*pos[a2][0] + 2*(1-qm)*qm*mx2 + qm*qm*pos[b2][0];
+    const zy = (1-qm)*(1-qm)*pos[a2][1] + 2*(1-qm)*qm*my2 + qm*qm*pos[b2][1];
+    siegel.push([zx, zy, bnd ? "🛡️" : "💍"]);
+  }
+  /* Anrückende Heere: rote Marschlinie mit wandernden Truppenpunkten */
+  for(const ag of (G._angriffe||[])){
+    const A2 = pos[ag.kr.a], B2 = pos[ag.kr.d];
+    if(!A2 || !B2) continue;
+    ctx.strokeStyle = "rgba(219,90,90,.6)"; ctx.lineWidth = 2.5; ctx.setLineDash([8,6]);
+    ctx.lineDashOffset = -t/40;
+    ctx.beginPath(); ctx.moveTo(A2[0], A2[1]);
+    ctx.quadraticCurveTo(cx, cy, B2[0], B2[1]); ctx.stroke();
+    ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    for(let tr=0; tr<3; tr++){
+      const q2 = ((t/2600) + tr*0.18) % 1;
+      const iq = 1-q2;
+      const tx = iq*iq*A2[0] + 2*iq*q2*cx + q2*q2*B2[0];
+      const ty = iq*iq*A2[1] + 2*iq*q2*cy + q2*q2*B2[1];
+      ctx.fillStyle = "rgba(219,90,90,.85)";
+      ctx.beginPath(); ctx.arc(tx, ty, 2.4, 0, 7); ctx.fill();
+    }
+    const mxk = (A2[0]+B2[0])/2*0.5 + cx*0.5, myk = (A2[1]+B2[1])/2*0.5 + cy*0.5;
+    const puls2 = 1 + Math.sin(t/220)*0.12;
+    ctx.save(); ctx.translate(mxk, myk); ctx.scale(puls2, puls2);
+    ctx.font = "15px sans-serif"; ctx.textAlign = "center"; ctx.fillText("⚔️", 0, 5);
+    ctx.restore();
+  }
   /* Reiche */
   G.spieler.forEach((p,i)=>{
     const [px,py] = pos[i];
@@ -3045,8 +3129,53 @@ function zeichneWelt(t=0){
       ctx.quadraticCurveTo(bl[k][0], bl[k][1], (bl[k][0]+nx[0])/2, (bl[k][1]+nx[1])/2);
     }
     ctx.closePath();
+    /* Flachwasser-Halo um die Küste */
+    ctx.save();
+    ctx.strokeStyle = "rgba(120,170,210,.16)"; ctx.lineWidth = 9; ctx.stroke();
+    ctx.strokeStyle = "rgba(120,170,210,.10)"; ctx.lineWidth = 16; ctx.stroke();
+    ctx.restore();
     ctx.fillStyle = p.tot ? "#39404a" : saison().g2;
     ctx.fill();
+    /* Sandsaum und Terrain im Inselinneren */
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle = p.tot ? "rgba(90,95,105,.5)" : "rgba(196,177,144,.4)"; ctx.lineWidth = 5;
+    ctx.stroke();
+    if(!p.tot){
+      const sn2 = saison();
+      ctx.fillStyle = sn2.f1 + "55";
+      for(let f2=0; f2<3; f2++){
+        ctx.fillRect(px - rrW*0.7 + f2*rrW*0.5, py + rrW*0.32, rrW*0.38, rrW*0.2);
+      }
+      if(p.land > 12000){
+        for(let b4=0; b4<3; b4++){
+          const bx4 = px - rrW*0.5 + b4*rrW*0.5, by4 = py - rrW*0.42;
+          ctx.fillStyle = "rgba(122,130,144,.75)";
+          ctx.beginPath(); ctx.moveTo(bx4-rrW*0.2, by4); ctx.lineTo(bx4, by4-rrW*0.26); ctx.lineTo(bx4+rrW*0.2, by4);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = "rgba(230,235,242,.8)";
+          ctx.beginPath(); ctx.moveTo(bx4-rrW*0.06, by4-rrW*0.17); ctx.lineTo(bx4, by4-rrW*0.26); ctx.lineTo(bx4+rrW*0.06, by4-rrW*0.17);
+          ctx.closePath(); ctx.fill();
+        }
+      }
+      malBaum(ctx, px - rrW*0.72, py + rrW*0.05, rrW*0.1, sn2.b1, sn2.b2, sn2.schnee);
+      malBaum(ctx, px + rrW*0.68, py - rrW*0.1, rrW*0.09, sn2.b1, sn2.b2, sn2.schnee);
+      const st = Math.min(staedte(p), 4);
+      for(let s2=0; s2<st; s2++){
+        malHaus(ctx, px - rrW*0.4 + s2*rrW*0.28, py + rrW*0.12 + (s2%2)*rrW*0.1, rrW*0.13, "#c4b190", "#96543c", t);
+      }
+      if((p.mauer||0) + (p.burg||0) > 0){
+        const fx2 = px + rrW*0.42, fy2 = py - rrW*0.16;
+        ctx.fillStyle = "#7d7568";
+        ctx.fillRect(fx2 - rrW*0.07, fy2 - rrW*0.22, rrW*0.14, rrW*0.24);
+        for(let z2=0; z2<3; z2++) ctx.fillRect(fx2 - rrW*0.08 + z2*rrW*0.06, fy2 - rrW*0.27, rrW*0.04, rrW*0.06);
+        ctx.fillStyle = p.farbe;
+        ctx.fillRect(fx2 - rrW*0.008, fy2 - rrW*0.38, rrW*0.02, rrW*0.12);
+        ctx.beginPath(); ctx.moveTo(fx2 + rrW*0.01, fy2 - rrW*0.38);
+        ctx.lineTo(fx2 + rrW*0.1, fy2 - rrW*0.35); ctx.lineTo(fx2 + rrW*0.01, fy2 - rrW*0.32);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.restore();
     ctx.strokeStyle = p.farbe; ctx.lineWidth = 2; ctx.setLineDash([6,4]); ctx.stroke(); ctx.setLineDash([]);
     if(i===G.aktiv && !p.tot){
       ctx.strokeStyle = "rgba(224,180,88,"+(0.55+Math.sin(t/300)*0.3)+")"; ctx.lineWidth = 3; ctx.setLineDash([]);
@@ -3054,12 +3183,49 @@ function zeichneWelt(t=0){
     }
     ctx.font = `${Math.round(rrW*0.62)}px sans-serif`; ctx.textAlign = "center";
     ctx.fillText(p.wappen, px, py + rrW*0.2);
-    ctx.font = "600 13px sans-serif"; ctx.fillStyle = "#dbe2ee";
-    ctx.fillText(`${titelName(p)} ${p.name}${p.tot?" †":""}`, px, py + rrW*0.85 + 16);
+    /* Namensschild: dunkle Plakette mit Goldrand */
+    const nm = `${titelName(p)} ${p.name}${p.tot?" †":""}`;
+    ctx.font = "600 13px sans-serif";
+    const bw = Math.max(ctx.measureText(nm).width, 118) + 18;
+    const bx5 = px - bw/2, by5 = py + rrW*0.85 + 4;
+    ctx.fillStyle = "rgba(13,17,23,.78)";
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(bx5, by5, bw, 34, 7); else ctx.rect(bx5, by5, bw, 34);
+    ctx.fill();
+    ctx.strokeStyle = i===G.aktiv && !p.tot ? "rgba(224,180,88,.8)" : "rgba(224,180,88,.28)";
+    ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = "#dbe2ee";
+    ctx.fillText(nm, px, by5 + 14);
     ctx.font = "11px sans-serif"; ctx.fillStyle = "#8b96a8";
-    ctx.fillText(`${fmt(p.land)} ha · ${fmt(p.pop)} Einw.`, px, py + rrW*0.85 + 30);
+    ctx.fillText(`${fmt(p.land)} ha · ${fmt(p.pop)} Einw.`, px, by5 + 27);
     ctx.restore();
   });
+  /* Siegel der Ehen und Bündnisse über den Linien */
+  ctx.font = "13px sans-serif"; ctx.textAlign = "center";
+  for(const [sx7, sy7, ico7] of siegel){
+    ctx.fillStyle = "rgba(13,17,23,.7)";
+    ctx.beginPath(); ctx.arc(sx7, sy7, 10, 0, 7); ctx.fill();
+    ctx.fillText(ico7, sx7, sy7 + 4);
+  }
+  /* Möwen kreisen über dem Meer */
+  ctx.strokeStyle = "rgba(226,232,242,.5)"; ctx.lineWidth = 1.2; ctx.lineCap = "round";
+  for(let mo=0; mo<3; mo++){
+    const ma = t/2100 + mo*2.1;
+    const mxx = W*0.5 + Math.cos(ma)*(W*0.31 + mo*20);
+    const myy = H*0.5 + Math.sin(ma)*(H*0.33 + mo*8);
+    const fl3 = Math.sin(t/150 + mo*2)*2.2;
+    ctx.beginPath();
+    ctx.moveTo(mxx-3.6, myy - fl3); ctx.quadraticCurveTo(mxx, myy+1, mxx+3.6, myy - fl3);
+    ctx.stroke();
+  }
+  /* Wolkenschatten ziehen über die Karte */
+  ctx.fillStyle = "rgba(6,9,14,.10)";
+  for(let ws=0; ws<2; ws++){
+    const wsx = ((t/(160+ws*70) + ws*500) % (W+420)) - 210;
+    const wsy = H*(0.3 + ws*0.35);
+    ctx.beginPath(); ctx.ellipse(wsx, wsy, 130, 42, -0.25, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(wsx+80, wsy+16, 90, 30, -0.25, 0, 7); ctx.fill();
+  }
   /* Ein Segelschiff kreuzt das Weltmeer am Kartenrand */
   {
     const bahn = (t/34000) % 1;

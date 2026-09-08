@@ -323,3 +323,10 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Porträts:** Die Regenten blinzeln auf dem Status-Bildschirm alle paar Sekunden.
 - **UI-Politur:** Knöpfe reagieren mit Druck-Effekt und Gold-Glanz (Primärknöpfe schimmern beim Überfahren), Fokus-Ringe für Tastatur-Bedienung, gestylte Scrollleisten, Zeilen-Hover in Tabellen, sanft animierte Moral- und Stärkebalken, Pergamente entrollen sich beim Erscheinen, Bilanz-Deltas blitzen kurz grün/rot auf, neue Schlachtlog-Zeilen gleiten herein.
 - **Barrierefreiheit:** Wer im System „Bewegung reduzieren" wählt, bekommt alle Animationen stillgelegt.
+
+## Version 3.4.1 — Die bekannte Welt, neu gestochen
+
+- **Insel-Terrain:** Jedes Reich zeigt auf der Weltkarte echtes Land: Felder, Wäldchen, Bergkämme mit Schneekuppen (ab 12.000 ha), Häusergruppen je Stadt mit Kaminrauch und einen Festungsturm mit Hausbanner, sobald Mauer oder Burg stehen. Küsten bekommen Sandsaum und Flachwasser-Halo.
+- **Lesbare Namensschilder:** Name und Kennzahlen jedes Regenten stehen auf dunklen Goldrand-Plaketten; das aktive Reich trägt einen helleren Rahmen.
+- **Beziehungen sichtbar:** Ehen (rosé, 💍-Siegel) und Bündnisse (stahlblau, 🛡️-Siegel) verbinden die Häuser als eigene Linien. Anrückende Heere erscheinen als rot marschierende Linie mit wandernden Truppenpunkten und pulsierendem ⚔️.
+- **Lebendiges Weltmeer:** Ein Wal taucht periodisch auf und bläst seine Fontäne, eine Seeschlange ziert die Karte („Hic sunt dracones"), Möwen kreisen, und Wolkenschatten ziehen über See und Inseln.
