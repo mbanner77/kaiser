@@ -295,3 +295,11 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
   Vorschau erklärt die Blickrichtung
 - **Schlacht auf dem Handy**: größere Schrift auf dem Schlachtfeld,
   kompakte Armee-Karten, zentrierte Gefechtsanzeige, lesbares Protokoll
+
+## Version 3.2 — Große Bühne, kluge Schlachten, sprechende Höfe
+
+- **Saison- und Wetter-Anzeigen groß und lesbar:** Das Jahreszeiten-Panorama im Zugwechsel ist dreimal so hoch und trägt einen großen Titel (Saison, Anno, Spruch) als gut lesbares Overlay. Die Jahresbilanz zeigt das Erntewetter als große Schlagzeile mit Ertragsfaktor über einem höheren Wetterbild.
+- **Scroll-Fix (Mobil):** Beim Truppenkauf und anderen Aktionen, die die Ansicht nur aktualisieren, springt die Seite nicht mehr nach oben. Nur echte Bildschirmwechsel scrollen an den Anfang.
+- **Schlacht-Animationen:** Das Feld bebt bei schweren Einschlägen, Musketen-Salven blitzen an der Front, stürmende Kavallerie zieht Staubstreifen, Durchbrüche leuchten golden auf, Pulverdunst legt sich mit der Dauer des Gefechts über die Feldmitte, und die geschlagene Seite flieht sichtbar vom Feld.
+- **Schlachtenlogik:** Neue Reserve-Regel: Vor der Schlacht lassen sich 20 % oder 35 % der Truppen (ohne Artillerie) zurückhalten; die Reserve rückt ein, sobald die eigene Linie wankt, und hebt die Moral. Morgennebel macht die Artillerie halb blind, beschleunigt aber den Vormarsch. Nach einer Flucht setzt die Reiterei des Siegers den Fliehenden nach. KI-Verteidiger halten je nach Charakter selbst Reserven.
+- **Botschaften an fremde Höfe:** In der Diplomatie lassen sich freundliche Worte, Drohungen, Tributforderungen oder frei formulierte Botschaften senden. Bots antworten nach Charakter und Kräfteverhältnis: Schwache zahlen Tribut, Starke weisen Drohungen zurück — oder erklären den Krieg, der dann zu Beginn des eigenen Zuges verteidigt werden muss. Botschaften an menschliche Mitspieler werden zu Beginn von deren Zug überbracht (auch asynchron im Mehrspieler-Modus).
