@@ -314,3 +314,12 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Bündnisse mit Beistandspflicht:** Neue Diplomatie-Aktion (8 Jahre, 1.000 T, ab +25 Verhältnis). Wird ein Partner angegriffen, kämpft der andere automatisch mit; Verbündete können einander nicht angreifen. Wer den Beistand verweigert, zerbricht das Bündnis und verliert viel Ansehen.
 - **Erfolge-Galerie ausgebaut:** Fortschrittsbalken und ein Wappen-Kabinett — 4 Prunk-Wappen (👑 🦄 🔥 ⚜️) werden über gesammelte Erfolge für neue Partien freigeschaltet.
 - **Chronik-Zeitstrahl:** Die Reichsgeschichte als gezeichneter Zeitstrahl in der Statistik und der Schlusswertung, samt Ereignisliste und „Als Bild speichern".
+
+## Version 3.4 — Feinschliff: Grafik, UI und Animationen
+
+- **Schlachtfeld:** Die Feldbanner tragen jetzt die Wappen beider Regenten und neigen sich sichtbar, wenn die Moral der Seite sinkt. Nach dem Gefecht erscheint eine Sieges-Zeremonie direkt auf dem Feld: Pokal, Wappen und Namenszug des Siegers schweben ein, Goldfunken rieseln über die siegreiche Hälfte.
+- **Lebendige Reichskarte:** Aus den Häusern der Dörfer und Städte steigt träger Kaminrauch auf.
+- **Titelbild:** In tiefer Nacht huscht alle paar Sekunden eine Sternschnuppe über den Himmel.
+- **Porträts:** Die Regenten blinzeln auf dem Status-Bildschirm alle paar Sekunden.
+- **UI-Politur:** Knöpfe reagieren mit Druck-Effekt und Gold-Glanz (Primärknöpfe schimmern beim Überfahren), Fokus-Ringe für Tastatur-Bedienung, gestylte Scrollleisten, Zeilen-Hover in Tabellen, sanft animierte Moral- und Stärkebalken, Pergamente entrollen sich beim Erscheinen, Bilanz-Deltas blitzen kurz grün/rot auf, neue Schlachtlog-Zeilen gleiten herein.
+- **Barrierefreiheit:** Wer im System „Bewegung reduzieren" wählt, bekommt alle Animationen stillgelegt.

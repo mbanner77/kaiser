@@ -135,7 +135,37 @@
     padding:10px 18px;cursor:pointer;margin:4px 8px 4px 0;
     transition:transform .06s, background .15s, border-color .15s, filter .15s;
   }
-  button:hover:not(:disabled){border-color:var(--gold);}
+  button:hover:not(:disabled){border-color:var(--gold);box-shadow:0 3px 14px rgba(224,180,88,.14);}
+  button:active:not(:disabled){transform:scale(.965);}
+  button{transition:border-color .18s ease, box-shadow .18s ease, transform .1s ease, background .18s ease;}
+  .btn-primary{position:relative;overflow:hidden;}
+  .btn-primary::after{content:"";position:absolute;top:0;left:-80%;width:45%;height:100%;
+    background:linear-gradient(105deg,transparent,rgba(255,255,255,.28),transparent);
+    transform:skewX(-18deg);transition:left .05s;pointer-events:none;opacity:0;}
+  .btn-primary:hover::after{animation:btnGlanz .8s ease;opacity:1;}
+  @keyframes btnGlanz{from{left:-80%;}to{left:130%;}}
+  :focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:6px;}
+  .moral div{transition:width .55s cubic-bezier(.3,.9,.4,1);}
+  .strbar div{transition:width .55s cubic-bezier(.3,.9,.4,1);}
+  table tr:hover td{background:rgba(255,255,255,.03);}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:#2a3546;border-radius:99px;border:2px solid #0d1117;}
+  ::-webkit-scrollbar-thumb:hover{background:#3a4a60;}
+  .pergament{animation:pergamentAuf .5s cubic-bezier(.2,.9,.3,1) both;}
+  @keyframes pergamentAuf{from{opacity:0;transform:translateY(12px) scale(.96,.9);}to{opacity:1;transform:none;}}
+  .delta-pos{animation:deltaGruen 1.1s ease both;}
+  .delta-neg{animation:deltaRot 1.1s ease both;}
+  @keyframes deltaGruen{0%{background:rgba(94,190,120,.28);}100%{background:transparent;}}
+  @keyframes deltaRot{0%{background:rgba(219,90,90,.24);}100%{background:transparent;}}
+  .battlelog p:first-child{animation:logNeu .4s ease both;}
+  @keyframes logNeu{from{opacity:0;transform:translateX(-10px);}to{opacity:1;transform:none;}}
+  .stat{transition:border-color .2s ease, box-shadow .2s ease;}
+  .stat:hover{border-color:rgba(224,180,88,.55);box-shadow:0 4px 16px rgba(0,0,0,.3);}
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;
+      transition-duration:.01ms !important;}
+  }
   button:active:not(:disabled){transform:scale(.97);}
   button:disabled{opacity:.35;cursor:default;}
   .btn-primary{background:linear-gradient(180deg,var(--gold) 0%,var(--gold2) 100%);color:#1a1509;border-color:var(--gold2);
@@ -435,7 +465,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.3 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.4 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -1878,7 +1908,7 @@ function replayStarten(){
   }, 150);
 }
 /* ---------- Regenten-Porträt (prozedural: Rang, Geschlecht, Alter) ---------- */
-function zeichnePortraet(cid, p){
+function zeichnePortraet(cid, p, t=0){
   const c = document.getElementById(cid);
   if(!c || !p) return;
   const ctx = c.getContext("2d");
@@ -2030,13 +2060,20 @@ function zeichnePortraet(cid, p){
       ctx.beginPath(); ctx.moveTo(cx-kr*0.3, kopfY+kr*0.48); ctx.quadraticCurveTo(cx, kopfY+kr*0.6, cx+kr*0.3, kopfY+kr*0.48); ctx.stroke();
     }
   }
-  /* Augen, Brauen, Nase, Mund */
+  /* Augen, Brauen, Nase, Mund. Alle paar Sekunden ein Wimpernschlag */
   const augY = kopfY - kr*0.08;
+  const blinzelt = t > 0 && ((t + idx*1300) % 4300) < 140;
   for(const s of [-1,1]){
+    if(blinzelt){
+      ctx.strokeStyle = "rgba(90,64,44,.85)"; ctx.lineWidth = 2; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(cx+s*kr*0.2, augY); ctx.lineTo(cx+s*kr*0.5, augY); ctx.stroke();
+      ctx.fillStyle = "#fff";
+    } else {
     ctx.fillStyle = "#fff";
     ctx.beginPath(); ctx.ellipse(cx+s*kr*0.35, augY, kr*0.16, kr*0.10, 0, 0, 7); ctx.fill();
     ctx.fillStyle = ["#4a3a28","#3a5a6a","#3f5a3a"][Math.floor(rng()*3)];
     ctx.beginPath(); ctx.arc(cx+s*kr*0.35, augY, kr*0.065, 0, 7); ctx.fill();
+    }
     ctx.strokeStyle = haar; ctx.lineWidth = 3; ctx.lineCap="round";
     ctx.beginPath(); ctx.moveTo(cx+s*kr*0.18, augY-kr*0.22); ctx.lineTo(cx+s*kr*0.52, augY-kr*(0.24+rng()*0.05)); ctx.stroke();
   }
@@ -2320,6 +2357,22 @@ function zeichneTitel(t){
     ctx.fillStyle = `rgba(235,240,250,${hell})`;
     ctx.beginPath(); ctx.arc(seedX*W, seedY*H*0.4, 0.8 + zwinkern*0.7, 0, 7); ctx.fill();
   }
+  /* Sternschnuppe: alle ~9 s huscht eine über den Nachthimmel */
+  if(nachtFaktor > 0.55){
+    const periode = 9000, ph2 = (t % periode) / periode;
+    if(ph2 < 0.09){
+      const q3 = ph2 / 0.09;
+      const startX = W*(0.15 + ((Math.floor(t/periode)*137)%60)/100);
+      const sx4 = startX + q3*W*0.22, sy4 = H*0.06 + q3*H*0.16;
+      const grad4 = ctx.createLinearGradient(sx4-46*(1-q3*0.4), sy4-30*(1-q3*0.4), sx4, sy4);
+      grad4.addColorStop(0, "rgba(235,240,250,0)");
+      grad4.addColorStop(1, `rgba(235,240,250,${0.8*nachtFaktor*(1-q3)})`);
+      ctx.strokeStyle = grad4; ctx.lineWidth = 1.6; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(sx4-46*(1-q3*0.4), sy4-30*(1-q3*0.4)); ctx.lineTo(sx4, sy4); ctx.stroke();
+      ctx.fillStyle = `rgba(250,252,255,${0.9*nachtFaktor*(1-q3)})`;
+      ctx.beginPath(); ctx.arc(sx4, sy4, 1.6, 0, 7); ctx.fill();
+    }
+  }
   /* Wolken ziehen */
   ctx.fillStyle = "rgba(220,215,230,.10)";
   for(let i=0;i<4;i++){
@@ -2401,10 +2454,23 @@ function malBlob(ctx, pts){
   }
   ctx.closePath();
 }
-function malHaus(ctx, x, y, s, wand, dach){
+function malHaus(ctx, x, y, s, wand, dach, t=0){
   ctx.fillStyle = wand; ctx.fillRect(x-s/2, y-s/2, s, s*0.8);
   ctx.fillStyle = dach;
   ctx.beginPath(); ctx.moveTo(x-s*0.65,y-s/2); ctx.lineTo(x,y-s*1.15); ctx.lineTo(x+s*0.65,y-s/2); ctx.closePath(); ctx.fill();
+  /* Kaminrauch: kleine Wölkchen steigen träge auf (nur bei jedem 2. Haus) */
+  if(t && (Math.floor(x*7.3) % 2 === 0)){
+    const kx = x + s*0.3;
+    for(let r=0; r<3; r++){
+      const q = ((t/2400) + r*0.33 + x*0.05) % 1;
+      const alpha = 0.22 * (1-q) * (0.6 + 0.4*Math.sin(x));
+      if(alpha <= 0.02) continue;
+      ctx.fillStyle = `rgba(200,204,212,${alpha})`;
+      ctx.beginPath();
+      ctx.arc(kx + Math.sin(q*6 + x)*2.2, y - s*1.2 - q*s*1.6, 0.8 + q*1.8, 0, 7);
+      ctx.fill();
+    }
+  }
 }
 function malBaum(ctx, x, y, s, c1="#1e3a1c", c2="#25491f", schnee=false){
   ctx.fillStyle = c1;
@@ -2668,7 +2734,7 @@ function zeichneKarte(p, canvasId, t=0){
   const haeuser = clamp(Math.round(p.pop/1100), 3, 26);
   for(let i=0;i<haeuser;i++){
     const a = rng()*6.2832, d = rng()*rr*0.24;
-    malHaus(ctx, cx+Math.cos(a)*d*1.3, cy+10+Math.sin(a)*d*0.7, 9, "#b09877", "#8a4a35");
+    malHaus(ctx, cx+Math.cos(a)*d*1.3, cy+10+Math.sin(a)*d*0.7, 9, "#b09877", "#8a4a35", t);
   }
   /* Dorfkirche und Brunnen im Herzen des Reiches */
   {
@@ -2713,7 +2779,7 @@ function zeichneKarte(p, canvasId, t=0){
     ctx.beginPath(); ctx.arc(sx, sy, 21, 0, 7); ctx.stroke();
     ctx.fillStyle = "#9aa3ad";
     for(let z=0;z<8;z++){ const za=z/8*6.2832; ctx.fillRect(sx+Math.cos(za)*21-1.5, sy+Math.sin(za)*21-1.5, 3.5, 3.5); }
-    for(let h=0;h<4;h++) malHaus(ctx, sx+(rng()-0.5)*18, sy+3+(rng()-0.5)*12, 7, "#c4b190", "#96543c");
+    for(let h=0;h<4;h++) malHaus(ctx, sx+(rng()-0.5)*18, sy+3+(rng()-0.5)*12, 7, "#c4b190", "#96543c", t);
     ctx.fillStyle = p.farbe;
     ctx.fillRect(sx-1, sy-33, 2, 13);
     const sw = Math.sin(t/280 + s)*2;
@@ -3452,18 +3518,25 @@ function zeichneFeld(t=0){
     }
   });
 
-  /* Feldbanner */
-  const banner = (bx, farbe, ph) => {
+  /* Feldbanner mit Wappen. Bei sinkender Moral neigt sich die Fahne */
+  const banner = (bx, farbe, ph, wp, moral) => {
+    const kippen = (100 - (moral===undefined?100:moral)) / 100 * 0.35;
+    ctx.save();
+    ctx.translate(bx, oben-4);
+    ctx.rotate(bx < W/2 ? -kippen : kippen);
     ctx.strokeStyle = "#5a4a30"; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(bx, oben-4); ctx.lineTo(bx, oben-34); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -30); ctx.stroke();
     ctx.fillStyle = farbe;
     const wf = Math.sin(t/240 + ph)*3;
-    ctx.beginPath(); ctx.moveTo(bx, oben-34);
-    ctx.quadraticCurveTo(bx+10, oben-32+wf, bx+20, oben-29+wf);
-    ctx.quadraticCurveTo(bx+10, oben-26+wf*0.5, bx, oben-22);
+    ctx.beginPath(); ctx.moveTo(0, -30);
+    ctx.quadraticCurveTo(10, -28+wf, 20, -25+wf);
+    ctx.quadraticCurveTo(10, -22+wf*0.5, 0, -18);
     ctx.closePath(); ctx.fill();
+    if(wp){ ctx.font = "11px sans-serif"; ctx.textAlign = "center"; ctx.fillText(wp, 8, -21); }
+    ctx.restore();
   };
-  banner(W*0.05, fA, 0); banner(W*0.95-20, fD, 2);
+  banner(W*0.05, fA, 0, G._kr ? G.spieler[G._kr.a].wappen : "", s.moralA);
+  banner(W*0.95-20, fD, 2, G._kr ? G.spieler[G._kr.d].wappen : "", s.moralD);
 
   /* Partikel: Kanonenkugeln (Flugbahn), Explosionen, Nahkampfstaub */
   const jetzt = performance.now();
@@ -3615,6 +3688,36 @@ function zeichneFeld(t=0){
       ctx.beginPath();
       ctx.moveTo(kxx-3.4, kyy - fl2); ctx.quadraticCurveTo(kxx, kyy+1.2, kxx+3.4, kyy - fl2);
       ctx.stroke();
+    }
+  }
+  /* Sieges-Zeremonie: Lorbeer und Wappen des Siegers, Goldfunken rieseln */
+  if(s.fertig && !s.replayAktiv && s.fertigZeit && G._kr){
+    const seit = jetztF - s.fertigZeit;
+    const q = Math.min(1, seit/900);
+    const ease2 = 1 - Math.pow(1-q, 3);
+    const wx5 = s.sieger==="A" ? W*0.28 : W*0.72;
+    const gewinner = G.spieler[s.sieger==="A" ? G._kr.a : G._kr.d];
+    ctx.save();
+    ctx.globalAlpha = ease2;
+    ctx.translate(wx5, H*0.30 - (1-ease2)*24);
+    ctx.scale(0.6 + ease2*0.4, 0.6 + ease2*0.4);
+    ctx.textAlign = "center";
+    ctx.font = "38px sans-serif"; ctx.fillText("🏆", 0, 0);
+    ctx.font = "22px sans-serif"; ctx.fillText(gewinner.wappen, 0, -34);
+    ctx.font = "600 13px Georgia, serif"; ctx.fillStyle = "#e0b458";
+    ctx.fillText(`${titelName(gewinner)} ${gewinner.name} behält das Feld`, 0, 22);
+    ctx.restore();
+    /* Goldfunken rieseln über die Sieger-Hälfte */
+    if(seit < 6000){
+      ctx.fillStyle = "rgba(224,180,88,.75)";
+      for(let gf=0; gf<14; gf++){
+        const seed = ((gf*67)%91)/91;
+        const gy = ((seit/(9+seed*7)) + gf*43) % (H*0.7);
+        const gx = wx5 + Math.sin(seit/500 + gf)*W*0.13 + (seed-0.5)*W*0.2;
+        ctx.globalAlpha = 0.7 * (1 - gy/(H*0.7));
+        ctx.beginPath(); ctx.arc(gx, H*0.1 + gy, 1.1 + seed, 0, 7); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
   }
   /* Weisse Flagge + Sieger-Vignette */
@@ -7855,7 +7958,7 @@ function animLoop(t){
   if(document.hidden) return;
   if(G.screen === "title")        zeichneTitel(t);
   else if(G.screen === "bauen")   zeichneKarte(cur(), "karte", t);
-  else if(G.screen === "status")  zeichneKarte(cur(), "karteS", t);
+  else if(G.screen === "status"){ zeichneKarte(cur(), "karteS", t); zeichnePortraet("portraitS", cur(), t); }
   else if(G.screen === "schlacht"){ if(!(G._s && G._s.replayAktiv)) zeichneFeld(t); }
   else if(G.screen === "welt")    zeichneWelt(t);
   else if(G.screen === "bilanz")  zeichneWetter(t);
