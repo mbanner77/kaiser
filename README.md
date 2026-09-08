@@ -330,3 +330,15 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Lesbare Namensschilder:** Name und Kennzahlen jedes Regenten stehen auf dunklen Goldrand-Plaketten; das aktive Reich trägt einen helleren Rahmen.
 - **Beziehungen sichtbar:** Ehen (rosé, 💍-Siegel) und Bündnisse (stahlblau, 🛡️-Siegel) verbinden die Häuser als eigene Linien. Anrückende Heere erscheinen als rot marschierende Linie mit wandernden Truppenpunkten und pulsierendem ⚔️.
 - **Lebendiges Weltmeer:** Ein Wal taucht periodisch auf und bläst seine Fontäne, eine Seeschlange ziert die Karte („Hic sunt dracones"), Möwen kreisen, und Wolkenschatten ziehen über See und Inseln.
+
+## Version 3.5 — Thronfolger, Spione und die große Krönung
+
+- **Thronfolger & Erziehung:** Dem Haus werden Kinder geboren (mit Ehe öfter). Die Erziehung — Marschall, Kontor oder Gelehrte — bestimmt den Charakterzug, mit dem der Erbe später wirklich den Thron besteigt, samt echtem Alter und Namen.
+- **Spionage-Missionen:** Neben dem Geheimbericht jetzt Sabotage (Mauer sprengen), Speicherbrand und Aufruhr. Gefasste Spione lösen Skandale aus, bis hin zur Kriegserklärung. Gegenspione (500 T/Jahr) schützen das eigene Reich.
+- **Entdeckerfahrten:** Expeditionen (2.500 T) kehren nach 2 bis 4 Jahren zurück, mit Gold, exotischen Waren, Seekarten (nächste Fahrt kürzer), oder gar nicht. Ein Hafen verbessert die Aussichten.
+- **Turniere & Volksfeste:** Das Volksfest hebt die Stimmung, das Ritterturnier (ab Graf) lädt alle Höfe, mit animierter Tjost-Szene, Lanzensplittern und Sieger-Zeremonie.
+- **Klickbare Weltkarte:** Ein Klick auf eine Insel öffnet das Dossier des Reiches: Kennzahlen, Verhältnis, Verträge, Geheimbericht und Schnellzugriff auf Diplomatie oder Angriff.
+- **Stadtbrand & Hochwasser:** Neue Katastrophen können Märkte und Mühlen zerstören. Brandruinen rauchen auf der Reichskarte, bis neu gebaut wird.
+- **Machtindex & Astrologe:** Die Statistik zeigt den Machtindex aller Reiche im Verlauf, und der Hofastrologe deutet, wer auf dem Weg zur Krone vorn liegt und wer am schnellsten aufsteigt.
+- **Drei Spielstand-Plätze:** Benannte Speicherplätze mit Vorschau (Regent, Jahr, Punkte, Datum) plus die automatische Jahres-Sicherung, erreichbar vom Titel und aus dem Menü.
+- **Krönungs-Zeremonie:** Wer die Kathedrale vollendet, erlebt ein Finale: Prozession durchs Kirchenschiff, Rosette, Weihrauch, die Krone senkt sich — dann erst folgt die Schlusswertung.

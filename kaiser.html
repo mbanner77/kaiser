@@ -431,7 +431,8 @@
   <details class="menu" id="sysmenu">
     <summary>☰ Menü</summary>
     <div class="menu-inhalt" onclick="$('#sysmenu').removeAttribute('open')">
-      <button id="btnExport" style="display:none" onclick="exportSpielstand()">💾 Spielstand speichern</button>
+      <button id="btnExport" style="display:none" onclick="exportSpielstand()">📤 Spielstand als Datei</button>
+      <button onclick="staendeAuf()">💾 Spielstände</button>
       <button onclick="$('#importFile').click()">📂 Spielstand laden</button>
       <button onclick="erfolgeAuf()">🏅 Erfolge</button>
       <button onclick="ruhmAuf()">🏆 Ruhmeshalle</button>
@@ -465,7 +466,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.4.1 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.5 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -481,6 +482,21 @@ const TITEL = [
   ["Fürst","Fürstin"],["Herzog","Herzogin"],["Kurfürst","Kurfürstin"],["König","Königin"],["Kaiser","Kaiserin"]
 ];
 const NAMEN = ["Friedrich","Anna","Wilhelm","Luise","Karl","Sophie","Otto","Marie","Georg"];
+const KINDER_M = ["Friedrich","Wilhelm","Karl","Heinrich","Ludwig","Konrad","Albrecht","Leopold"];
+const KINDER_W = ["Anna","Luise","Sophie","Adelheid","Mathilde","Klara","Editha","Theresia"];
+const ERZIEHUNG = [
+  { zug:"kriegerisch",  ico:"🛡️", n:"Beim Marschall",     d:"Der Erbe lernt das Kriegshandwerk (Zug: Kriegerisch)." },
+  { zug:"haendlerisch", ico:"⚖️", n:"Im Kontor",          d:"Der Erbe lernt rechnen und feilschen (Zug: Händlerisch)." },
+  { zug:"gelehrt",      ico:"📚", n:"Bei den Gelehrten",  d:"Der Erbe studiert Schrift und Staatskunst (Zug: Gelehrt)." }
+];
+function erziehen(zug){
+  const p = cur();
+  if(!p.erbe || p.erbe.zug) return;
+  p.erbe.zug = zug;
+  const e = ERZIEHUNG.find(x=>x.zug===zug);
+  toast(`${e.ico} ${p.erbe.name} wird fortan ${e.n.toLowerCase()} erzogen.`);
+  render();
+}
 const FARBEN = ["#5fb8d4","#e0b458","#4cc38a","#e5636f","#b58fd4","#d9973f","#7fd4c1","#e08ab8","#a8c46a"];
 const WAPPEN = ["🦅","🦁","🐺","🌹","⚔️","⭐","🐉","🛡️","🌙"];
 /* Bonus-Wappen, freigeschaltet über gesammelte Erfolge */
@@ -1291,6 +1307,17 @@ function zwischenbilanz(p){
   r.migration  = Math.round(p.pop * 0.05 * (p.stimmung-50)/100 * g);
   p.pop = Math.max(50, p.pop + r.geburten - r.tote - r.verhungert + r.migration);
   if(p.stimmung >= 90) erfolg("volk");
+  /* Thronfolger: dem Haus wird ein Kind geboren */
+  if(!p.erbe && alterJahre(p) >= 20 && alterJahre(p) <= 55){
+    const verm = p.ehen && Object.values(p.ehen).some(j=>j>=G.jahr);
+    if(Math.random() < (verm ? 0.22 : 0.13)){
+      const w = Math.random() < 0.5;
+      const pool = w ? KINDER_W : KINDER_M;
+      p.erbe = { name: pool[ri(0,pool.length-1)], w, geb: G.jahr, zug: p.ki ? wuerfleZug() : null };
+      r.ereignisse.push({ t:`🍼 Dem Hause wird ${w?"eine Tochter":"ein Sohn"} geboren: <b>${p.erbe.name}</b>! ${p.ki?"":"Wählt unten die Erziehung."}`, c:"good" });
+      geschichte("🍼", `${p.name}s Haus feiert die Geburt von ${p.erbe.name}.`);
+    }
+  }
   r.f = f;
   p.zb = r;
 }
@@ -1340,6 +1367,9 @@ function jahresschluss(p){
   p.geld -= r.unterhalt;
   r.gehaelter = beraterGehalt(p);
   p.geld -= r.gehaelter;
+  r.spione = p.gegenspione ? 500 : 0;
+  p.geld -= r.spione;
+  expeditionAufloesen(p, r);
   /* Berater-Agenden: gelegentliche Zwischenfälle */
   if(p.berater && p.berater.schatz && Math.random() < 0.05){
     p.geld -= 1000;
@@ -1368,7 +1398,7 @@ function jahresschluss(p){
   auftragPruefen(p, r);
   if(G.jahr >= 1750 && !p.ki) erfolg("chronist");
   p.report = r;
-  p.chronik = (p.chronik||[]).concat({ j:G.jahr, pop:p.pop, geld:Math.round(p.geld), land:p.land, heer:heerGroesse(p.heer) }).slice(-80);
+  p.chronik = (p.chronik||[]).concat({ j:G.jahr, pop:p.pop, geld:Math.round(p.geld), land:p.land, heer:heerGroesse(p.heer), mi:score(p) }).slice(-80);
   quicksave();
 }
 
@@ -2555,6 +2585,17 @@ function malBruch(ctx, x, y){
   ctx.fillStyle = "#6f695f";
   ctx.fillRect(x-2, y+2, 5, 4); ctx.fillRect(x+5, y+3, 4, 3);
 }
+function malRuine(ctx, x, y, t=0){
+  ctx.fillStyle = "#2a2622";
+  ctx.fillRect(x-6, y-3, 12, 7);
+  ctx.strokeStyle = "#191613"; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(x-6, y-3); ctx.lineTo(x-2, y-9); ctx.moveTo(x+1, y-3); ctx.lineTo(x+4, y-8); ctx.stroke();
+  for(let r=0; r<2; r++){
+    const q = ((t/2900) + r*0.5 + x*0.03) % 1;
+    ctx.fillStyle = `rgba(90,88,86,${0.3*(1-q)})`;
+    ctx.beginPath(); ctx.arc(x + Math.sin(q*5+x)*3, y - 8 - q*12, 1.5 + q*2.5, 0, 7); ctx.fill();
+  }
+}
 function zeichneKarte(p, canvasId, t=0){
   const c = document.getElementById(canvasId);
   if(!c || !p) return;
@@ -2789,6 +2830,11 @@ function zeichneKarte(p, canvasId, t=0){
     ctx.closePath(); ctx.fill();
   }
   /* Märkte & Mühlen an ihren gebauten Plätzen (mit Schatten) */
+  /* Brandruinen mahnen, bis wieder aufgebaut wird */
+  for(let ru=0; ru<Math.min(p._ruinen||0, 4); ru++){
+    const ra = 1.1 + ru*1.7, rd = 0.5 + (ru%2)*0.22;
+    malRuine(ctx, cx + Math.cos(ra)*rd*rr*1.25, cy + Math.sin(ra)*rd*rr*0.75, t);
+  }
   (p.gebaeude||[]).forEach((g,i)=>{
     const gx = cx + Math.cos(g.ang)*g.dist*rr*1.25;
     const gy = cy + Math.sin(g.ang)*g.dist*rr*0.75;
@@ -3181,6 +3227,12 @@ function zeichneWelt(t=0){
       ctx.strokeStyle = "rgba(224,180,88,"+(0.55+Math.sin(t/300)*0.3)+")"; ctx.lineWidth = 3; ctx.setLineDash([]);
       ctx.beginPath(); ctx.arc(px, py, rrW*1.35, 0, 7); ctx.stroke();
     }
+    if(i===G._dossier){
+      ctx.strokeStyle = "rgba(226,232,242,.8)"; ctx.lineWidth = 2; ctx.setLineDash([3,4]);
+      ctx.lineDashOffset = -t/60;
+      ctx.beginPath(); ctx.arc(px, py, rrW*1.5, 0, 7); ctx.stroke();
+      ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    }
     ctx.font = `${Math.round(rrW*0.62)}px sans-serif`; ctx.textAlign = "center";
     ctx.fillText(p.wappen, px, py + rrW*0.2);
     /* Namensschild: dunkle Plakette mit Goldrand */
@@ -3382,7 +3434,25 @@ function zeichneWetter(t=0){
   ctx.fillStyle = "rgba(13,17,23,.72)"; ctx.fillRect(10, H-28, 300, 20);
   /* Der Wettertitel liegt als großes HTML-Overlay über dem Bild */
 }
-function weltAuf(){ G._vorWelt = G.screen; zeige("welt"); }
+function weltAuf(){ G._vorWelt = G.screen; G._dossier = null; zeige("welt"); }
+function weltKlick(ev){
+  const c = document.getElementById("welt");
+  if(!c) return;
+  const rect = c.getBoundingClientRect();
+  const x = (ev.clientX - rect.left) * (c.width / rect.width);
+  const y = (ev.clientY - rect.top) * (c.height / rect.height);
+  const W = c.width, H = c.height, n = G.spieler.length;
+  const cx = W/2, cy = H/2 + 4, ex = W*0.36, ey = H*0.32;
+  let treffer = null;
+  G.spieler.forEach((p,i)=>{
+    const a = -Math.PI/2 + i/n*6.2832;
+    const px = cx + Math.cos(a)*ex*(n>1?1:0), py = cy + Math.sin(a)*ey*(n>1?1:0);
+    const rrW = 24 + 34*Math.sqrt(Math.min(p.land,50000)/50000);
+    if(Math.hypot(x-px, y-py) < Math.max(40, rrW*1.15)) treffer = i;
+  });
+  G._dossier = (treffer === G._dossier) ? null : treffer;
+  render();
+}
 function weltZu(){ zeige(G._vorWelt || "status"); }
 function angreifenAus(i){ G._zielVorwahl = i; zeige("kriegPlan"); }
 
@@ -4091,7 +4161,10 @@ function erben(p){
     }
   });
   p.gen = (p.gen||1) + 1;
-  p.startAlter = ri(18,26) - (G.jahr - 1700);      /* Alter = startAlter + Regierungsjahre */
+  const erbe = p.erbe && (G.jahr - p.erbe.geb) >= 14 ? p.erbe : null;
+  p.startAlter = erbe
+    ? Math.max(16, G.jahr - erbe.geb) - (G.jahr - 1700)
+    : ri(18,26) - (G.jahr - 1700);                 /* Alter = startAlter + Regierungsjahre */
   p.todesJahr = G.jahr + (G.tempo>=2.5 ? ri(17,23) : G.tempo>1 ? ri(28,38) : ri(42,55)) + Math.random();
   p.tot = false;
   /* Erbstreit: die Übergabe kostet */
@@ -4101,12 +4174,19 @@ function erben(p){
   p.land -= verlustLand;
   if(p.titel > 0) p.titel--;
   p.stimmung = clamp(p.stimmung-8, 5, 100);
-  p.zug = wuerfleZug();                              /* der Erbe bringt eine eigene Stärke mit */
-  const roem = ["","II.","III.","IV.","V.","VI.","VII."][Math.min(p.gen-1,6)] || (p.gen+".");
-  if(!/ (II\.|III\.|IV\.|V\.|VI\.|VII\.|\d+\.)$/.test(p.name)) p.name = p.name + " " + roem;
-  else p.name = p.name.replace(/ (II\.|III\.|IV\.|V\.|VI\.|VII\.|\d+\.)$/, " " + roem);
+  if(erbe){
+    p.name = erbe.name;
+    p.w = erbe.w;
+    p.zug = erbe.zug || wuerfleZug();
+  } else {
+    p.zug = wuerfleZug();                            /* ein ferner Vetter tritt an */
+    const roem = ["","II.","III.","IV.","V.","VI.","VII."][Math.min(p.gen-1,6)] || (p.gen+".");
+    if(!/ (II\.|III\.|IV\.|V\.|VI\.|VII\.|\d+\.)$/.test(p.name)) p.name = p.name + " " + roem;
+    else p.name = p.name.replace(/ (II\.|III\.|IV\.|V\.|VI\.|VII\.|\d+\.)$/, " " + roem);
+  }
+  p.erbe = null;
   const zg = zugVon(p);
-  geschichte("👶", `${alterName} stirbt · ${p.name} (${zg?zg.n.toLowerCase():"?"}) tritt das Erbe an (Erbstreit: −${fmt(verlustGeld)} T, −${fmt(verlustLand)} ha).`);
+  geschichte("👶", `${alterName} stirbt · ${erbe?"Thronfolge":"Erbfolge"}: ${p.name} (${zg?zg.n.toLowerCase():"?"}) tritt das Erbe an (Erbstreit: −${fmt(verlustGeld)} T, −${fmt(verlustLand)} ha).`);
   if(!p.ki && zg) toast(`${zg.ico} Der neue Regent ist <b>${zg.n.toLowerCase()}</b>: ${zg.d}`, 7000);
   quicksave(); mpSync();
 }
@@ -4271,8 +4351,31 @@ const EREIGNIS_RAUBRITTER = { id:"raubritter", ico:"🏴",
     { t:"Ignorieren", fx:p=>{ p._routenPause = G.jahr; p.stimmung=clamp(p.stimmung-2,5,100);
         return "Die Kaufleute zahlen den Wegzoll selbst und bleiben künftig fort. Dieses Jahr bringt Euch keine Route Zoll."; } }
   ]};
+const EREIGNIS_STADTBRAND = { id:"stadtbrand", ico:"🔥",
+  txt:p=>`Feuer! In der Nacht schlagen Flammen aus einem Marktviertel, der Wind treibt die Funken über die Dächer.`,
+  wahl:[
+    { t:"Löschketten bezahlen (400 T)", fx:p=>{ p.geld-=400;
+        if(Math.random() < 0.75) return "Eimer um Eimer! Die Flammen sterben, kein Gebäude geht verloren.";
+        p.maerkte = Math.max(0, p.maerkte-1); p._ruinen = (p._ruinen||0)+1;
+        return "Trotz aller Mühe frisst das Feuer einen Markt. Die Brandruine mahnt am Stadtrand."; } },
+    { t:"Das Viertel aufgeben", fx:p=>{ const weg = Math.min(p.maerkte, ri(1,2));
+        p.maerkte -= weg; p._ruinen = (p._ruinen||0)+weg; p.stimmung = clamp(p.stimmung-6,5,100);
+        folgePlanen(p,"aufruhr",2);
+        return `Das Feuer wütet ungehindert: ${weg} M${weg>1?"ärkte":"arkt"} brennen nieder, das Volk murrt über Euren Geiz.`; } }
+  ]};
+const EREIGNIS_HOCHWASSER = { id:"hochwasser", ico:"🌊",
+  txt:p=>`Tagelanger Regen! Der Fluss tritt über die Ufer und leckt an den Fundamenten Eurer Mühlen.`,
+  wahl:[
+    { t:"Dämme aufwerfen (500 T)", fx:p=>{ p.geld-=500; p.stimmung=clamp(p.stimmung+2,5,100);
+        return "Sandsäcke und Palisaden halten die Flut, die Mühlen mahlen weiter."; } },
+    { t:"Beten und hoffen", fx:p=>{ if(Math.random()<0.5) return "Die Flut zieht glimpflich ab, der Himmel war gnädig.";
+        const weg = Math.min(p.muehlen, 1); p.muehlen -= weg; p._ruinen = (p._ruinen||0)+weg;
+        return "Die Flut reißt eine Mühle fort, nur Trümmer bleiben im Schlamm."; } }
+  ]};
 function ereignisWuerfeln(p){
   if(Math.random() >= 0.20) return null;
+  if(p.maerkte >= 2 && Math.random() < 0.10) return EREIGNIS_STADTBRAND;
+  if(p.muehlen >= 2 && Math.random() < 0.08) return EREIGNIS_HOCHWASSER;
   if(routenVon(G.spieler.indexOf(p)).length > 0 && Math.random() < 0.18) return EREIGNIS_RAUBRITTER;
   if((p.haefen||0) > 0 && Math.random() < 0.16) return EREIGNIS_PIRATEN;
   if((p.bruch||0) > 0 && Math.random() < 0.10) return EREIGNIS_GOLDADER;
@@ -4452,24 +4555,59 @@ function beraterEntlassen(k){
 const beraterGehalt = p => BERATER.reduce((s,b)=> s + (p.berater && p.berater[b.k] ? b.gehalt : 0), 0);
 
 /* ---------- Spionage: Geheimberichte über fremde Reiche ---------- */
+const SPION_MISSIONEN = {
+  bericht:  { kosten:600,  chance:0.72, n:"Geheimbericht" },
+  sabotage: { kosten:1200, chance:0.60, n:"Mauersprengung" },
+  brand:    { kosten:1000, chance:0.60, n:"Speicherbrand" },
+  aufruhr:  { kosten:1500, chance:0.58, n:"Aufruhr" }
+};
+function gegenspioneToggle(an){
+  cur().gegenspione = !!an;
+  toast(an ? "🛡️ Eure Gegenspione durchkämmen fortan Gasthöfe und Häfen (500 T/Jahr)."
+           : "Die Gegenspione werden entlassen.");
+}
 function spionEntsenden(){
   const p = cur();
-  const ziel = G.spieler[+$("#dipZiel").value];
+  const zi = +$("#dipZiel").value;
+  const ziel = G.spieler[zi];
+  const art = $("#spionMission") ? $("#spionMission").value : "bericht";
+  const m = SPION_MISSIONEN[art] || SPION_MISSIONEN.bericht;
   if(!ziel || ziel.tot || p.spionGenutzt) return;
-  if(p.geld < 600){ alertMsg("Ein guter Spion kostet 600 Taler."); return; }
-  p.geld -= 600;
+  if(p.geld < m.kosten){ alertMsg(`Diese Mission kostet ${fmt(m.kosten)} Taler.`); return; }
+  p.geld -= m.kosten;
   p.spionGenutzt = true;
-  if(Math.random() < 0.72){
-    p.spionage[G.spieler.indexOf(ziel)] = {
-      jahr: G.jahr,
-      heer: { ...ziel.heer }, miliz: miliz(ziel),
-      korn: ziel.korn, geld: Math.round(ziel.geld)
-    };
-    toast(`🕵️ Euer Spion kehrt mit einem Geheimbericht über ${ziel.name} zurück.`);
-    erfolg("spion");
+  let chance = m.chance + (p.zug === "gelehrt" ? 0.08 : 0);
+  if(ziel.gegenspione) chance -= 0.22;
+  if(Math.random() < chance){
+    if(art === "bericht"){
+      p.spionage[zi] = { jahr: G.jahr, heer: { ...ziel.heer }, miliz: miliz(ziel),
+        korn: ziel.korn, geld: Math.round(ziel.geld) };
+      toast(`🕵️ Euer Spion kehrt mit einem Geheimbericht über ${ziel.name} zurück.`);
+      erfolg("spion");
+    } else if(art === "sabotage"){
+      if((ziel.mauer||0) > 0){
+        ziel.mauer--;
+        toast(`💥 In ${ziel.name}s Stadt birst des Nachts ein Mauerring! Niemand ahnt, wer dahintersteckt.`);
+        geschichte("💥", `Ein Mauerring in ${ziel.name}s Stadt stürzt unter mysteriösen Umständen ein.`);
+      } else toast(`💨 ${ziel.name} besitzt keine Mauern, Euer Sprengmeister zieht unverrichteter Dinge ab.`);
+    } else if(art === "brand"){
+      const weg = Math.round(ziel.korn * 0.15);
+      ziel.korn -= weg;
+      toast(`🔥 ${fmt(weg)} Fuder in ${ziel.name}s Speichern gehen in Flammen auf.`);
+      geschichte("🔥", `Feuer in ${ziel.name}s Kornspeichern, man munkelt von Brandstiftung.`);
+    } else if(art === "aufruhr"){
+      ziel.stimmung = clamp(ziel.stimmung - 12, 5, 100);
+      toast(`🗣️ Eure Flugschriften wiegeln ${ziel.name}s Volk auf, die Stimmung dort kippt.`);
+    }
   } else {
-    bezAendern(p, ziel, -15);
-    toast(`🚨 Euer Spion wurde in ${ziel.name}s Reich gefasst! Das Verhältnis leidet.`);
+    const schwer = art !== "bericht";
+    bezAendern(p, ziel, schwer ? -25 : -15);
+    toast(`🚨 Euer Spion wurde in ${ziel.name}s Reich gefasst${schwer ? " und hat unter der Folter alles gestanden" : ""}! Das Verhältnis leidet schwer.`, 7000);
+    geschichte("🚨", `${p.name}s Spion wird in ${ziel.name}s Reich gefasst, ein Skandal!`);
+    if(schwer && ziel.ki && Math.random() < 0.3 && botKriegserklaerung(zi, G.aktiv)){
+      toast(`⚔️ ${ziel.name} erklärt Euch wegen des Anschlags den Krieg!`, 8000);
+      sTrommel();
+    }
   }
   render();
 }
@@ -4928,6 +5066,31 @@ function importSpielstand(inp){
   rd.readAsText(file);
   inp.value = "";
 }
+function slotRoh(n){
+  try{ const raw = window.localStorage.getItem("kaiser_slot_"+n); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+function slotSpeichern(n){
+  if(!G.spieler.length){ alertMsg("Es läuft keine Partie, die man speichern könnte."); return; }
+  const p = cur();
+  const meta = { name:`${titelName(p)} ${p.name}`, wappen:p.wappen, jahr:G.jahr,
+                 punkte:score(p), zeit:Date.now() };
+  try{
+    window.localStorage.setItem("kaiser_slot_"+n, JSON.stringify({ meta, stand: spielstand() }));
+    toast(`💾 Partie in Platz ${n} gespeichert.`);
+  }catch(e){ alertMsg("Speichern fehlgeschlagen, der Browser-Speicher ist voll oder gesperrt."); }
+  render();
+}
+function slotLaden(n){
+  const roh = n === "auto" ? { stand: window.localStorage.getItem("kaiser_save") } : slotRoh(n);
+  if(!roh || !roh.stand){ alertMsg("Dieser Platz ist leer."); return; }
+  try{ ladeSpielstand(roh.stand); }catch(e){ alertMsg("Dieser Spielstand ist beschädigt."); }
+}
+function slotLoeschen(n){
+  try{ window.localStorage.removeItem("kaiser_slot_"+n); }catch(e){}
+  render();
+}
+function staendeAuf(){ G._vorStaende = G.screen; zeige("staende"); }
 function quicksave(){
   if(!storageOK() || !G.spieler.length) return;
   try{ window.localStorage.setItem("kaiser_save", spielstand()); }catch(e){}
@@ -5442,6 +5605,220 @@ function zaehlerAnimieren(){
     requestAnimationFrame(step);
   });
 }
+/* Krönungs-Szene: Prozession durch das Kirchenschiff, die Krone senkt sich */
+function zeichneKroenung(t){
+  const c = document.getElementById("kroenBild");
+  if(!c || !G._kroenStart) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  const seit = performance.now() - G._kroenStart;
+  const p = G.sieger || cur();
+  ctx.clearRect(0,0,W,H);
+  /* Dunkles Kirchenschiff */
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,"#141019"); bg.addColorStop(0.5,"#1c1622"); bg.addColorStop(1,"#0f0c13");
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+  /* Rosette: buntes Glasfenster über dem Altar */
+  const rx = W/2, ry = H*0.20, rr2 = 52;
+  const glas = ["#8a2f3f","#3f5d8a","#7a3f8a","#c79a3d","#3f7a5d","#5d3f8a"];
+  for(let g2=0; g2<12; g2++){
+    ctx.fillStyle = glas[g2 % glas.length] + "cc";
+    ctx.beginPath(); ctx.moveTo(rx, ry);
+    ctx.arc(rx, ry, rr2, g2*Math.PI/6, (g2+1)*Math.PI/6); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = "#e8d9a0";
+  ctx.beginPath(); ctx.arc(rx, ry, 10, 0, 7); ctx.fill();
+  ctx.strokeStyle = "#0f0c13"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(rx, ry, rr2, 0, 7); ctx.stroke();
+  /* Lichtkegel aus der Rosette auf den Altar */
+  const licht = ctx.createLinearGradient(rx, ry, rx, H*0.72);
+  licht.addColorStop(0, "rgba(232,217,160,.28)"); licht.addColorStop(1, "rgba(232,217,160,0)");
+  ctx.fillStyle = licht;
+  ctx.beginPath(); ctx.moveTo(rx-20, ry+rr2); ctx.lineTo(rx+20, ry+rr2);
+  ctx.lineTo(rx+90, H*0.75); ctx.lineTo(rx-90, H*0.75); ctx.closePath(); ctx.fill();
+  /* Säulenreihen mit Wappenbannern */
+  for(const seite of [-1,1]){
+    for(let s2=0; s2<4; s2++){
+      const q2 = s2/4;
+      const sx = W/2 + seite*(W*0.16 + q2*W*0.26);
+      const sw2 = 16 + q2*14, sh = H*(0.30 + q2*0.34);
+      const sgrad = ctx.createLinearGradient(sx-sw2/2,0,sx+sw2/2,0);
+      sgrad.addColorStop(0,"#2e2937"); sgrad.addColorStop(0.5,"#4a4258"); sgrad.addColorStop(1,"#262230");
+      ctx.fillStyle = sgrad;
+      ctx.fillRect(sx-sw2/2, H*0.14, sw2, sh);
+      ctx.fillStyle = "#4a4258";
+      ctx.fillRect(sx-sw2/2-4, H*0.14 + sh, sw2+8, 8);
+      /* Banner mit Wappen */
+      ctx.fillStyle = p.farbe + "dd";
+      ctx.fillRect(sx-9, H*0.20, 18, 40 + Math.sin(t/500 + s2)*2);
+      ctx.font = "12px sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(p.wappen, sx, H*0.20 + 24);
+    }
+  }
+  /* Roter Teppich */
+  ctx.fillStyle = "#6e1f2b";
+  ctx.beginPath(); ctx.moveTo(W/2-26, H*0.55); ctx.lineTo(W/2+26, H*0.55);
+  ctx.lineTo(W/2+110, H); ctx.lineTo(W/2-110, H); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#c79a3d"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(W/2-24, H*0.55); ctx.lineTo(W/2-100, H); ctx.moveTo(W/2+24, H*0.55); ctx.lineTo(W/2+100, H); ctx.stroke();
+  /* Hofstaat als Silhouetten, wiegen sich leicht */
+  for(let hz=0; hz<26; hz++){
+    const seite = hz%2 ? 1 : -1;
+    const q2 = (hz%13)/13;
+    const hx = W/2 + seite*(60 + q2*W*0.3);
+    const hy = H*(0.62 + q2*0.3);
+    ctx.fillStyle = GEWAND[hz % GEWAND.length] + "bb";
+    ctx.beginPath(); ctx.arc(hx, hy + Math.sin(t/420 + hz)*1.2, 6 + q2*5, 0, 7); ctx.fill();
+  }
+  /* Altar und Bischof */
+  ctx.fillStyle = "#3a3344"; ctx.fillRect(W/2-40, H*0.47, 80, 12);
+  ctx.fillStyle = "#e8e0cf";
+  ctx.beginPath(); ctx.arc(W/2 + 34, H*0.43, 7, 0, 7); ctx.fill();
+  ctx.fillRect(W/2 + 27, H*0.44, 14, 22);
+  ctx.fillStyle = "#c79a3d"; ctx.fillRect(W/2 + 31, H*0.36, 6, 8);
+  /* Kerzen flackern */
+  for(const kx of [W/2-56, W/2+56]){
+    ctx.fillStyle = "#d8d0bd"; ctx.fillRect(kx-1.5, H*0.41, 3, 12);
+    ctx.fillStyle = `rgba(255,200,90,${0.7 + Math.sin(t/90 + kx)*0.3})`;
+    ctx.beginPath(); ctx.arc(kx, H*0.40, 2.6, 0, 7); ctx.fill();
+  }
+  /* Der Regent schreitet zum Altar (0-5 s), kniet, die Krone senkt sich (5-7 s) */
+  const gehQ = Math.min(1, seit/5000);
+  const ge = gehQ*gehQ*(3-2*gehQ);
+  const ky = H*0.92 - ge*(H*0.35);
+  const skal = 1.5 - ge*0.6;
+  ctx.save();
+  ctx.translate(W/2, ky);
+  ctx.scale(skal, skal);
+  const schritt = gehQ < 1 ? Math.sin(seit/130)*1.4 : 0;
+  ctx.fillStyle = p.farbe;
+  ctx.beginPath(); ctx.moveTo(-9, 0); ctx.quadraticCurveTo(0, -26 - schritt*0.4, 9, 0); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = "#caa07a";
+  ctx.beginPath(); ctx.arc(0, -30 - schritt*0.4, 6, 0, 7); ctx.fill();
+  /* Hermelin-Umhang */
+  ctx.strokeStyle = "rgba(240,236,224,.85)"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(-9, -4); ctx.quadraticCurveTo(0, 4, 9, -4); ctx.stroke();
+  ctx.restore();
+  /* Die Krone senkt sich mit goldenem Glanz */
+  if(seit > 5000){
+    const kq = Math.min(1, (seit-5000)/1800);
+    const ke = kq*kq*(3-2*kq);
+    const kyy = H*0.30 + ke*(H*0.22);
+    const glanz = ctx.createRadialGradient(W/2, kyy, 2, W/2, kyy, 34);
+    glanz.addColorStop(0, "rgba(255,225,130,.5)"); glanz.addColorStop(1, "rgba(255,225,130,0)");
+    ctx.fillStyle = glanz;
+    ctx.beginPath(); ctx.arc(W/2, kyy, 34, 0, 7); ctx.fill();
+    ctx.font = "30px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("👑", W/2, kyy);
+    if(kq >= 1){
+      const pq = 0.75 + Math.sin(t/260)*0.08;
+      ctx.save(); ctx.globalAlpha = Math.min(1, (seit-6800)/600);
+      ctx.font = `bold ${Math.round(24*pq+8)}px Georgia, serif`; ctx.fillStyle = "#e0b458";
+      ctx.fillText(`${p.name}, von Gottes Gnaden Kaiser!`, W/2, H*0.86);
+      ctx.restore();
+    }
+  }
+  /* Weihrauch-Schleier */
+  for(let wr2=0; wr2<3; wr2++){
+    const q2 = ((t/5200) + wr2*0.33) % 1;
+    ctx.fillStyle = `rgba(216,208,189,${0.10*(1-q2)})`;
+    ctx.beginPath();
+    ctx.arc(W/2 + Math.sin(q2*6 + wr2*2)*70, H*0.6 - q2*H*0.4, 18 + q2*30, 0, 7);
+    ctx.fill();
+  }
+}
+/* Tjost-Szene: zwei Reiter sprengen aufeinander zu */
+function zeichneTjost(t){
+  const c = document.getElementById("tjost");
+  const t2 = G._turnier;
+  if(!c || !t2) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  const seit = performance.now() - t2.start;
+  const ich = cur(), gast = G.spieler[t2.gast] || ich;
+  ctx.clearRect(0,0,W,H);
+  /* Turnierplatz: Rasen, Schranke, Tribüne mit Wimpeln */
+  const gras = ctx.createLinearGradient(0,0,0,H);
+  gras.addColorStop(0,"#2b3444"); gras.addColorStop(0.35,"#31402a"); gras.addColorStop(1,"#24331f");
+  ctx.fillStyle = gras; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = "#3a2f22"; ctx.fillRect(0, H*0.30, W, 10);
+  for(let tb=0; tb<12; tb++){
+    ctx.fillStyle = tb%2 ? "#4a3a28" : "#544232";
+    ctx.fillRect(20 + tb*(W-40)/12, H*0.14, (W-40)/12 - 4, H*0.15);
+  }
+  /* Zuschauer wippen */
+  for(let z=0; z<24; z++){
+    ctx.fillStyle = GEWAND[z % GEWAND.length];
+    const zx = 34 + z*(W-70)/24, zy = H*0.20 + Math.sin(t/260 + z)*1.6;
+    ctx.beginPath(); ctx.arc(zx, zy, 5, 0, 7); ctx.fill();
+  }
+  /* Wimpelkette */
+  for(let wp=0; wp<16; wp++){
+    ctx.fillStyle = wp%2 ? ich.farbe : gast.farbe;
+    const wx = 20 + wp*(W-40)/16;
+    const wy = H*0.09 + Math.sin(wp*1.2)*3 + Math.sin(t/300 + wp)*1.2;
+    ctx.beginPath(); ctx.moveTo(wx, wy); ctx.lineTo(wx+10, wy); ctx.lineTo(wx+5, wy+9); ctx.closePath(); ctx.fill();
+  }
+  /* Tjost-Schranke */
+  ctx.fillStyle = "#5a4a30"; ctx.fillRect(W*0.1, H*0.66, W*0.8, 6);
+  /* Ritt: 0..2200ms aufeinander zu, Zusammenprall, dann hält der Sieger */
+  const q = Math.min(1, seit/2200);
+  const ease = q*q*(3-2*q);
+  const rx1 = W*0.08 + ease*(W*0.40);
+  const rx2 = W*0.92 - ease*(W*0.40);
+  const hop = Math.abs(Math.sin(seit/90))*3*(q<1?1:0);
+  const reiter = (x, farbe, richt, lanze) => {
+    ctx.save(); ctx.translate(x, H*0.60 - hop);
+    if(richt<0) ctx.scale(-1,1);
+    ctx.fillStyle = "#6a4a2a";
+    ctx.beginPath(); ctx.ellipse(0, 0, 20, 9, 0, 0, 7); ctx.fill();          /* Ross */
+    ctx.beginPath(); ctx.moveTo(18,-3); ctx.quadraticCurveTo(27,-8,26,-16); ctx.quadraticCurveTo(21,-12,17,-9); ctx.fill(); /* Hals */
+    ctx.strokeStyle = "#4a331d"; ctx.lineWidth = 2.5;
+    for(const bx of [-12,-5,5,12]){
+      const schw = q<1 ? Math.sin(seit/70 + bx)*4 : 0;
+      ctx.beginPath(); ctx.moveTo(bx, 7); ctx.lineTo(bx + schw, 16); ctx.stroke();
+    }
+    ctx.fillStyle = farbe;
+    ctx.beginPath(); ctx.arc(2, -16, 6.5, 0, 7); ctx.fill();                 /* Reiter */
+    ctx.fillStyle = "#d8d0bd";
+    ctx.beginPath(); ctx.arc(2, -24, 3.6, 0, 7); ctx.fill();                 /* Helm */
+    if(lanze){ ctx.strokeStyle = "#c8beab"; ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.moveTo(6,-15); ctx.lineTo(34,-9); ctx.stroke(); }
+    ctx.restore();
+  };
+  reiter(rx1, ich.farbe, 1, q<1);
+  reiter(rx2, gast.farbe, -1, q<1);
+  /* Zusammenprall */
+  if(seit > 2050 && seit < 2650){
+    const bq = (seit-2050)/600;
+    ctx.fillStyle = `rgba(255,235,160,${0.9*(1-bq)})`;
+    ctx.beginPath(); ctx.arc(W/2, H*0.56, 8 + bq*36, 0, 7); ctx.fill();
+    /* Lanzensplitter */
+    ctx.strokeStyle = `rgba(200,190,171,${1-bq})`; ctx.lineWidth = 2;
+    for(let sp=0; sp<6; sp++){
+      const sa = sp*1.05 + 0.3;
+      const sd = 10 + bq*44;
+      ctx.beginPath();
+      ctx.moveTo(W/2 + Math.cos(sa)*sd, H*0.56 + Math.sin(sa)*sd - bq*20);
+      ctx.lineTo(W/2 + Math.cos(sa)*(sd+9), H*0.56 + Math.sin(sa)*(sd+9) - bq*20);
+      ctx.stroke();
+    }
+  }
+  /* Ergebnis einblenden */
+  if(seit > 2600){
+    const sieger = G.spieler[t2.sieger];
+    const eq = Math.min(1, (seit-2600)/500);
+    ctx.save(); ctx.globalAlpha = eq;
+    ctx.textAlign = "center";
+    ctx.font = "26px sans-serif"; ctx.fillText("🏆", W/2, H*0.36 - (1-eq)*10);
+    ctx.font = "bold 17px Georgia, serif"; ctx.fillStyle = "#e0b458";
+    ctx.fillText(`${sieger.wappen} ${sieger.name} siegt in der Tjost!`, W/2, H*0.45);
+    ctx.restore();
+    const erg = document.getElementById("tjostErgebnis");
+    if(erg && erg.style.display === "none"){ erg.style.display = ""; konfetti(60); sFanfare();
+      const tt = document.getElementById("tjostText"); if(tt) tt.style.display = "none"; }
+  }
+}
 /* Die Reichsgeschichte als gezeichneter Zeitstrahl */
 function zeichneZeitstrahl(cid){
   const c = document.getElementById(cid);
@@ -5767,10 +6144,57 @@ const SCREENS = {
       <button class="btn-lg" onclick="zeige('kampagne')">📖 Kampagne</button>
       <button class="btn-lg" onclick="lehreStart()">🎓 Die Lehrjahre (Tutorial)</button>
       ${hatQuicksave()?`<button class="btn-lg" onclick="quickload()">Fortsetzen</button>`:""}
+      <button class="btn-lg" onclick="staendeAuf()">💾 Spielstände</button>
       <button class="btn-lg" onclick="zeige('online')">🌐 Online spielen</button>
       <button class="btn-lg" onclick="$('#importFile').click()">Spielstand laden</button>
       <button class="btn-lg" onclick="zeige('erfolge')">🏅 Erfolge (${erfolge().size}/${ERFOLGE.length})</button>
     </div>`;
+  },
+
+  kroenung(){
+    if(!G._kroenStart) G._kroenStart = performance.now();
+    const p = G.sieger || cur();
+    return `
+      <div class="hero" style="padding-top:16px;padding-bottom:6px">
+        <h2 style="font-size:24px">⛪ Die Krönung in der Kathedrale</h2>
+        <p class="muted small">Anno ${G.jahr} · Alle Glocken des Reiches läuten für ${titelName(p)} ${p.name}</p>
+      </div>
+      <canvas id="kroenBild" width="920" height="360" style="display:block;width:100%;max-width:780px;margin:0 auto;border-radius:14px;border:1px solid var(--border);box-shadow:0 14px 40px rgba(0,0,0,.5)"></canvas>
+      <div class="center" style="margin-top:14px">
+        <button class="btn-primary btn-lg" onclick="G._kroenStart=null; zeige('sieg')">Lang lebe der Kaiser!</button>
+      </div>`;
+  },
+
+  staende(){
+    const inSpiel = G.spieler.length > 0;
+    const reihen = [1,2,3].map(n=>{
+      const s = slotRoh(n);
+      return `<div class="card" style="margin-bottom:10px">
+        <div class="rowflex" style="justify-content:space-between">
+          <span>${s && s.meta ? `${s.meta.wappen||"💾"} <b>${s.meta.name}</b> · Anno ${s.meta.jahr}
+              · ${fmt(s.meta.punkte)} Punkte<br><span class="muted small">${new Date(s.meta.zeit).toLocaleString("de-DE")}</span>`
+            : `<span class="muted">Platz ${n} · leer</span>`}</span>
+          <span style="white-space:nowrap">
+            ${s ? `<button class="btn-sm btn-primary" onclick="slotLaden(${n})">Laden</button>`:""}
+            ${inSpiel ? `<button class="btn-sm" onclick="slotSpeichern(${n})">${s?"Überschreiben":"Hier speichern"}</button>`:""}
+            ${s ? `<button class="btn-sm" onclick="slotLoeschen(${n})">🗑️</button>`:""}
+          </span>
+        </div>
+      </div>`;
+    }).join("");
+    return `
+      <h2>💾 Spielstände</h2>
+      <p class="muted small" style="margin-bottom:10px">Drei Plätze auf diesem Gerät. Zusätzlich sichert
+      das Spiel am Ende jedes Jahres automatisch (unten), und über das Menü lässt sich jeder Stand
+      als Datei exportieren.</p>
+      ${reihen}
+      ${hatQuicksave()?`<div class="card" style="border-style:dashed">
+        <div class="rowflex" style="justify-content:space-between">
+          <span>🕰️ <b>Automatische Sicherung</b> <span class="muted small">(jeweils das letzte Jahresende)</span></span>
+          <button class="btn-sm" onclick="slotLaden('auto')">Laden</button>
+        </div>
+      </div>`:""}
+      <button class="btn-primary btn-lg" onclick="zeige(G._vorStaende || (G.spieler.length?'bauen':'title'))">Zurück</button>`;
   },
 
   erfolge(){
@@ -6318,6 +6742,19 @@ const SCREENS = {
         </table>
       </div>
       ${r.verhungert?'<div class="event bad">Euer Volk hungert! Das spricht sich im Reich herum.</div>':""}
+      ${p.erbe && !p.erbe.zug ? `
+      <div class="card" style="border-color:rgba(224,180,88,.5)">
+        <h3>🍼 Die Erziehung von ${p.erbe.name}</h3>
+        <p class="muted small">Wem vertraut Ihr ${p.erbe.w?"Eure Tochter":"Euren Sohn"} an? Die Erziehung
+        bestimmt den Charakterzug, mit dem ${p.erbe.name} dereinst das Erbe antritt.</p>
+        ${ERZIEHUNG.map(e=>`
+        <div class="rowflex" style="justify-content:space-between;margin-top:6px">
+          <span>${e.ico} <b>${e.n}</b><br><span class="muted small">${e.d}</span></span>
+          <button class="btn-sm" onclick="erziehen('${e.zug}')">Wählen</button>
+        </div>`).join("")}
+      </div>`:""}
+      ${p.erbe && p.erbe.zug ? `<p class="muted small">🍼 Thronfolge: <b>${p.erbe.name}</b> (${G.jahr - p.erbe.geb} Jahre),
+        erzogen ${(ERZIEHUNG.find(x=>x.zug===p.erbe.zug)||{n:""}).n.toLowerCase()}.</p>`:""}
       <button class="btn-primary btn-lg" onclick="nachZwischenbilanz()">Weiter: Steuern</button>`;
   },
 
@@ -6493,6 +6930,19 @@ const SCREENS = {
               </div>`).join("")}`}
         </div>
       </div>
+      <div class="card">
+        <h3>🎪 Hof, Feste & Fahrten</h3>
+        <div class="rowflex">
+          <button onclick="volksfest()" ${p.festJahr===G.jahr?'disabled':''}>🎪 Volksfest geben (800 T, +10 Stimmung)</button>
+          <button onclick="turnierStarten()" ${p.turnierJahr===G.jahr||p.titel<2?'disabled':''}>🏇 Ritterturnier ausrichten (2.000 T${p.titel<2?", ab Graf":""})</button>
+          <button onclick="expeditionStarten()" ${p.expedition?'disabled':''}>⛵ Expedition ausrüsten (2.500 T)</button>
+        </div>
+        <p class="muted small" style="margin-top:6px">Das Turnier lädt alle Höfe (+4 Verhältnis); wer die Tjost
+        gewinnt, erntet Ruhm. Die Expedition kehrt nach 2 bis 4 Jahren zurück, mit Schätzen, Waren,
+        Seekarten, oder gar nicht${(p.haefen||0)>0?" · Euer Hafen verbessert die Aussichten":""}.
+        ${p.expedition?`<b class="gold">Eure Expedition ist seit Anno ${p.expedition.start} auf See (Rückkehr ~Anno ${p.expedition.start+p.expedition.dauer}).</b>`:""}
+        ${p._seekarten?`<b class="green">Kostbare Seekarten liegen bereit, die nächste Fahrt wird kürzer.</b>`:""}</p>
+      </div>
       <div class="card"><b>Vermögen: <span class="${p.geld<0?'red':'gold'}">${fmt(p.geld)} Taler</span></b></div>
       <button class="btn-danger" onclick="zeige('kriegPlan')" ${kriegOk?'':'disabled'}>⚔️ Krieg führen</button>
       <button onclick="zeige('diplo')" ${lebende().length>1?'':'disabled'}>🤝 Diplomatie</button>
@@ -6560,8 +7010,21 @@ const SCREENS = {
           <p class="muted small">Eine Ehe stiftet 12 Jahre Frieden zwischen den Häusern, und beim Tod des
           vermählten Regenten erbt Euer Haus einen Teil seines Landes.</p>
           <div class="rowflex">
-            <button onclick="spionEntsenden()" ${p.spionGenutzt?'disabled':''}>🕵️ Spion entsenden (600 T)</button>
+            <select id="spionMission" style="min-width:200px">
+              <option value="bericht">🕵️ Geheimbericht (600 T)</option>
+              <option value="sabotage">💥 Mauer sprengen (1.200 T)</option>
+              <option value="brand">🔥 Speicher brandschatzen (1.000 T)</option>
+              <option value="aufruhr">🗣️ Aufruhr stiften (1.500 T)</option>
+            </select>
+            <button onclick="spionEntsenden()" ${p.spionGenutzt?'disabled':''}>Entsenden</button>
             ${p.spionGenutzt?'<span class="muted small">Spion dieses Jahr bereits unterwegs</span>':''}
+          </div>
+          <p class="muted small">Sabotage-Missionen sind riskant: Wird der Spion gefasst, gibt es einen
+          Skandal, und mancher Regent greift dann zu den Waffen.</p>
+          <div class="rowflex">
+            <label class="small" style="cursor:pointer"><input type="checkbox" ${p.gegenspione?'checked':''}
+              onchange="gegenspioneToggle(this.checked)"> 🛡️ Gegenspione unterhalten (500 T/Jahr) ·
+              fremde Spione scheitern bei Euch deutlich öfter</label>
           </div>
           ${lebende().filter(x=>x.i!==G.aktiv).map(z=>spionBericht(p, z.i)).join("")}
         </div>
@@ -6801,6 +7264,28 @@ const SCREENS = {
       "aufstellungDFertig()", "Stellung beziehen, zur Schlacht!");
   },
 
+  turnier(){
+    const t2 = G._turnier;
+    if(!t2) { setTimeout(()=>zeige("bauen"), 10); return ""; }
+    const ich = cur(), sieger = G.spieler[t2.sieger];
+    const gewonnen = t2.sieger === G.aktiv;
+    return `
+      <div class="hero" style="padding-top:22px;padding-bottom:8px">
+        <h2 style="font-size:24px">🏇 Das große Turnier zu ${ich.name}${/[sxz]$/.test(ich.name)?"’":"s"} Hof</h2>
+      </div>
+      <canvas id="tjost" width="920" height="240" style="display:block;width:100%;max-width:760px;margin:0 auto;border-radius:12px;border:1px solid var(--border)"></canvas>
+      <div class="center" style="margin-top:12px">
+        <p id="tjostText" class="muted">Die Reiter legen die Lanzen ein …</p>
+        <div class="pergament" style="max-width:460px;margin:12px auto;padding:12px 18px;display:none" id="tjostErgebnis">
+          <p style="font-size:17px"><b class="gold">${sieger.wappen} ${titelName(sieger)} ${sieger.name}</b> gewinnt die Tjost!</p>
+          <p class="small" style="margin-top:4px">${gewonnen
+            ? "Euer Volk jubelt (+5 Stimmung), und Eure Truppen üben sich am Rande des Turniers (+5 Erfahrung)."
+            : `Alle geladenen Höfe verlassen das Fest wohlgesonnen (+4 Verhältnis), der Sieger fühlt sich geehrt.`}</p>
+        </div>
+        <button class="btn-primary btn-lg" onclick="G._turnier=null; zeige('bauen')">Zurück an den Hof</button>
+      </div>`;
+  },
+
   /* gemeinsames Aufstellungs-Formular */
   _aufstellung(p, gegner, text, fertigFn, knopf){
     const gel = (G._kr && G._kr.gelaende) || [];
@@ -6930,6 +7415,7 @@ const SCREENS = {
             ${r.routenGeld?row("Zoll aus "+routenVon(G.spieler.indexOf(p)).length+" Handelsroute"+(routenVon(G.spieler.indexOf(p)).length>1?"n":""), "+"+fmt(r.routenGeld)+" Taler", "delta-pos"):""}
             ${r.unterhalt?row("Heer-Unterhalt", "−"+fmt(r.unterhalt)+" Taler", "delta-neg"):""}
             ${r.gehaelter?row("Berater-Gehälter", "−"+fmt(r.gehaelter)+" Taler", "delta-neg"):""}
+            ${r.spione?row("🛡️ Gegenspione", "−"+fmt(r.spione)+" Taler", "delta-neg"):""}
             ${row("Vermögen jetzt", `<span data-cnt="${Math.round(p.geld)}" data-suf=" Taler">${fmt(p.geld)} Taler</span>`, p.geld<0?"red":"")}
           </table>
         </div>
@@ -6966,7 +7452,7 @@ const SCREENS = {
         </div>` : ""}
         ${p.titel===8
           ? `<p class="green" style="font-size:16px">Die Kathedrale ist vollendet, das Reich hat einen neuen ${titelName(p)}!</p>
-             <div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="zeige('sieg')">Zur Krönung</button></div>`
+             <div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="G._kroenStart=null; zeige('kroenung')">Zur Krönung</button></div>`
           : `<div style="margin-top:22px"><button class="btn-primary btn-lg" onclick="naechsterSpieler()">Weiter</button></div>`}
       </div>`;
   },
@@ -6985,7 +7471,7 @@ const SCREENS = {
         <p class="muted">Höchster Rang: ${titelName(p)} · ${fmt(p.land)} ha · ${fmt(p.pop)} Untertanen</p>
         <div style="margin-top:22px">
           ${G.opt && G.opt.dynastie
-            ? `<button class="btn-primary btn-lg" onclick="erben(cur()); zeige('handoff')">👶 Erbfolge antreten</button>
+            ? `<button class="btn-primary btn-lg" onclick="erben(cur()); zeige('handoff')">👶 ${p.erbe && (G.jahr-p.erbe.geb)>=14 ? `Thronfolge: ${p.erbe.name} (${G.jahr-p.erbe.geb} J.)` : "Erbfolge antreten"}</button>
                <p class="muted small" style="margin-top:8px">Der Erbstreit kostet 20 % des Vermögens, 8 % des Landes und eine Titelstufe.</p>`
             : ""}
           ${G.kampagne?`<button class="btn-lg" onclick="kampagneStartDirekt(G.kampagne.k)">📖 Kapitel erneut versuchen</button>`:""}
@@ -7039,7 +7525,7 @@ const SCREENS = {
     return `
       <h2>🗺️ Die bekannte Welt. Anno ${G.jahr}</h2>
       <div class="card">
-        <canvas id="welt" width="920" height="430"></canvas>
+        <canvas id="welt" width="920" height="430" onclick="weltKlick(event)" style="cursor:pointer"></canvas>
         <p class="muted small">Die Sitzreihenfolge bildet den Nachbarschaftskreis, blasse Wege verbinden
         Nachbarn, <span class="gold">goldene Wege mit Karawanen</span> sind aktive Handelsrouten (jährlicher
         Zoll für beide Seiten). Euer Reich trägt den goldenen Ring.</p>
@@ -7053,6 +7539,35 @@ const SCREENS = {
         ${!ausBauen?'<p class="muted small">Feldzüge lassen sich in der Bauphase beginnen (Landkarte &amp; Bauen → Gesamtkarte).</p>':
           !kk.ok?`<p class="muted small">Für einen Feldzug fehlt Euch noch: ${kk.fehlt.join(" · ")}.</p>`:""}
       </div>
+      ${G._dossier!=null && G.spieler[G._dossier] ? (()=>{
+        const d = G.spieler[G._dossier], di = G._dossier;
+        if(di === G.aktiv) return `
+        <div class="card" style="border-color:rgba(224,180,88,.5)">
+          <h3>${d.wappen} Euer eigenes Reich</h3>
+          <p class="small">${fmt(d.land)} ha · ${fmt(d.pop)} Untertanen · ${fmt(heerGroesse(d.heer))} Mann unter Waffen
+            · ${staedte(d)} St${staedte(d)===1?"adt":"ädte"} · Routen: ${routenVon(di).length}/3</p>
+        </div>`;
+        const w = bezWert(p, d);
+        const vertr = [
+          buendnisAktiv(p,d) ? `🛡️ Bündnis bis ${p.buendnisse[di]}` : "",
+          eheAktiv(p,d) ? `💍 Ehe bis ${p.ehen[di]}` : "",
+          paktAktiv(p,d) ? `🕊️ Pakt bis ${p.pakte[di]}` : "",
+          routeAktiv(G.aktiv,di) ? "🚚 Handelsroute" : ""
+        ].filter(Boolean).join(" · ") || "keine Verträge";
+        return `
+        <div class="card" style="border-color:${d.farbe}66">
+          <h3>${d.wappen} Dossier: ${titelName(d)} ${d.name}${d.tot?" †":""}
+            ${d.ki?`<span class="muted small">(${KI_TYP_NAMEN[d.kiTyp]||"KI"})</span>`:""}</h3>
+          <p class="small">${fmt(d.land)} ha · ${fmt(d.pop)} Untertanen · ${staedte(d)} St${staedte(d)===1?"adt":"ädte"}
+            · Festung ${(d.mauer||0)}/${(d.burg||0)} (Mauer/Burg) · Titelstufe ${d.titel}</p>
+          <p class="small" style="margin-top:4px">Verhältnis:
+            <b class="${w>10?'green':w<-10?'red':''}">${w>0?"+":""}${w}</b> · ${vertr}</p>
+          ${spionBericht(p, di) || '<p class="muted small">🕵️ Kein Geheimbericht. Ein Spion könnte Heer und Kasse ausspähen.</p>'}
+          ${!d.tot?`<div class="rowflex" style="margin-top:8px">
+            <button class="btn-sm" onclick="G._dipZielMerk=${di}; zeige('diplo')">🤝 Diplomatie mit ${d.name}</button>
+            ${G._vorWelt==="bauen" && kk.ok ? `<button class="btn-danger btn-sm" onclick="angreifenAus(${di})">⚔️ Angreifen</button>`:""}
+          </div>`:""}
+        </div>`; })() : `<p class="muted small">💡 Klickt ein Reich auf der Karte an, um sein Dossier zu öffnen.</p>`}
       <button class="btn-primary btn-lg" onclick="weltZu()">Zurück</button>
       <button class="btn-lg" onclick="statAuf()">📈 Statistik</button>`;
   },
@@ -7334,7 +7849,28 @@ const SCREENS = {
         ${statChart("geld","💰 Vermögen"," T")}
         ${statChart("land","🌍 Land"," ha")}
         ${statChart("heer","⚔️ Heeresstärke","")}
+        ${statChart("mi","👑 Machtindex","")}
       </div>
+      ${(()=>{
+        const leb2 = lebende().map(x=>x.p);
+        if(leb2.length < 2) return "";
+        const sortiert2 = [...leb2].sort((a,b)=>score(b)-score(a));
+        const erster = sortiert2[0], zweiter = sortiert2[1];
+        const trend = z => {
+          const c2 = (z.chronik||[]).filter(e=>e.mi!==undefined);
+          if(c2.length < 4) return 0;
+          return c2[c2.length-1].mi - c2[Math.max(0, c2.length-5)].mi;
+        };
+        const aufsteiger = [...leb2].sort((a,b)=>trend(b)-trend(a))[0];
+        const abstand = score(erster) > 0 ? Math.round((score(erster)-score(zweiter))/Math.max(1,score(erster))*100) : 0;
+        return `
+      <div class="card" style="border-color:rgba(224,180,88,.4)">
+        <h3>🔮 Der Hofastrologe liest die Sterne</h3>
+        <p class="small">„Derzeit weist alles auf <b class="gold">${erster.wappen} ${titelName(erster)} ${erster.name}</b>
+        als künftigen Träger der Krone, mit ${abstand<8?"hauchdünnem":abstand<25?"solidem":"gewaltigem"} Vorsprung
+        vor ${zweiter.wappen} ${zweiter.name}.
+        ${aufsteiger!==erster && trend(aufsteiger)>0 ? `Doch die Gestirne künden: <b>${aufsteiger.name}</b> steigt derzeit am schnellsten auf!` : "Und die Gestirne stützen diesen Lauf der Dinge."}“</p>
+      </div>`; })()}
       ${marktChart()}
       ${zeitstrahlKarte()}
       <div class="card">
@@ -7546,6 +8082,7 @@ function karteKlick(ev){
   p.geld -= kosten;
   zahleMaterial(p, G._bauModus);
   if(typ==="m") p.maerkte++; else p.muehlen++;
+  if(p._ruinen > 0){ p._ruinen--; toast("🧹 Eine Brandruine ist wieder aufgebaut."); }
   p.gebaeude.push({ t:typ, ang:Math.atan2(dy, dx), dist:clamp(dist, 0.08, 0.9) });
   p._neu = p.gebaeude.length - 1;
   p.stat.bauten++;
@@ -7577,8 +8114,8 @@ function baue(was){
     return;
   }
   const bk = w2 => bauKosten(p, w2);
-  if(was==="markt"  && p.geld>=bk("markt")  && platz && hatMaterial(p,"markt")){ p.geld-=bk("markt"); zahleMaterial(p,"markt"); p.maerkte++; platziereGebaeude(p,"m"); }
-  if(was==="muehle" && p.geld>=bk("muehle") && platz && hatMaterial(p,"muehle")){ p.geld-=bk("muehle"); zahleMaterial(p,"muehle"); p.muehlen++; platziereGebaeude(p,"k"); }
+  if(was==="markt"  && p.geld>=bk("markt")  && platz && hatMaterial(p,"markt")){ p.geld-=bk("markt"); zahleMaterial(p,"markt"); p.maerkte++; platziereGebaeude(p,"m"); if(p._ruinen>0){ p._ruinen--; toast("🧹 Eine Brandruine ist wieder aufgebaut."); } }
+  if(was==="muehle" && p.geld>=bk("muehle") && platz && hatMaterial(p,"muehle")){ p.geld-=bk("muehle"); zahleMaterial(p,"muehle"); p.muehlen++; platziereGebaeude(p,"k"); if(p._ruinen>0){ p._ruinen--; toast("🧹 Eine Brandruine ist wieder aufgebaut."); } }
   if(was==="palast" && p.palast<PALAST_TEILE && p.geld>=bk("palastTeil") && p.land>=LAND.palast && hatMaterial(p,"palastTeil")){ p.geld-=bk("palastTeil"); zahleMaterial(p,"palastTeil"); p.palast++; p._neu="palast"; }
   if(was==="dom"    && p.dom<DOM_TEILE && p.geld>=bk("domTeil") && p.land>=LAND.dom && hatMaterial(p,"domTeil")){ p.geld-=bk("domTeil"); zahleMaterial(p,"domTeil"); p.dom++; p._neu="dom"; }
   if(was==="hafen"  && (p.haefen||0)<2 && p.geld>=bk("hafen") && p.land>=12000 && hatMaterial(p,"hafen")){ p.geld-=bk("hafen"); zahleMaterial(p,"hafen"); p.haefen=(p.haefen||0)+1; p._neu="hafen"; }
@@ -7602,6 +8139,82 @@ function werbe(art, n){
   /* Frische Rekruten verwässern die Kampferfahrung des Heeres */
   if(alt > 0) p.heerXp = (p.heerXp||0) * alt / (alt + n);
   render();
+}
+function volksfest(){
+  const p = cur();
+  if(p.festJahr === G.jahr){ alertMsg("Das Volk hat heuer schon gefeiert."); return; }
+  if(p.geld < 800){ alertMsg("Ein Volksfest kostet 800 Taler."); return; }
+  p.geld -= 800;
+  p.festJahr = G.jahr;
+  p.stimmung = clamp(p.stimmung + 10, 5, 100);
+  geschichte("🎪", `${p.name} gibt dem Volk ein rauschendes Fest.`);
+  toast("🎪 Musik, Bier und Braten! Die Stimmung des Volkes steigt spürbar (+10).");
+  konfetti(50); sFanfare();
+  render();
+}
+function expeditionStarten(){
+  const p = cur();
+  if(p.expedition){ alertMsg("Eure Expedition ist noch auf See."); return; }
+  if(p.geld < 2500){ alertMsg("Schiff, Proviant und Mannschaft kosten 2.500 Taler."); return; }
+  p.geld -= 2500;
+  const dauer = Math.max(2, ri(2,4) - (p._seekarten ? 1 : 0));
+  p.expedition = { start: G.jahr, dauer, karten: !!p._seekarten };
+  p._seekarten = false;
+  geschichte("⛵", `${p.name} schickt eine Expedition in unbekannte Gewässer.`);
+  toast(`⛵ Die Segel sind gesetzt! Rückkehr in etwa ${dauer} Jahren${(p.haefen||0)>0?" · Euer Hafen verbessert die Aussichten":""}.`);
+  render();
+}
+function expeditionAufloesen(p, r){
+  if(!p.expedition || G.jahr < p.expedition.start + p.expedition.dauer) return;
+  const hafen = (p.haefen||0) > 0 ? 0.12 : 0;
+  const karten = p.expedition.karten ? 0.08 : 0;
+  const wurf = Math.random();
+  p.expedition = null;
+  if(wurf < 0.42 + hafen + karten){
+    const schatz = ri(3000, 9000);
+    p.geld += schatz;
+    r.ereignisse.push({ t:`⛵ Die Expedition kehrt schwer beladen zurück: <b>${fmt(schatz)} Taler</b> in Gold und Gewürzen!`, c:"good" });
+    geschichte("💰", `${p.name}s Expedition kehrt mit ${fmt(schatz)} Talern Schätzen heim.`);
+    if(!p.ki) sMuenze();
+  } else if(wurf < 0.67 + hafen){
+    p.stimmung = clamp(p.stimmung + 8, 5, 100);
+    G.spieler.forEach(z=>{ if(z!==p && !z.tot) bezAendern(p, z, 2); });
+    r.ereignisse.push({ t:"⛵ Die Expedition bringt exotische Waren und Geschichten, das Volk staunt (+8 Stimmung), die Höfe sind beeindruckt.", c:"good" });
+  } else if(wurf < 0.84){
+    p._seekarten = true;
+    r.ereignisse.push({ t:"⛵ Die Expedition kehrt mit kostbaren Seekarten zurück, die nächste Fahrt wird kürzer und sicherer.", c:"good" });
+  } else {
+    p.stimmung = clamp(p.stimmung - 3, 5, 100);
+    r.ereignisse.push({ t:"🌊 Von der Expedition fehlt jede Spur. Die Witwen tragen Schwarz.", c:"bad" });
+    geschichte("🌊", `${p.name}s Expedition bleibt verschollen.`);
+  }
+}
+function turnierStarten(){
+  const p = cur();
+  if(p.turnierJahr === G.jahr){ alertMsg("Heuer fand bereits ein Turnier statt."); return; }
+  if(p.titel < 2){ alertMsg("Ein Turnier ziemt sich erst ab dem Rang Graf."); return; }
+  if(p.geld < 2000){ alertMsg("Tribünen, Preise und Bankett kosten 2.000 Taler."); return; }
+  p.geld -= 2000;
+  p.turnierJahr = G.jahr;
+  const gaeste = lebende().map(x=>x.p).filter(z=>z!==p);
+  gaeste.forEach(z=>bezAendern(p, z, 4));
+  const teilnehmer = [p].concat(gaeste);
+  const staerke = z => (z.heer.kav||0)*2 + heerGroesse(z.heer)*0.1
+    + (feldherrArt(z) ? 30*feldherrSkala(z) : 0) + (z.zug==="kriegerisch"?20:0) + rf(0, 60);
+  let sieger = teilnehmer[0], best = -1;
+  for(const z of teilnehmer){ const s2 = staerke(z); if(s2 > best){ best = s2; sieger = z; } }
+  if(sieger === p){
+    p.stimmung = clamp(p.stimmung + 5, 5, 100);
+    p.heerXp = clamp((p.heerXp||0) + 5, 0, 100);
+    geschichte("🏇", `${p.name} richtet ein Turnier aus und gewinnt die Tjost vor allen Höfen!`);
+  } else {
+    bezAendern(p, sieger, 3);
+    geschichte("🏇", `${p.name} richtet ein Turnier aus, ${sieger.name} gewinnt die Tjost.`);
+  }
+  G._turnier = { gast: G.spieler.indexOf(sieger === p ? (gaeste[0]||p) : sieger),
+                 sieger: G.spieler.indexOf(sieger), start: performance.now() };
+  sTrommel();
+  zeige("turnier");
 }
 function feldherrAnwerben(id){
   const p = cur();
@@ -8131,6 +8744,8 @@ function animLoop(t){
   else if(G.screen === "replay")  zeichnePartieReplay(t);
   else if(G.screen === "sieg")    zeichneFeuerwerk(t);
   else if(G.screen === "handoff") zeichneSaisonband(t);
+  else if(G.screen === "turnier") zeichneTjost(t);
+  else if(G.screen === "kroenung") zeichneKroenung(t);
 }
 requestAnimationFrame(animLoop);
 
