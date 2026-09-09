@@ -522,7 +522,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.6 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.6.1 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -6261,12 +6261,14 @@ function deltaBadge(v, einheit=""){
   return v>0 ? `<span class="up">▲ ${fmt(v)}${einheit}</span>` : `<span class="down">▼ ${fmt(Math.abs(v))}${einheit}</span>`;
 }
 function alertMsg(t, ms){
-  const el = $("#screen");
+  const box = $("#toasts");
+  if(!box) return;
   const div = document.createElement("div");
-  div.className = "card"; div.style.borderColor = "var(--red)";
-  div.innerHTML = `<p class="red">${t}</p>`;
-  el.prepend(div);
-  setTimeout(()=>div.remove(), ms || 4000);
+  div.className = "toast";
+  div.style.borderColor = "var(--red)";
+  div.innerHTML = `<p>⚠️ ${t}</p>`;
+  box.appendChild(div);
+  setTimeout(()=>{ div.style.opacity="0"; div.style.transition="opacity .4s"; setTimeout(()=>div.remove(),400); }, ms || 5000);
 }
 
 const SCREENS = {
@@ -7076,8 +7078,8 @@ const SCREENS = {
       <div class="card">
         <h3>🎪 Hof, Feste & Fahrten</h3>
         <div class="rowflex">
-          <button onclick="volksfest()" ${p.festJahr===G.jahr?'disabled':''}>🎪 Volksfest geben (800 T, +10 Stimmung)</button>
-          <button onclick="turnierStarten()" ${p.turnierJahr===G.jahr||p.titel<2?'disabled':''}>🏇 Ritterturnier ausrichten (2.000 T${p.titel<2?", ab Graf":""})</button>
+          <button onclick="volksfest()" ${p.festJahr===G.jahr?'disabled':''}>${p.festJahr===G.jahr?"🎉 Volksfest gegeben (+10 Stimmung)":"🎪 Volksfest geben (800 T, +10 Stimmung)"}</button>
+          <button onclick="turnierStarten()" ${p.turnierJahr===G.jahr||p.titel<2?'disabled':''}>${p.turnierJahr===G.jahr?"🏇 Turnier fand heuer statt":`🏇 Ritterturnier ausrichten (2.000 T${p.titel<2?", ab Graf":""})`}</button>
           <button onclick="expeditionStarten()" ${p.expedition?'disabled':''}>⛵ Expedition ausrüsten (2.500 T)</button>
         </div>
         <p class="muted small" style="margin-top:6px">Das Turnier lädt alle Höfe (+4 Verhältnis); wer die Tjost
@@ -7091,7 +7093,7 @@ const SCREENS = {
       <button onclick="zeige('diplo')" ${lebende().length>1?'':'disabled'}>🤝 Diplomatie</button>
       <button onclick="weltAuf()">🗺️ Gesamtkarte</button>
       <button class="btn-primary btn-lg" onclick="jahrAbschliessen()">Jahr abschließen</button>
-      ${!kriegOk?`<div class="event bad" style="max-width:640px">⚔️ <b>Für einen Feldzug fehlt Euch noch:</b> ${kannKrieg(p).fehlt.join(" · ")}.</div>`:''}`;
+      ${!kriegOk?`<p class="muted small" style="max-width:640px;margin-top:6px">⚔️ Feldzüge werden möglich, sobald Ihr habt: ${kannKrieg(p).fehlt.join(" · ")}.</p>`:''}`;
   },
 
   diplo(){

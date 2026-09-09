@@ -357,3 +357,8 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Zug-Timer als Fortschritt:** Der Timer-Chip im Kopf füllt sich golden mit ablaufender Zeit — man sieht die 90 Sekunden, statt sie zu lesen.
 - **Atmendes Titelbild:** Das Panorama zoomt kaum merklich, Goldfunken steigen auf, und Titelbild wie Reichskarte tragen jetzt den gestochenen Goldrahmen mit Eckzier der Weltkarte.
 - **Feinschliff überall:** Dezente Struktur im Seitenhintergrund, goldene Haarlinie unter dem Kopf, Karten mit Lichtkante und gestaffeltem Eintritt.
+
+## Version 3.6.1 — Missverständliche Feldzug-Warnung behoben
+
+- Der rote Kasten „Für einen Feldzug fehlt Euch noch …" stand dauerhaft in der Bauphase und wirkte nach jedem Klick (z. B. „Volksfest geben") wie eine Fehlermeldung zur Aktion. Er ist jetzt ein dezenter grauer Hinweis neben dem Kriegs-Knopf. Das Volksfest selbst hat immer funktioniert.
+- Fehlermeldungen erscheinen nun als rote Einblendung unten rechts (immer sichtbar, auch wenn man gescrollt hat), und die Fest-/Turnier-Knöpfe zeigen nach dem Klick ihren erledigten Zustand („🎉 Volksfest gegeben").
