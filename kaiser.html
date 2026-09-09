@@ -526,7 +526,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.8 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.8.1 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -1851,6 +1851,7 @@ function einTick(s, leise){
     s.lanes.forEach(l => { sturmTote += laneVerlust(l.A, laneGroesse(l.A)*0.06); });
     if(sturmTote > 0) s.log.unshift(`Der Sturm auf die Mauern kostet die Angreifer ${fmt(sturmTote)} Mann.`);
   }
+  if(s.tick === 1 && !leise) s.partikel.push({ typ:"voegelflucht", born: performance.now() });
   if(s.tick === 1 && s.winter){
     let frost = 0;
     s.lanes.forEach(l => { frost += laneVerlust(l.A, laneGroesse(l.A)*0.04); });
@@ -1905,6 +1906,9 @@ function einTick(s, leise){
       if(!leise){
         if(nahD > 3) s.partikel.push({ typ:"tref", lane:i, seite:"D", born:jetzt+rf(0,300) });
         if(nahA > 3) s.partikel.push({ typ:"tref", lane:i, seite:"A", born:jetzt+rf(0,300) });
+        /* Klingenblitze und Musketenkugeln im Handgemenge */
+        if(Math.random() < 0.8) s.partikel.push({ typ:"klinge", lane:i, off:rf(-0.5,0.5), born:jetzt+rf(0,400) });
+        if(Math.random() < 0.6) s.partikel.push({ typ:"mkugel", lane:i, von:Math.random()<0.5?"A":"D", born:jetzt+rf(0,350) });
       }
       if(!leise){
         s.partikel.push({ typ:"staub", lane:i, born:jetzt });
@@ -3809,17 +3813,18 @@ function zeichneFeld(t=0){
     }
   }
 
-  /* Morgennebel: träge Schwaden über dem Feld */
+  /* Morgennebel: träge Schwaden, die sich im Lauf des Gefechts lichten */
   if(s.nebel){
+    const lichtung = Math.max(0.35, 1 - (s.tick||0)/30);
     for(let nb=0; nb<4; nb++){
       const nx = ((t/(90+nb*35) + nb*260) % (W+320)) - 160;
       const ny = H*0.35 + nb*H*0.16;
       const ngrad = ctx.createRadialGradient(nx, ny, 10, nx, ny, 130);
-      ngrad.addColorStop(0, "rgba(205,210,220,.16)"); ngrad.addColorStop(1, "rgba(205,210,220,0)");
+      ngrad.addColorStop(0, `rgba(205,210,220,${0.16*lichtung})`); ngrad.addColorStop(1, "rgba(205,210,220,0)");
       ctx.fillStyle = ngrad;
       ctx.beginPath(); ctx.ellipse(nx, ny, 150, 34, 0, 0, 7); ctx.fill();
     }
-    ctx.fillStyle = "rgba(200,206,216,.07)"; ctx.fillRect(0, H*0.27, W, H*0.7);
+    ctx.fillStyle = `rgba(200,206,216,${0.07*lichtung})`; ctx.fillRect(0, H*0.27, W, H*0.7);
   }
   /* Pulverdunst: je länger das Gefecht, desto trüber die Feldmitte */
   const dunst = Math.min(0.15, (s.tick||0)*0.006);
@@ -3982,6 +3987,32 @@ function zeichneFeld(t=0){
   };
   banner(W*0.05, fA, 0, G._kr ? G.spieler[G._kr.a].wappen : "", s.moralA);
   banner(W*0.95-20, fD, 2, G._kr ? G.spieler[G._kr.d].wappen : "", s.moralD);
+  /* Trommler geben den Marschtakt, solange eine Linie vorrückt */
+  if(!s.fertig && s.lanes.some(l=>l.dist>0 && laneGroesse(l.A)>0 && laneGroesse(l.D)>0)){
+    const trommler = (tx, farbe, richt) => {
+      const schlag = Math.sin(t/110) * 2.6;
+      ctx.save();
+      ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineWidth = 1.5; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.arc(tx, H*0.52 - 7, 2, 0, 7); ctx.fill();          /* Kopf */
+      ctx.beginPath(); ctx.moveTo(tx, H*0.52 - 4.8); ctx.lineTo(tx, H*0.52 + 1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(tx, H*0.52 + 1); ctx.lineTo(tx-2, H*0.52 + 5);
+      ctx.moveTo(tx, H*0.52 + 1); ctx.lineTo(tx+2, H*0.52 + 5); ctx.stroke();
+      /* Trommel */
+      ctx.fillStyle = "#c8beab";
+      ctx.fillRect(tx + richt*3, H*0.52 - 2, 5, 4.5);
+      ctx.strokeStyle = "#8a5a2a"; ctx.lineWidth = 1;
+      ctx.strokeRect(tx + richt*3, H*0.52 - 2, 5, 4.5);
+      /* Schlegel wirbeln */
+      ctx.strokeStyle = farbe; ctx.lineWidth = 1.1;
+      ctx.beginPath(); ctx.moveTo(tx + richt*2, H*0.52 - 3.5);
+      ctx.lineTo(tx + richt*5.5, H*0.52 - 5 + schlag); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(tx + richt*2, H*0.52 - 3.5);
+      ctx.lineTo(tx + richt*6.5, H*0.52 - 5 - schlag); ctx.stroke();
+      ctx.restore();
+    };
+    trommler(basisA - 46, fA, 1);
+    trommler(basisD + 46, fD, -1);
+  }
 
   /* Partikel: Kanonenkugeln (Flugbahn), Explosionen, Nahkampfstaub */
   const jetzt = performance.now();
@@ -3990,12 +4021,21 @@ function zeichneFeld(t=0){
     if(alter < 0) continue;
     if(pk.typ==="kugel" && alter < 900){
       const q = alter/900;
-      /* Mündungsfeuer beim Abschuss */
+      /* Mündungsfeuer und Rauchring beim Abschuss */
       if(q < 0.14){
         const mx = pk.von==="A" ? basisA-16 : basisD+16;
         const my = oben + pk.lane*laneH + laneH/2;
         ctx.fillStyle = `rgba(255,225,140,${0.9*(1-q/0.14)})`;
         ctx.beginPath(); ctx.arc(mx, my, 5+q*30, 0, 7); ctx.fill();
+      }
+      if(q < 0.4){
+        const mx = pk.von==="A" ? basisA-14 : basisD+14;
+        const my = oben + pk.lane*laneH + laneH/2;
+        ctx.strokeStyle = `rgba(210,210,215,${0.4*(1-q/0.4)})`;
+        ctx.lineWidth = 2 - q*3;
+        ctx.beginPath();
+        ctx.ellipse(mx + (pk.von==="A"?1:-1)*q*10, my, 3+q*24, 2+q*13, 0, 0, 7);
+        ctx.stroke();
       }
       /* Pulverrauch treibt nach dem Schuss davon */
       if(q < 0.75){
@@ -4037,10 +4077,23 @@ function zeichneFeld(t=0){
       const lane = s.lanes[pk.lane];
       const y0 = oben + pk.lane*laneH + laneH*0.5;
       const xm = basisA + (100-(lane?lane.dist:0))/100*spann + (pk.seite==="A"?-14:14) + pk.off*W;
-      ctx.strokeStyle = `rgba(150,150,158,${0.5*(1-q)})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(xm-4, y0+6); ctx.lineTo(xm+4, y0+6);
-      ctx.moveTo(xm, y0+2); ctx.lineTo(xm, y0+9); ctx.stroke();
+      if(alter < 420){
+        /* Die Figur kippt zur Seite */
+        const kq = alter/420;
+        ctx.save();
+        ctx.translate(xm, y0+6);
+        ctx.rotate((pk.seite==="A"?-1:1) * kq * 1.5);
+        ctx.strokeStyle = `rgba(165,165,172,.85)`; ctx.lineWidth = 1.4; ctx.lineCap = "round";
+        ctx.beginPath(); ctx.arc(0, -6, 1.6, 0, 7); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, -4.4); ctx.lineTo(0, 0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-1.6, 3.4); ctx.moveTo(0, 0); ctx.lineTo(1.6, 3.4); ctx.stroke();
+        ctx.restore();
+      } else {
+        ctx.strokeStyle = `rgba(150,150,158,${0.5*(1-q)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(xm-4, y0+6); ctx.lineTo(xm+4, y0+6);
+        ctx.moveTo(xm, y0+2); ctx.lineTo(xm, y0+9); ctx.stroke();
+      }
     } else if(pk.typ==="wandtreffer" && alter < 1100){
       const q = alter/1100;
       const y0 = oben + pk.lane*laneH + laneH/2;
@@ -4086,6 +4139,12 @@ function zeichneFeld(t=0){
         const sx = xm - 26 - k*7 + q*30;
         ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx+15, sy); ctx.stroke();
       }
+      /* Zwei Reiter preschen sichtbar durch den Staub */
+      ctx.save(); ctx.globalAlpha = Math.min(1, (1-q)*1.6);
+      const fRitt = G._kr ? G.spieler[G._kr.a].farbe : "#5fb8d4";
+      malReiter(ctx, xm - 34 + q*46, y0 - 3, fRitt, 1, Math.abs(Math.sin(alter/60))*2.4);
+      malReiter(ctx, xm - 48 + q*46, y0 + 5, fRitt, 1, Math.abs(Math.sin(alter/60 + 1.5))*2.4);
+      ctx.restore();
       ctx.fillStyle = `rgba(160,140,110,${0.4*(1-q)})`;
       ctx.beginPath(); ctx.ellipse(xm-20+q*24, y0+6, 12+q*14, 4, 0, 0, 7); ctx.fill();
     } else if(pk.typ==="durchflash" && alter < 1000){
@@ -4123,6 +4182,49 @@ function zeichneFeld(t=0){
       gradT.addColorStop(pk.seite==="A"?1:0, `rgba(255,90,60,${0.26*(1-q)})`);
       ctx.fillStyle = gradT;
       ctx.fillRect(front - (pk.seite==="A"?breite:0), y0+2, breite, laneH-4);
+    } else if(pk.typ==="klinge" && alter < 260){
+      const q = alter/260;
+      const lane = s.lanes[pk.lane];
+      const y0 = oben + pk.lane*laneH + laneH*(0.3 + Math.abs(pk.off));
+      const xm = basisA + (100-(lane?lane.dist:0))/100*spann + pk.off*22;
+      /* Aufblitzende Klinge: kurzer heller Strich, der kippt */
+      ctx.save();
+      ctx.translate(xm, y0);
+      ctx.rotate(-0.9 + q*1.8 + pk.off*2);
+      ctx.strokeStyle = `rgba(240,246,255,${0.85*(1-q)})`;
+      ctx.lineWidth = 1.6; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(-5, 0); ctx.lineTo(6, 0); ctx.stroke();
+      ctx.restore();
+      if(q < 0.3){
+        ctx.fillStyle = `rgba(255,240,180,${0.7*(1-q/0.3)})`;
+        ctx.beginPath(); ctx.arc(xm, y0, 1.6, 0, 7); ctx.fill();
+      }
+    } else if(pk.typ==="mkugel" && alter < 300){
+      const q = alter/300;
+      const lane = s.lanes[pk.lane];
+      const y0 = oben + pk.lane*laneH + laneH*(0.3 + ((pk.born % 97)/97)*0.4);
+      const mitte = basisA + (100-(lane?lane.dist:0))/100*spann;
+      const von2 = pk.von==="A" ? mitte - 26 : mitte + 26;
+      const nach2 = pk.von==="A" ? mitte + 20 : mitte - 20;
+      const x2 = von2 + (nach2-von2)*q;
+      ctx.strokeStyle = `rgba(255,235,190,${0.5*(1-q)})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x2 - (nach2-von2)*0.12, y0); ctx.lineTo(x2, y0); ctx.stroke();
+    } else if(pk.typ==="voegelflucht" && alter < 2600){
+      const q = alter/2600;
+      /* Aufgescheuchte Vögel fliehen fächerförmig vom Feld */
+      ctx.strokeStyle = `rgba(30,34,42,${0.8*(1-q)})`;
+      ctx.lineWidth = 1.4; ctx.lineCap = "round";
+      for(let vb=0; vb<6; vb++){
+        const wink = -0.4 - vb*0.45;
+        const vd = q * (170 + vb*36);
+        const vx5 = W*0.5 + Math.cos(wink)*vd*(vb%2?1:-1);
+        const vy5 = H*0.45 + Math.sin(wink)*vd*0.55;
+        const fl4 = Math.sin(t/90 + vb*2.2)*3;
+        ctx.beginPath();
+        ctx.moveTo(vx5-3.4, vy5 - fl4); ctx.quadraticCurveTo(vx5, vy5+1, vx5+3.4, vy5 - fl4);
+        ctx.stroke();
+      }
     } else if(pk.typ==="staub" && alter < 1300){
       const q = alter/1300;
       const lane = s.lanes[pk.lane];

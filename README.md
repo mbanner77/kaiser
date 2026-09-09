@@ -378,3 +378,11 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Zerwühlter Boden:** Wo die Linien aufeinanderprallen, bleibt aufgewühlte Erde zurück.
 - **Übersichtlicheres Gefecht:** Ein schmaler Fortschrittsbalken zeigt den Verlauf (Gefecht x/40), und das Schlachtlog ist farbcodiert: Gold für Durchbrüche/Reserven, Blau für Wetter, gedämpft für Verlustmeldungen.
 - **Aufstellung mit Gelände:** Die Vorschau der Schlachtordnung zeigt jetzt Hügel, Furten und Wälder in der Feldmitte — man stellt gezielt dagegen auf.
+
+## Version 3.8.1 — Noch mehr Leben in der Schlacht
+
+- **Handgemenge:** Im Nahkampf blitzen kippende Klingen auf und Musketenkugeln ziehen als kurze Leuchtspuren zwischen den Fronten hin und her.
+- **Gefallene:** Getroffene Soldaten kippen sichtbar zur Seite, bevor das stille Kreuz im Boden bleibt.
+- **Kanonen:** Jeder Abschuss stößt jetzt zusätzlich einen expandierenden Rauchring aus.
+- **Sturmritt:** Bei der Kavallerie-Attacke preschen zwei sichtbare Reiter in Hausfarbe durch den Staub, statt nur Streifen zu ziehen.
+- **Atmosphäre:** Beim ersten Schuss stieben aufgescheuchte Vögel fächerförmig vom Feld; der Morgennebel lichtet sich im Lauf des Gefechts; an beiden Basen wirbeln Trommler-Jungen die Schlegel im Marschtakt, solange die Linien vorrücken.
