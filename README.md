@@ -349,3 +349,11 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Spielstart auf iPad/iPhone repariert:** Die Spielerzeilen sind jetzt flexible, umbrechende Reihen statt einer starren Tabelle. Nichts überlappt mehr, und das Namensfeld ist auf dem Handy groß und tippbar.
 - **Schwarzer Balken entfernt:** In der Jahresbilanz-Wetterszene stand noch die leere Beschriftungsfläche des alten Schriftzugs, sie ist weg.
 - **Sieg durch Eroberung:** Wer in einer Schlacht mit tiefem Durchbruch (Stufe 4+) geschlagen wird, verliert jetzt auch bebautes Land (Gebäude auf verlorenem Boden verfallen). Fällt ein Reich unter 1.500 ha, ist es vernichtet: Es scheidet aus, Restland und halbe Kasse gehen an den Sieger. Bleibt nur ein Reich übrig, wird sein Regent durch das Recht des Schwertes zum Kaiser ausgerufen, samt Krönungs-Zeremonie. Neuer Erfolg: „Reichsbezwinger".
+
+## Version 3.6 — Politur auf Spieleniveau
+
+- **Goldene Regler:** Alle Schieberegler (Korn, Steuern, Aufstellung) haben jetzt eine geprägte Schiene und einen griffigen Goldknauf statt der Browser-Standardoptik; Checkboxen und Zahlenfelder passen sich an.
+- **Geprägte Knöpfe:** Primär- und Gefahren-Knöpfe wirken wie geprägtes Metall mit Lichtkante, Tiefe und Glanzlauf.
+- **Zug-Timer als Fortschritt:** Der Timer-Chip im Kopf füllt sich golden mit ablaufender Zeit — man sieht die 90 Sekunden, statt sie zu lesen.
+- **Atmendes Titelbild:** Das Panorama zoomt kaum merklich, Goldfunken steigen auf, und Titelbild wie Reichskarte tragen jetzt den gestochenen Goldrahmen mit Eckzier der Weltkarte.
+- **Feinschliff überall:** Dezente Struktur im Seitenhintergrund, goldene Haarlinie unter dem Kopf, Karten mit Lichtkante und gestaffeltem Eintritt.

@@ -22,7 +22,11 @@
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{
-    background:radial-gradient(1200px 600px at 50% -100px,#1a2233 0%,var(--bg) 60%);
+    background:
+      radial-gradient(1200px 600px at 50% -100px,#1a2233 0%,transparent 60%),
+      repeating-linear-gradient(-45deg, rgba(255,255,255,.006) 0 2px, transparent 2px 6px),
+      radial-gradient(1400px 700px at 50% 115%, #131a28 0%, transparent 55%),
+      var(--bg);
     color:var(--txt);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
     min-height:100vh;overflow-x:hidden;
@@ -33,6 +37,8 @@
     padding:12px 20px;background:rgba(14,17,23,.85);backdrop-filter:blur(8px);
     border-bottom:1px solid var(--border);
   }
+  header::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
+    background:linear-gradient(90deg,transparent 0%,rgba(224,180,88,.55) 50%,transparent 100%);}
   .brand{font-weight:800;font-size:20px;letter-spacing:2px;color:var(--gold);
     font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;}
   /* --- Systemmenü --- */
@@ -95,6 +101,12 @@
     transition:border-color .2s, transform .15s, box-shadow .2s;
   }
   .card:hover{border-color:#3a4759;transform:translateY(-1px);box-shadow:0 8px 22px rgba(0,0,0,.28);}
+  .card{box-shadow:inset 0 1px 0 rgba(255,255,255,.035), 0 6px 18px rgba(0,0,0,.18);}
+  #screen .card:nth-of-type(2){animation-delay:.05s;}
+  #screen .card:nth-of-type(3){animation-delay:.10s;}
+  #screen .card:nth-of-type(4){animation-delay:.15s;}
+  #screen .grid .card:nth-child(2){animation-delay:.07s;}
+  #screen .grid .card:nth-child(3){animation-delay:.13s;}
   ::selection{background:rgba(224,180,88,.35);}
   :focus-visible{outline:2px solid var(--gold);outline-offset:2px;}
   ::-webkit-scrollbar{width:10px;height:10px;}
@@ -182,7 +194,9 @@
   }
   button:active:not(:disabled){transform:scale(.97);}
   button:disabled{opacity:.35;cursor:default;}
-  .btn-primary{background:linear-gradient(180deg,var(--gold) 0%,var(--gold2) 100%);color:#1a1509;border-color:var(--gold2);
+  .btn-primary{background:linear-gradient(180deg,#ecc878 0%,var(--gold) 34%,var(--gold2) 100%);color:#1a1509;border-color:#a97f35;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 3px 10px rgba(0,0,0,.35);
+    text-shadow:0 1px 0 rgba(255,255,255,.25);
     position:relative;overflow:hidden;}
   .btn-primary:hover:not(:disabled){filter:brightness(1.08);border-color:var(--gold);
     box-shadow:0 0 18px rgba(224,180,88,.32);}
@@ -191,7 +205,9 @@
     transform:skewX(-18deg);transition:left .45s ease;}
   .btn-primary:hover:not(:disabled)::after{left:130%;}
   .btn-danger{background:transparent;color:var(--red);border-color:var(--red);}
-  .btn-danger:hover:not(:disabled){background:var(--red);color:#fff;border-color:var(--red);}
+  .btn-danger:hover:not(:disabled){
+    background:linear-gradient(180deg,#e5636f 0%,#b23845 100%);color:#fff;border-color:#8a2f3f;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.25), 0 3px 12px rgba(219,90,90,.35);}
   .btn-lg{font-size:16px;padding:13px 26px;border-radius:12px;}
   .btn-sm{font-size:12.5px;padding:6px 10px;margin:2px 4px 2px 0;}
   input[type=text],input[type=number],select{
@@ -202,7 +218,33 @@
   }
   input[type=text]{width:210px;}
   input:focus,select:focus{outline:none;border-color:var(--gold);}
-  input[type=range]{width:100%;accent-color:var(--gold);}
+  input[type=range]{
+    width:100%;appearance:none;-webkit-appearance:none;background:transparent;
+    height:30px;cursor:pointer;accent-color:var(--gold);
+  }
+  input[type=range]::-webkit-slider-runnable-track{
+    height:7px;border-radius:99px;
+    background:linear-gradient(180deg,#232c3b,#2a3446);
+    border:1px solid #202a3a;box-shadow:inset 0 1px 3px rgba(0,0,0,.5);
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:21px;height:21px;border-radius:50%;margin-top:-8px;
+    background:radial-gradient(circle at 35% 30%,#f4d98d 0%,var(--gold) 45%,var(--gold2) 100%);
+    border:1px solid #a97f35;
+    box-shadow:0 2px 7px rgba(0,0,0,.55), inset 0 1px 1px rgba(255,255,255,.5);
+  }
+  input[type=range]:active::-webkit-slider-thumb{transform:scale(1.12);}
+  input[type=range]::-moz-range-track{
+    height:7px;border-radius:99px;background:#2a3446;border:1px solid #202a3a;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:20px;height:20px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#f4d98d 0%,var(--gold) 45%,var(--gold2) 100%);
+    border:1px solid #a97f35;box-shadow:0 2px 7px rgba(0,0,0,.55);
+  }
+  input[type=checkbox]{accent-color:var(--gold);width:17px;height:17px;vertical-align:-3px;}
+  input[type=number]::-webkit-inner-spin-button{opacity:.5;}
   table{width:100%;border-collapse:collapse;}
   td,th{padding:7px 6px;text-align:left;font-size:14.5px;}
   td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;}
@@ -480,7 +522,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.5.1 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.6 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -2348,6 +2390,10 @@ function zeichneTitel(t){
   if(!c) return;
   const ctx = c.getContext("2d");
   const W = c.width, H = c.height;
+  /* Atmender Kamerazug: die Szene zoomt kaum merklich */
+  const atmen = 1.012 + Math.sin(t/7000) * 0.012;
+  ctx.save();
+  ctx.translate(W/2, H*0.62); ctx.scale(atmen, atmen); ctx.translate(-W/2, -H*0.62);
   /* Tageszeit: weicher Umlauf durch die vier Phasen */
   const umlauf = (t/80000) % 1;
   const seg = umlauf*4, si = Math.floor(seg)%4, sq = seg - Math.floor(seg);
@@ -2467,6 +2513,17 @@ function zeichneTitel(t){
     ctx.beginPath(); ctx.moveTo(vx-6,vy); ctx.quadraticCurveTo(vx-2,vy-4,vx,vy);
     ctx.quadraticCurveTo(vx+2,vy-4,vx+6,vy); ctx.stroke();
   }
+  ctx.restore();
+  /* Goldfunken steigen wie Kaminfunken über dem Panorama auf */
+  for(let gf=0; gf<9; gf++){
+    const seed = ((gf*71)%89)/89;
+    const q = ((t/(5200+seed*2800)) + gf*0.31) % 1;
+    const gx = W*(0.08 + seed*0.84) + Math.sin(q*7 + gf)*14;
+    const gy = H - q*H*0.85;
+    ctx.fillStyle = `rgba(240,205,120,${0.34*(1-q)*(0.5+0.5*Math.sin(t/140+gf))})`;
+    ctx.beginPath(); ctx.arc(gx, gy, 1 + seed*1.2, 0, 7); ctx.fill();
+  }
+  malKartenRahmen(ctx, W, H);
 }
 
 /* ---------- Reichskarte (prozedural, deterministisch pro Reich) ---------- */
@@ -3021,6 +3078,25 @@ function zeichneKarte(p, canvasId, t=0){
   ctx.beginPath(); ctx.moveTo(W-30,18); ctx.lineTo(W-26,32); ctx.lineTo(W-30,29); ctx.lineTo(W-34,32); ctx.closePath(); ctx.fill();
   ctx.fillStyle = "#8b96a8"; ctx.font = "10px sans-serif"; ctx.textAlign="center";
   ctx.fillText("N", W-30, 14);
+  malKartenRahmen(ctx, W, H);
+}
+/* Goldener Doppelrahmen mit Eckzier, wie auf alten Stichen */
+function malKartenRahmen(ctx, W, H){
+  ctx.save();
+  ctx.strokeStyle = "rgba(224,180,88,.45)"; ctx.lineWidth = 2;
+  ctx.strokeRect(5, 5, W-10, H-10);
+  ctx.strokeStyle = "rgba(224,180,88,.18)"; ctx.lineWidth = 1;
+  ctx.strokeRect(10, 10, W-20, H-20);
+  ctx.strokeStyle = "rgba(224,180,88,.45)"; ctx.lineWidth = 1.5;
+  ctx.fillStyle = "rgba(224,180,88,.45)";
+  for(const [ecx, ecy, sx, sy] of [[5,5,1,1],[W-5,5,-1,1],[5,H-5,1,-1],[W-5,H-5,-1,-1]]){
+    ctx.beginPath();
+    ctx.moveTo(ecx + sx*20, ecy);
+    ctx.quadraticCurveTo(ecx + sx*4, ecy + sy*4, ecx, ecy + sy*20);
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(ecx + sx*9, ecy + sy*9, 1.8, 0, 7); ctx.fill();
+  }
+  ctx.restore();
 }
 
 /* ---------- Gesamtkarte: alle Reiche im Nachbarschaftskreis ---------- */
@@ -5572,6 +5648,9 @@ function kopf(){
       const t = Math.floor((Date.now()-cur().turnStart)/1000);
       $("#hTimer").innerHTML = t>90 ? `⏳ <b>${t}s</b>. Euer Leben verrinnt!` : `⏱ <b>${t}s</b> / 90s`;
       $("#hTimer").className = "chip" + (t>90 ? " warn" : "");
+      const q = clamp(t/90*100, 0, 100);
+      $("#hTimer").style.background = t>90 ? "" :
+        `linear-gradient(90deg, rgba(224,180,88,.22) ${q}%, var(--panel2) ${q}%)`;
     };
     tick(); timerIv = setInterval(tick, 1000);
   }
