@@ -368,3 +368,13 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Revolutions-Mechanik:** Wer sein Volk dauerhaft im Elend hält (Stimmung unter 15), erlebt eine Eskalation über Jahre: Erst gärt es (Warnung), dann plündern aufgebrachte Haufen die Speicher, ab dem dritten Jahr droht der offene **Volksaufstand**. Ein starkes Heer kann die Erhebung niederschlagen (Gebäude brennen, Menschen und Soldaten sterben, die Ruhe ist nur erkauft). Ist das Heer zu schwach, wird der Regent gestürzt: Mit einem erwachsenen Thronfolger kommt es zur erzwungenen Abdankung (der Erbe übernimmt mit Stimmung 45), ohne Erben endet die Herrschaft — der Spieler scheidet aus, und der letzte Verbliebene wird ggf. Kaiser. Erholt sich die Stimmung (25+), beruhigt sich das Volk wieder.
 - **Sichtbare Unruhe:** Bei Gärung ziehen Fackelzüge über die Reichskarte und roter Feuerschein liegt über der Stadt. Die Stimmungs-Kachel pulsiert rot mit wütendem Smiley, der Status-Bildschirm warnt mit konkreten Abhilfe-Tipps, und die Zwischenbilanz zeigt „⚠️ Revolutionsgefahr".
 - **UI-Feinschliff:** Das Titelmenü ist eine aufgeräumte Knopf-Spalte (Fortsetzen direkt unter Neues Spiel), und in der Schlacht pulsieren brechende Moralbalken.
+
+## Version 3.8 — Die Schlacht lebt
+
+- **Marschierende Formationen:** Infanterie und Miliz schwingen im Marschtritt die Beine (reihenversetzt), Kavallerie galoppiert sichtbar — sobald die Linie steht, steht auch die Formation.
+- **Kanonen-Rückstoß:** Beim Abschuss weicht die Kanone kurz zurück.
+- **Treffer-Blitze:** Wo eine Formation ernsthaft Verluste nimmt, flammt ein roter Schein über ihrer Front auf — man sieht, wer gerade blutet.
+- **Kampf-Kamera:** Das Feld zoomt dezent heran, je näher sich die Linien kommen; Abschnittsnamen und Truppenzahlen bleiben davon unberührt scharf am Rand.
+- **Zerwühlter Boden:** Wo die Linien aufeinanderprallen, bleibt aufgewühlte Erde zurück.
+- **Übersichtlicheres Gefecht:** Ein schmaler Fortschrittsbalken zeigt den Verlauf (Gefecht x/40), und das Schlachtlog ist farbcodiert: Gold für Durchbrüche/Reserven, Blau für Wetter, gedämpft für Verlustmeldungen.
+- **Aufstellung mit Gelände:** Die Vorschau der Schlachtordnung zeigt jetzt Hügel, Furten und Wälder in der Feldmitte — man stellt gezielt dagegen auf.

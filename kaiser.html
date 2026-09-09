@@ -526,7 +526,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.7 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.8 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -1879,9 +1879,12 @@ function einTick(s, leise){
       const artFx = (gel.artFaktor || 1) * (s.regen ? 0.65 : 1) * (s.nebel ? 0.55 : 1);
       const feuerA = a.art * rf(0.7,1.3) * artFx * ((s.fxA && s.fxA.art) || 1);
       const feuerD = d.art * rf(0.7,1.3) * 1.15 * artFx * ((s.fxD && s.fxD.art) || 1);
-      gefD += laneVerlust(d, feuerA*0.30);
-      gefA += laneVerlust(a, feuerD*0.30);
+      const trefD = laneVerlust(d, feuerA*0.30);
+      const trefA = laneVerlust(a, feuerD*0.30);
+      gefD += trefD; gefA += trefA;
       if(!leise){
+        if(trefD > 2) s.partikel.push({ typ:"tref", lane:i, seite:"D", born:jetzt+rf(500,800) });
+        if(trefA > 2) s.partikel.push({ typ:"tref", lane:i, seite:"A", born:jetzt+rf(500,800) });
         if(a.art>0) s.partikel.push({ typ:"kugel", von:"A", lane:i, born:jetzt+rf(0,250) });
         if(d.art>0) s.partikel.push({ typ:"kugel", von:"D", lane:i, born:jetzt+rf(0,250) });
         /* Einschläge im Mauerwerk: Staub und Splitter an der Festung */
@@ -1896,8 +1899,13 @@ function einTick(s, leise){
       const nah = (u, fx) => u.inf + u.kav*2.5*kavFx*((fx && fx.kav)||1) + u.art*0.4 + u.miliz*0.8 + u.auf*0.5;
       const stA = nah(a, s.fxA) * ((s.fxA && s.fxA.nah) || 1) * rf(0.85,1.15);
       const stD = nah(d, s.fxD) * ((s.fxD && s.fxD.nah) || 1) * 1.15 * (gel.defBonus || 1) * (s.festung || 1) * rf(0.85,1.15);
-      gefD += laneVerlust(d, gD * stA/(stA+stD) * 0.15);
-      gefA += laneVerlust(a, gA * stD/(stA+stD) * 0.15);
+      const nahD = laneVerlust(d, gD * stA/(stA+stD) * 0.15);
+      const nahA = laneVerlust(a, gA * stD/(stA+stD) * 0.15);
+      gefD += nahD; gefA += nahA;
+      if(!leise){
+        if(nahD > 3) s.partikel.push({ typ:"tref", lane:i, seite:"D", born:jetzt+rf(0,300) });
+        if(nahA > 3) s.partikel.push({ typ:"tref", lane:i, seite:"A", born:jetzt+rf(0,300) });
+      }
       if(!leise){
         s.partikel.push({ typ:"staub", lane:i, born:jetzt });
         if(Math.random()<0.65)
@@ -3628,21 +3636,21 @@ function weltZu(){ zeige(G._vorWelt || "status"); }
 function angreifenAus(i){ G._zielVorwahl = i; zeige("kriegPlan"); }
 
 /* ---------- Einheiten-Sprites (Schlachtfeld & Aufstellungs-Vorschau) ---------- */
-function malSoldat(ctx, x, y, farbe, richt, pike=true){
+function malSoldat(ctx, x, y, farbe, richt, pike=true, schritt=0){
   ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineWidth = 1.4; ctx.lineCap = "round";
   ctx.beginPath(); ctx.arc(x, y-4.5, 1.7, 0, 7); ctx.fill();
   ctx.beginPath(); ctx.moveTo(x, y-2.8); ctx.lineTo(x, y+1.6); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x, y+1.6); ctx.lineTo(x-1.8, y+5);
-  ctx.moveTo(x, y+1.6); ctx.lineTo(x+1.8, y+5); ctx.stroke();
-  if(pike){ ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(x+richt*2, y+2); ctx.lineTo(x+richt*5, y-8); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(x, y+1.6); ctx.lineTo(x-1.8+schritt, y+5);
+  ctx.moveTo(x, y+1.6); ctx.lineTo(x+1.8-schritt, y+5); ctx.stroke();
+  if(pike){ ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(x+richt*2, y+2); ctx.lineTo(x+richt*5, y-8+schritt*0.4); ctx.stroke(); }
 }
 function malReiter(ctx, x, y, farbe, richt){
   ctx.strokeStyle = farbe; ctx.fillStyle = farbe; ctx.lineWidth = 1.5; ctx.lineCap = "round";
   ctx.beginPath(); ctx.ellipse(x, y+1, 5.2, 2.7, 0, 0, 7); ctx.fill();          /* Pferdeleib */
   ctx.beginPath(); ctx.moveTo(x+richt*4, y);                                     /* Hals & Kopf */
   ctx.lineTo(x+richt*6.6, y-3.6); ctx.lineTo(x+richt*8.4, y-2.8); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x-3, y+3); ctx.lineTo(x-3.4, y+6.4);               /* Beine */
-  ctx.moveTo(x+3, y+3); ctx.lineTo(x+3.4, y+6.4); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x-3, y+3); ctx.lineTo(x-3.4-(arguments[5]||0), y+6.4);   /* Beine */
+  ctx.moveTo(x+3, y+3); ctx.lineTo(x+3.4+(arguments[5]||0), y+6.4); ctx.stroke();
   ctx.beginPath(); ctx.arc(x-richt*0.6, y-5, 1.6, 0, 7); ctx.fill();             /* Reiter */
   ctx.beginPath(); ctx.moveTo(x-richt*0.6, y-3.4); ctx.lineTo(x-richt*0.6, y-0.5); ctx.stroke();
   ctx.lineWidth = 1.1;
@@ -3668,7 +3676,7 @@ function malAufgebot(ctx, x, y, farbe, richt){
   ctx.beginPath(); ctx.moveTo(x+richt*2.6, y-6.5); ctx.lineTo(x+richt*4.6, y-5.5); ctx.stroke();
 }
 /* Ein Trupp Sprites eines Typs in Reihen zeichnen; gibt die Blocktiefe zurück */
-function malTrupp(ctx, typ, anzahl, maxSprites, front, richt, y0, laneH, farbe){
+function malTrupp(ctx, typ, anzahl, maxSprites, front, richt, y0, laneH, farbe, t=0, marsch=false, rueck=0){
   if(anzahl <= 0) return 0;
   const sprites = clamp(Math.ceil(anzahl/Math.max(1,Math.round(anzahl/maxSprites))), 1, maxSprites);
   const abst = typ==="kav" ? 13 : typ==="art" ? 13 : 7.5;
@@ -3677,12 +3685,14 @@ function malTrupp(ctx, typ, anzahl, maxSprites, front, richt, y0, laneH, farbe){
   let tiefe = 0;
   for(let i=0;i<sprites;i++){
     const reihe = i % reihen, spalte = Math.floor(i/reihen);
-    const x = front - richt*(spalte*abst);
+    const x = front - richt*(spalte*abst) - richt*rueck;
     const y = y0 + 8 + reihe*reihenH;
-    if(typ==="inf") malSoldat(ctx, x, y, farbe, richt, true);
-    else if(typ==="miliz") malSoldat(ctx, x, y, farbe, richt, false);
+    /* Marschtritt: die Beine der Reihen schwingen versetzt */
+    const schritt = marsch ? Math.sin(t/110 + i*1.7) * 1.4 : 0;
+    if(typ==="inf") malSoldat(ctx, x, y, farbe, richt, true, schritt);
+    else if(typ==="miliz") malSoldat(ctx, x, y, farbe, richt, false, schritt);
     else if(typ==="auf") malAufgebot(ctx, x, y, farbe, richt);
-    else if(typ==="kav") malReiter(ctx, x, y, farbe, richt);
+    else if(typ==="kav") malReiter(ctx, x, y, farbe, richt, marsch ? Math.abs(schritt)*1.5 : 0);
     else malKanone(ctx, x, y, farbe, richt);
     tiefe = Math.max(tiefe, spalte*abst + abst);
   }
@@ -3700,6 +3710,10 @@ function zeichneFeld(t=0){
   ctx.clearRect(0,0,W,H);
   const jetztF = performance.now();
   ctx.save();
+  /* Kamera rückt näher, je dichter die Linien stehen */
+  const naeheDurchschnitt = s.lanes.reduce((a,l)=>a+l.dist,0) / Math.max(1, s.lanes.length);
+  const zoomF = 1 + 0.03 * (1 - naeheDurchschnitt/100);
+  ctx.translate(W/2, H*0.6); ctx.scale(zoomF, zoomF); ctx.translate(-W/2, -H*0.6);
   if(s.shakeBis && jetztF < s.shakeBis && !s.fertig){
     const stq = (s.shakeBis - jetztF) / 320;
     ctx.translate(rf(-2.6,2.6)*stq, rf(-1.8,1.8)*stq);
@@ -3761,11 +3775,13 @@ function zeichneFeld(t=0){
   for(let i=0;i<=LANES;i++){
     ctx.beginPath(); ctx.moveTo(0,oben+i*laneH); ctx.lineTo(W,oben+i*laneH); ctx.stroke();
   }
+  ctx.save(); ctx.setTransform(1,0,0,1,0,0);
   ctx.font = `${Math.round(10*M)}px sans-serif`; ctx.textAlign = "left"; ctx.fillStyle = `rgba(219,226,238,${M>1?.6:.4})`;
   for(let i=0;i<LANES;i++){
     const gel = (s.gelaende && s.gelaende[i]) || GELAENDE[0];
     ctx.fillText(`${LANE_NAMEN[i]}${gel.ico?" "+gel.ico:""}`, 8, oben+i*laneH+12);
   }
+  ctx.restore();
   /* Gelände in der Feldmitte einzeichnen */
   (s.gelaende||[]).forEach((gel,i)=>{
     const ym = oben + i*laneH + laneH/2;
@@ -3861,19 +3877,39 @@ function zeichneFeld(t=0){
   }
   const skala = Math.max(1, Math.ceil((s.startG.A+s.startG.D)/560));
 
+  /* Zerwühlter Boden, wo die Linien aufeinanderprallten */
+  s.lanes.forEach((lane,i)=>{
+    if(lane.dist === 0 && !lane.spurX) lane.spurX = (basisA + spann + basisD - spann) / 2 / W;
+    if(lane.spurX){
+      const ym = oben + i*laneH + laneH*0.72;
+      ctx.fillStyle = "rgba(52,42,30,.4)";
+      ctx.beginPath(); ctx.ellipse(lane.spurX*W, ym, 40, 5.5, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "rgba(38,31,22,.35)";
+      for(let sp2=0; sp2<4; sp2++){
+        ctx.beginPath();
+        ctx.ellipse(lane.spurX*W + (sp2-1.5)*17, ym + (sp2%2)*3 - 1, 9, 2.3, 0, 0, 7);
+        ctx.fill();
+      }
+    }
+  });
   /* Truppen als Einheiten-Sprites je Abschnitt */
   s.lanes.forEach((lane,i)=>{
     const y0 = oben + i*laneH + 2;
     const frontA = basisA + (100-lane.dist)/100*spann;
     const frontD = basisD - (100-lane.dist)/100*spann;
     const malSeite2 = (u, farbe, front, richt) => {
+      const marsch = lane.dist > 0 && !s.fertig;
+      /* Rückstoß: die Kanone weicht kurz nach dem Schuss zurück */
+      const von = richt > 0 ? "A" : "D";
+      const feuer = (s.partikel||[]).some(pk => pk.typ==="kugel" && pk.von===von && pk.lane===i
+        && jetztF - pk.born > 0 && jetztF - pk.born < 220);
       let x = front;
-      x -= richt * malTrupp(ctx, "inf",   u.inf,   10, x, richt, y0, laneH, farbe);
-      x -= richt * malTrupp(ctx, "miliz", u.miliz,  7, x, richt, y0, laneH, farbe+"99");
-      x -= richt * malTrupp(ctx, "auf",   u.auf,    5, x, richt, y0, laneH, farbe+"77");
-      malTrupp(ctx, "kav", u.kav, 5, x, richt, y0, laneH, farbe);
+      x -= richt * malTrupp(ctx, "inf",   u.inf,   10, x, richt, y0, laneH, farbe, t, marsch);
+      x -= richt * malTrupp(ctx, "miliz", u.miliz,  7, x, richt, y0, laneH, farbe+"99", t, marsch);
+      x -= richt * malTrupp(ctx, "auf",   u.auf,    5, x, richt, y0, laneH, farbe+"77", t, marsch);
+      malTrupp(ctx, "kav", u.kav, 5, x, richt, y0, laneH, farbe, t, marsch);
       /* Artillerie an der Basis */
-      malTrupp(ctx, "art", u.art, 3, richt>0 ? basisA-34 : basisD+34, richt, y0, laneH, farbe);
+      malTrupp(ctx, "art", u.art, 3, richt>0 ? basisA-34 : basisD+34, richt, y0, laneH, farbe, t, false, feuer ? 3 : 0);
     };
     /* Marsch-Wippen: solange die Linie vorrückt, wiegt sie leicht */
     const wippe = lane.dist > 0 && !s.fertig ? Math.sin(t/170 + i*1.4) * 1.1 : 0;
@@ -3910,12 +3946,14 @@ function zeichneFeld(t=0){
       ctx.quadraticCurveTo(frontD-14, y0+8, frontD-8, y0+9);
       ctx.closePath(); ctx.fill();
     }
-    /* Truppenzahlen an den Rändern */
+    /* Truppenzahlen an den Rändern (unabhängig vom Kamera-Zoom) */
+    ctx.save(); ctx.setTransform(1,0,0,1,0,0);
     ctx.font = `600 ${Math.round(11*M)}px sans-serif`;
     ctx.fillStyle = fA; ctx.textAlign = "left";
     ctx.fillText(fmt(laneGroesse(lane.A)), 8, y0 + laneH - 8);
     ctx.fillStyle = fD; ctx.textAlign = "right";
     ctx.fillText(fmt(laneGroesse(lane.D)), W-8, y0 + laneH - 8);
+    ctx.restore();
     if(laneGroesse(lane.A)===0 && laneGroesse(lane.D)===0){
       ctx.fillStyle = "rgba(219,226,238,.18)"; ctx.font = `${Math.round(11*M)}px sans-serif`; ctx.textAlign="center";
       ctx.fillText("verwaist", W/2, y0+laneH/2);
@@ -4072,6 +4110,19 @@ function zeichneFeld(t=0){
       for(let k=1;k<=3;k++){
         ctx.beginPath(); ctx.arc(x - k*10*(pk.seite==="A"?1:-1), y0+3, 1.8, 0, 7); ctx.fill();
       }
+    } else if(pk.typ==="tref" && alter < 380){
+      const q = alter/380;
+      const lane = s.lanes[pk.lane];
+      const y0 = oben + pk.lane*laneH;
+      const front = pk.seite==="A"
+        ? basisA + (100-(lane?lane.dist:0))/100*spann
+        : basisD - (100-(lane?lane.dist:0))/100*spann;
+      const breite = 34;
+      const gradT = ctx.createLinearGradient(front - (pk.seite==="A"?breite:0), 0, front + (pk.seite==="A"?0:breite), 0);
+      gradT.addColorStop(pk.seite==="A"?0:1, "rgba(255,90,60,0)");
+      gradT.addColorStop(pk.seite==="A"?1:0, `rgba(255,90,60,${0.26*(1-q)})`);
+      ctx.fillStyle = gradT;
+      ctx.fillRect(front - (pk.seite==="A"?breite:0), y0+2, breite, laneH-4);
     } else if(pk.typ==="staub" && alter < 1300){
       const q = alter/1300;
       const lane = s.lanes[pk.lane];
@@ -4190,6 +4241,20 @@ function zeichneAufstellung(cid, einheiten, gewichte, farbe, rechts){
   for(let i=0;i<=LANES;i++){ ctx.beginPath(); ctx.moveTo(0,6+i*laneH); ctx.lineTo(W,6+i*laneH); ctx.stroke(); }
   const richt = rechts ? -1 : 1;
   const basis = rechts ? W-70 : 70;
+  /* Erkundetes Gelände in der Feldmitte andeuten */
+  const gelV = (G._kr && G._kr.gelaende) || [];
+  gelV.forEach((gel,i)=>{
+    const ym = 6 + i*laneH + laneH/2;
+    if(gel.k==="huegel"){
+      ctx.fillStyle = "rgba(120,130,110,.3)";
+      ctx.beginPath(); ctx.ellipse(W/2, ym+laneH*0.24, 34, 8, 0, Math.PI, 0); ctx.fill();
+    } else if(gel.k==="furt"){
+      ctx.fillStyle = "rgba(80,140,180,.32)";
+      ctx.fillRect(W/2-9, 6+i*laneH+2, 18, laneH-4);
+    } else if(gel.k==="wald"){
+      for(let b=0;b<3;b++) malBaum(ctx, W/2 + (b-1)*13, ym + laneH*0.22, 4);
+    }
+  });
   lanes.forEach((u,i)=>{
     const y0 = 6 + i*laneH;
     let x = basis;
@@ -7589,6 +7654,7 @@ const SCREENS = {
     return `
       <h2>⚔️ Schlacht um ${ver.name}s Land</h2>
       <span class="phasebadge">Gefecht ${Math.min(s.tick,s.maxTicks)}/${s.maxTicks}${s.regen?" · 🌧️ Regen: Artillerie geschwächt":""}${s.nebel?" · 🌫️ Nebel: Kanonen blind, rascher Vormarsch":""}${(s.festung||1)>1?` · 🏰 Festung ×${(s.festung||1).toFixed(2)}`:""}${s.belagerung?` · ${s.belagerung==="sturm"?"⚔️ Sturmangriff":s.belagerung==="beschuss"?"💣 nach Beschuss":"⏳ nach Aushungern"}`:""}</span>
+      <div class="moral" style="margin:6px 0 8px;height:4px"><div style="width:${Math.min(100,s.tick/s.maxTicks*100)}%;background:linear-gradient(90deg,var(--gold),var(--red))"></div></div>
       <canvas id="feld" width="900" height="380"></canvas>
       <div class="battlefield">
         <div>
@@ -7603,7 +7669,11 @@ const SCREENS = {
           <p class="muted small center">Truppenstärke ${Math.round(pctD)} %</p>
         </div>
       </div>
-      <div class="card battlelog">${s.log.map(l=>`<p>${l}</p>`).join("")||'<p class="muted">Die Linien rücken vor …</p>'}</div>
+      <div class="card battlelog">${s.log.map(l=>{
+        const cls = /^⚡|^🥁|^🎖|^🏆/.test(l) ? "gold" : /^🐎|^💣|^⚔/.test(l) ? "" :
+                    /^❄|^🌫/.test(l) ? "cyan" : /^🏳|verliert|fallen|Tote|bricht|fliehen/.test(l) ? "muted" : "";
+        return `<p class="${cls}">${l}</p>`;
+      }).join("")||'<p class="muted">Die Linien rücken vor …</p>'}</div>
       ${s.fertig
         ? `<div class="card" style="border-color:${s.sieger==='A'?'var(--green)':'var(--red)'}">
              <p class="${s.sieger==='A'?'green':'red'}" style="font-size:17px;font-weight:700">${s.ergebnis}</p>
