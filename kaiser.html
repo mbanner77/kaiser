@@ -188,6 +188,10 @@
     .setuprow{gap:5px;}
     .setuprow .s-name{flex:1 1 100%;order:5;}
   }
+  @keyframes unruhePuls{0%,100%{box-shadow:0 0 0 rgba(229,99,111,0);}50%{box-shadow:0 0 18px rgba(229,99,111,.45);}}
+  @keyframes moralPuls{0%,100%{filter:brightness(1);}50%{filter:brightness(1.6);}}
+  .titelmenu{display:grid;gap:9px;max-width:380px;margin:0 auto;}
+  .titelmenu button{width:100%;margin:0;text-align:center;}
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;
       transition-duration:.01ms !important;}
@@ -522,7 +526,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.6.1 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.7 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="wipe"></div>
@@ -1331,6 +1335,47 @@ function svgDom(teile){
 }
 
 /* ---------- Zwischenbilanz (nach Kornausgabe & Handel) ---------- */
+/* Volksaufstand: Höhepunkt anhaltenden Elends (Stimmung < 15 über Jahre) */
+function aufstand(p, r){
+  geschichte("⚡", `Volksaufstand in ${p.name}s Reich!`);
+  const weg = Math.min(p.maerkte, ri(1,2));
+  p.maerkte -= weg; p._ruinen = (p._ruinen||0) + weg;
+  for(let k=0;k<weg;k++) entferneGebaeude(p,"m");
+  const tote = Math.round(p.pop * 0.03);
+  p.pop = Math.max(50, p.pop - tote);
+  const staerke = heerStaerke(p.heer) + miliz(p)*0.8;
+  if(staerke > p.pop * 0.06 + 80){
+    /* Das Heer schlägt die Erhebung nieder, um einen hohen Preis */
+    const verluste = Math.round(heerGroesse(p.heer) * 0.1);
+    p.heer.inf = Math.max(0, p.heer.inf - verluste);
+    p.stimmung = clamp(p.stimmung + 10, 5, 100);
+    p._stimmungBasis = p.stimmung;
+    p.unruheJahre = 1;
+    r.ereignisse.push({ t:`⚡ <b>VOLKSAUFSTAND!</b> ${weg?weg+" Gebäude brennen, ":""}${fmt(tote)} Tote in den Gassen.
+      Euer Heer schlägt die Erhebung nieder (${fmt(verluste)} Soldaten fallen), doch die Ruhe ist erkauft, nicht gewonnen.`, c:"bad" });
+    if(!p.ki){ sTrommel(); }
+    return;
+  }
+  if(p.erbe && (G.jahr - p.erbe.geb) >= 14){
+    /* Erzwungene Abdankung zugunsten des Thronfolgers */
+    const alter2 = `${titelName(p)} ${p.name}`;
+    erben(p);
+    p.stimmung = 45; p._stimmungBasis = 45; p.unruheJahre = 0;
+    r.ereignisse.push({ t:`⚡ <b>REVOLUTION!</b> Das Volk stürmt die Residenz, ${alter2} muss abdanken.
+      ${p.name} besteigt unter Jubelrufen den Thron, ein Neuanfang für das geschundene Reich.`, c:"bad" });
+    geschichte("⚡", `${alter2} wird vom Volk zur Abdankung gezwungen, ${p.name} übernimmt.`);
+    if(!p.ki) toast(`⚡ Revolution! Ihr regiert fortan als ${p.name}.`, 8000);
+  } else {
+    /* Sturz: die Herrschaft endet */
+    p.tot = true; p.gestuerzt = true;
+    p.heer = { inf:0, kav:0, art:0 };
+    r.ereignisse.push({ t:`⚡ <b>REVOLUTION!</b> Das Volk stürmt die Residenz und jagt Euch vom Thron.
+      Ohne Thronfolger endet Eure Herrschaft hier.`, c:"bad" });
+    geschichte("🏳️", `${titelName(p)} ${p.name} wird vom eigenen Volk gestürzt, das Reich versinkt im Chaos.`);
+    if(!p.ki){ toast("🏳️ Das Volk hat Euch gestürzt. Eure Herrschaft ist beendet.", 9000); sTrauer(); }
+    pruefeAlleinherrschaft();
+  }
+}
 function zwischenbilanz(p){
   const r = { ereignisse:[] };
   const noetig = noetigKorn(p);
@@ -1364,6 +1409,24 @@ function zwischenbilanz(p){
   r.migration  = Math.round(p.pop * 0.05 * (p.stimmung-50)/100 * g);
   p.pop = Math.max(50, p.pop + r.geburten - r.tote - r.verhungert + r.migration);
   if(p.stimmung >= 90) erfolg("volk");
+  /* Revolutionsgefahr: anhaltendes Elend unter Stimmung 15 */
+  if(p.stimmung < 15){
+    p.unruheJahre = (p.unruheJahre||0) + 1;
+    if(p.unruheJahre === 1){
+      r.ereignisse.push({ t:"🔥 Es gärt im Volk! Flugschriften kursieren, auf den Märkten wird offen geschimpft. Hebt die Stimmung, sonst drohen Unruhen.", c:"bad" });
+    } else if(p.unruheJahre === 2){
+      const geplündert = Math.round(p.korn * 0.1);
+      p.korn -= geplündert;
+      r.ereignisse.push({ t:`🔥 Unruhen! Aufgebrachte Haufen plündern ${fmt(geplündert)} Fuder aus den Speichern. Noch ein Jahr Elend, und das Volk erhebt sich!`, c:"bad" });
+      geschichte("🔥", `Unruhen in ${p.name}s Reich, die Speicher werden geplündert.`);
+    } else if(Math.random() < 0.55){
+      aufstand(p, r);
+    } else {
+      r.ereignisse.push({ t:"🔥 Barrikaden in den Gassen! Nur das Zaudern der Rädelsführer rettet Euch dieses Jahr, das Reich steht am Abgrund.", c:"bad" });
+    }
+  } else if(p.stimmung >= 25){
+    p.unruheJahre = 0;
+  }
   /* Thronfolger: dem Haus wird ein Kind geboren */
   if(!p.erbe && alterJahre(p) >= 20 && alterJahre(p) <= 55){
     const verm = p.ehen && Object.values(p.ehen).some(j=>j>=G.jahr);
@@ -2902,6 +2965,24 @@ function zeichneKarte(p, canvasId, t=0){
     ctx.closePath(); ctx.fill();
   }
   /* Märkte & Mühlen an ihren gebauten Plätzen (mit Schatten) */
+  /* Unruhen: Fackelzüge ziehen durchs Land, roter Schein über der Stadt */
+  if((p.unruheJahre||0) >= 1 && p.stimmung < 25){
+    const glut = ctx.createRadialGradient(cx, cy, 6, cx, cy, rr*0.9);
+    glut.addColorStop(0, `rgba(230,110,50,${0.10 + 0.05*Math.sin(t/300)})`);
+    glut.addColorStop(1, "rgba(230,110,50,0)");
+    ctx.fillStyle = glut;
+    ctx.beginPath(); ctx.ellipse(cx, cy, rr*1.1, rr*0.7, 0, 0, 7); ctx.fill();
+    for(let fk=0; fk<5 + (p.unruheJahre||0)*2; fk++){
+      const fa = t/2600 + fk*1.26;
+      const fd = 0.35 + ((fk*37)%53)/53*0.45;
+      const fx3 = cx + Math.cos(fa)*fd*rr*1.25;
+      const fy3 = cy + Math.sin(fa)*fd*rr*0.75;
+      ctx.fillStyle = `rgba(255,${150+Math.round(Math.sin(t/70+fk)*40)},60,${0.75+Math.sin(t/90+fk)*0.2})`;
+      ctx.beginPath(); ctx.arc(fx3, fy3, 1.8, 0, 7); ctx.fill();
+      ctx.strokeStyle = "rgba(60,45,30,.8)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(fx3, fy3+1); ctx.lineTo(fx3, fy3+5); ctx.stroke();
+    }
+  }
   /* Brandruinen mahnen, bis wieder aufgebaut wird */
   for(let ru=0; ru<Math.min(p._ruinen||0, 4); ru++){
     const ra = 1.1 + ru*1.7, rd = 0.5 + (ru%2)*0.22;
@@ -4934,6 +5015,11 @@ function kiZug(p){
     if(m>0){ p.geld -= m*p.landPreis; p.land += m; p.landAngebot -= m; bericht.push(`kauft ${fmt(m)} ha Land`); }
   }
   zwischenbilanz(p);
+  if(p.tot){
+    G._kiBerichte = (G._kiBerichte||[]).concat(`⚡ Revolution in ${p.name}s Reich, der Regent ist gestürzt!`);
+    pruefeAlleinherrschaft();
+    return;
+  }
   /* Feldherr: wer es sich leisten kann, holt sich einen passenden Kopf */
   if(!p.feldherr && p.titel >= 2 && p.geld > 15000){
     const id = p.kiTyp==="aggressor" ? "sturm" : p.heer.art >= 4 ? "belagerung" : "defensiv";
@@ -5691,8 +5777,9 @@ function statKarten(p){
     <div class="stat"><span class="ico">👥</span><div class="lbl">Untertanen</div>
       <div class="val" data-cnt="${p.pop}">${fmt(p.pop)}</div>
       ${deltaBadge(d.pop)}${miniTrend(p,"pop")}</div>
-    <div class="stat"><span class="ico">${p.stimmung>=60?'😊':p.stimmung>=35?'😐':'😠'}</span><div class="lbl">Stimmung</div>
-      <div class="val">${p.stimmung}/100</div>
+    <div class="stat" ${p.stimmung<15?'style="border-color:var(--red);animation:unruhePuls 1.6s ease-in-out infinite"':''}>
+      <span class="ico">${p.stimmung>=80?'😄':p.stimmung>=60?'😊':p.stimmung>=45?'😐':p.stimmung>=25?'😟':p.stimmung>=15?'😠':'🤬'}</span><div class="lbl">Stimmung</div>
+      <div class="val ${p.stimmung<15?'red':''}">${p.stimmung}/100</div>
       <div class="bar"><div style="width:${p.stimmung}%;background:${p.stimmung>=60?'var(--green)':p.stimmung>=35?'var(--gold)':'var(--red)'}"></div></div></div>
   </div>`;
 }
@@ -6287,14 +6374,13 @@ const SCREENS = {
       <p class="muted" style="margin-top:10px">Aber bedenkt: Eure Lebenszeit ist begrenzt.
       Wer länger als 90 Sekunden pro Zug grübelt, altert schneller.</p>
     </div>
-    <div class="center">
-      <button class="btn-primary btn-lg" onclick="zeige('setup')">Neues Spiel</button>
+    <div class="titelmenu">
+      <button class="btn-primary btn-lg" onclick="zeige('setup')">⚔️ Neues Spiel</button>
+      ${hatQuicksave()?`<button class="btn-lg" onclick="quickload()">▶️ Fortsetzen</button>`:""}
       <button class="btn-lg" onclick="zeige('kampagne')">📖 Kampagne</button>
       <button class="btn-lg" onclick="lehreStart()">🎓 Die Lehrjahre (Tutorial)</button>
-      ${hatQuicksave()?`<button class="btn-lg" onclick="quickload()">Fortsetzen</button>`:""}
-      <button class="btn-lg" onclick="staendeAuf()">💾 Spielstände</button>
       <button class="btn-lg" onclick="zeige('online')">🌐 Online spielen</button>
-      <button class="btn-lg" onclick="$('#importFile').click()">Spielstand laden</button>
+      <button class="btn-lg" onclick="staendeAuf()">💾 Spielstände</button>
       <button class="btn-lg" onclick="zeige('erfolge')">🏅 Erfolge (${erfolge().size}/${ERFOLGE.length})</button>
     </div>`;
   },
@@ -6752,6 +6838,11 @@ const SCREENS = {
         <p class="muted small" style="margin-top:4px">Belohnung: ${fmt(p.auftrag.lohn)} Taler · Frist: Anno ${p.auftrag.frist}
           ${art.ok(p, p.auftrag) ? ' · <span class="green">Bedingung derzeit erfüllt, am Jahresende wird abgerechnet.</span>' : ""}</p>
       </div>`; })() : ""}
+      ${(p.unruheJahre||0)>=1 && p.stimmung<25 ? `
+      <div class="event bad">🔥 <b>Im Volk gärt es${(p.unruheJahre||0)>=2?" gewaltig":""}!</b>
+        ${(p.unruheJahre||0)>=2?"Die Speicher wurden schon geplündert, ein Volksaufstand steht bevor."
+        :"Anhaltendes Elend (Stimmung unter 15) führt binnen weniger Jahre zum Aufstand."}
+        Mehr Korn, weniger Steuern, mildere Justiz oder ein Volksfest schaffen Abhilfe.</div>`:""}
       ${statKarten(p)}
       <div class="grid g2">
         <div class="card">
@@ -6883,7 +6974,7 @@ const SCREENS = {
           ${r.verhungert?row("Verhungert", "−"+fmt(r.verhungert), "delta-neg"):""}
           ${row(r.migration>=0?"Einwanderung":"Abwanderung", (r.migration>=0?"+":"−")+fmt(Math.abs(r.migration)), r.migration>=0?"delta-pos":"delta-neg")}
           ${row("Untertanen jetzt", "<b>"+fmt(p.pop)+"</b>")}
-          ${row("Stimmung des Volkes", p.stimmung+"/100")}
+          ${row("Stimmung des Volkes", p.stimmung+"/100" + (p.stimmung<15?' <span class="red">⚠️ Revolutionsgefahr!</span>':''))}
         </table>
       </div>
       ${r.verhungert?'<div class="event bad">Euer Volk hungert! Das spricht sich im Reich herum.</div>':""}
@@ -7492,7 +7583,7 @@ const SCREENS = {
         ${s.start[key].auf?`<div class="u"><span>🔥 Volksaufgebot</span><b>${fmt(sRestTyp(s,key,"auf"))}</b></div>`:""}
         ${s["res"+key]?`<div class="u"><span>🥁 in Reserve</span><b>${fmt(resGroesse(s["res"+key]))}</b></div>`:""}
         <div class="u muted small"><span>Moral</span><span>${Math.round(moral)} %</span></div>
-        <div class="moral"><div style="width:${moral}%;background:${moral>60?'var(--green)':moral>32?'var(--gold)':'var(--red)'}"></div></div>
+        <div class="moral"><div style="width:${moral}%;background:${moral>60?'var(--green)':moral>32?'var(--gold)':'var(--red)'};${moral<=32?'animation:moralPuls .9s ease-in-out infinite;':''}"></div></div>
         ${helfer.length?`<p class="muted small" style="margin-top:6px">Verbündete: ${helfer.map(i=>G.spieler[i].name).join(", ")}</p>`:""}
       </div>`;
     return `
@@ -8136,6 +8227,7 @@ function handelFertig(){
   zeige("zwbilanz");
 }
 function nachZwischenbilanz(){
+  if(cur().tot){ naechsterSpieler(); return; }
   const folge = faelligeFolge(cur());
   if(folge){ G._ereignis = folge; zeige("entscheidung"); return; }
   const e = ereignisWuerfeln(cur());

@@ -362,3 +362,9 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 
 - Der rote Kasten „Für einen Feldzug fehlt Euch noch …" stand dauerhaft in der Bauphase und wirkte nach jedem Klick (z. B. „Volksfest geben") wie eine Fehlermeldung zur Aktion. Er ist jetzt ein dezenter grauer Hinweis neben dem Kriegs-Knopf. Das Volksfest selbst hat immer funktioniert.
 - Fehlermeldungen erscheinen nun als rote Einblendung unten rechts (immer sichtbar, auch wenn man gescrollt hat), und die Fest-/Turnier-Knöpfe zeigen nach dem Klick ihren erledigten Zustand („🎉 Volksfest gegeben").
+
+## Version 3.7 — Die Revolution
+
+- **Revolutions-Mechanik:** Wer sein Volk dauerhaft im Elend hält (Stimmung unter 15), erlebt eine Eskalation über Jahre: Erst gärt es (Warnung), dann plündern aufgebrachte Haufen die Speicher, ab dem dritten Jahr droht der offene **Volksaufstand**. Ein starkes Heer kann die Erhebung niederschlagen (Gebäude brennen, Menschen und Soldaten sterben, die Ruhe ist nur erkauft). Ist das Heer zu schwach, wird der Regent gestürzt: Mit einem erwachsenen Thronfolger kommt es zur erzwungenen Abdankung (der Erbe übernimmt mit Stimmung 45), ohne Erben endet die Herrschaft — der Spieler scheidet aus, und der letzte Verbliebene wird ggf. Kaiser. Erholt sich die Stimmung (25+), beruhigt sich das Volk wieder.
+- **Sichtbare Unruhe:** Bei Gärung ziehen Fackelzüge über die Reichskarte und roter Feuerschein liegt über der Stadt. Die Stimmungs-Kachel pulsiert rot mit wütendem Smiley, der Status-Bildschirm warnt mit konkreten Abhilfe-Tipps, und die Zwischenbilanz zeigt „⚠️ Revolutionsgefahr".
+- **UI-Feinschliff:** Das Titelmenü ist eine aufgeräumte Knopf-Spalte (Fortsetzen direkt unter Neues Spiel), und in der Schlacht pulsieren brechende Moralbalken.
