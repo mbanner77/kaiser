@@ -342,3 +342,10 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Machtindex & Astrologe:** Die Statistik zeigt den Machtindex aller Reiche im Verlauf, und der Hofastrologe deutet, wer auf dem Weg zur Krone vorn liegt und wer am schnellsten aufsteigt.
 - **Drei Spielstand-Plätze:** Benannte Speicherplätze mit Vorschau (Regent, Jahr, Punkte, Datum) plus die automatische Jahres-Sicherung, erreichbar vom Titel und aus dem Menü.
 - **Krönungs-Zeremonie:** Wer die Kathedrale vollendet, erlebt ein Finale: Prozession durchs Kirchenschiff, Rosette, Weihrauch, die Krone senkt sich — dann erst folgt die Schlusswertung.
+
+## Version 3.5.1 — Marktgrenzen, Mobil-Fixes und der Sieg durch das Schwert
+
+- **Landmarkt begrenzt:** Der Markt bietet jedes Jahr nur eine begrenzte Menge Land an (800 bis 2.600 ha, im Handel angezeigt). Käufe verbrauchen das Angebot, eigene Verkäufe füllen es. Auch die KI kauft nur, was angeboten wird.
+- **Spielstart auf iPad/iPhone repariert:** Die Spielerzeilen sind jetzt flexible, umbrechende Reihen statt einer starren Tabelle. Nichts überlappt mehr, und das Namensfeld ist auf dem Handy groß und tippbar.
+- **Schwarzer Balken entfernt:** In der Jahresbilanz-Wetterszene stand noch die leere Beschriftungsfläche des alten Schriftzugs, sie ist weg.
+- **Sieg durch Eroberung:** Wer in einer Schlacht mit tiefem Durchbruch (Stufe 4+) geschlagen wird, verliert jetzt auch bebautes Land (Gebäude auf verlorenem Boden verfallen). Fällt ein Reich unter 1.500 ha, ist es vernichtet: Es scheidet aus, Restland und halbe Kasse gehen an den Sieger. Bleibt nur ein Reich übrig, wird sein Regent durch das Recht des Schwertes zum Kaiser ausgerufen, samt Krönungs-Zeremonie. Neuer Erfolg: „Reichsbezwinger".
