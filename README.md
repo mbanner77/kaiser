@@ -386,3 +386,17 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Kanonen:** Jeder Abschuss stößt jetzt zusätzlich einen expandierenden Rauchring aus.
 - **Sturmritt:** Bei der Kavallerie-Attacke preschen zwei sichtbare Reiter in Hausfarbe durch den Staub, statt nur Streifen zu ziehen.
 - **Atmosphäre:** Beim ersten Schuss stieben aufgescheuchte Vögel fächerförmig vom Feld; der Morgennebel lichtet sich im Lauf des Gefechts; an beiden Basen wirbeln Trommler-Jungen die Schlegel im Marschtakt, solange die Linien vorrücken.
+
+## Version 3.9 — Zur See, vor die Tore, an den Hof
+
+- **Seeschlachten & Kriegsflotte:** Mit Hafen lassen sich bis zu fünf Kriegsschiffe bauen (3.000 T + 40 Holz, 100 T Sold). Die Flotte trägt Heere übers Meer, Kriege gegen Nicht-Nachbarn brauchen keine Durchmarschrechte mehr. Hat der Verteidiger eigene Schiffe, entscheidet erst ein animiertes Seegefecht (Breitseiten, Rauch, sinkende Segler) über die Landung.
+- **Mehrjährige Belagerung:** Neue Option „Belagerungsring legen": kein Kampf heute, dafür verliert der Belagerte jedes Jahr 20 % Korn und Stimmung, während der Belagerer Sold zahlt und Lagerseuchen riskiert. Der Belagerte wählt an seinem Zugbeginn: Ausfall, Freikaufen (15 % der Kasse) oder Ausharren; Verbündete können den Ring sprengen. Der Belagerer kann jederzeit stürmen (entkräftete Verteidiger) oder abziehen. Der Ring liegt sichtbar mit Zelten auf der Weltkarte.
+- **Audienzen am Hof:** Bittsteller mit gezeichnetem Porträt treten vor den Thron — Müllerin, Alchemist, Witwe, Baumeister, Wirt, Gauklerin — mit echten Entscheidungen samt Folgen.
+- **Gesichter überall:** Diplomatie-Partner und Weltkarten-Dossiers zeigen jetzt das prozedurale Porträt des jeweiligen Regenten.
+- **Schlacht-Nachbericht:** Nach dem Gefecht urteilt der Feldherr über jeden Abschnitt (Durchbruch, gehalten, umkämpft), der blutigste trägt einen Stern — und die Schlacht lässt sich als sepiafarbenes Gemälde mit Rahmen und Bildunterschrift speichern.
+- **Reichsmesse:** Alle fünf Jahre gastiert die Messe in einem Reich: Korn 8 % günstiger, Söldner 20 % billiger, der Gastgeber kassiert anderthalbfachen Routenzoll (+6 Stimmung).
+- **Musik nach Lage:** Eigene Themen für Turnier (Fanfare), Unruhe (dunkles Ostinato), Seegefecht und eine breite Krönungs-Hymne.
+- **Erzähltes Intro:** Zum Partiebeginn schreibt eine Feder die Ausgangslage des Szenarios aufs Pergament, dann fällt das Siegel.
+- **Krönung ausgebaut:** Schwingende Glocken, rotierende Lichtstrahlen aus der Rosette, jubelnder Hof mit erhobenen Armen, Blütenregen und ein Schlussbanner mit Wappen.
+- **Weltkarte mit Zoom & Schwenk:** Mausrad oder Fingerzoom vergrößert bis 3-fach, Ziehen verschiebt; Rahmen und Kompass bleiben fest, Klicks treffen auch im Zoom.
+- **Update-Hinweis:** Das Spiel prüft im Hintergrund auf neue Versionen und bietet Ein-Klick-Aktualisierung an, statt im Offline-Cache zu verharren.
