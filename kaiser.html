@@ -543,7 +543,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.11 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.12 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="vignette"></div>
@@ -747,10 +747,16 @@ function routeTrennen(i, j, grund){
   if(G.routen.length < vorher)
     geschichte("🪓", `Die Handelsroute zwischen ${G.spieler[i].name} und ${G.spieler[j].name} ist ${grund||"unterbrochen"}.`);
 }
+/* Eine Route wird zur Seeroute, sobald beide Häuser einen Hafen besitzen */
+const routeZurSee = r => (G.spieler[r.a].haefen||0) > 0 && (G.spieler[r.b].haefen||0) > 0;
 const routenZoll = p => {
   if(p._routenPause === G.jahr) return 0;                /* Raubritter: Karawanen bleiben aus */
   const i = G.spieler.indexOf(p);
-  const basis = routenVon(i).length * (350 + staedte(p)*80 + ((p.haefen||0)>0 ? 150 : 0));
+  let basis = 0;
+  for(const r of routenVon(i)){
+    const einzeln = 350 + staedte(p)*80 + ((p.haefen||0)>0 ? 150 : 0);
+    basis += Math.round(einzeln * (routeZurSee(r) ? 1.6 : 1));   /* Koggen tragen mehr als Karren */
+  }
   return Math.round(basis
     * (G.handelsprivileg && G.handelsprivileg >= G.jahr ? 1.5 : 1)
     * (messeAktiv() && G.messe.gastgeber === i ? 1.5 : 1));
@@ -1363,6 +1369,45 @@ const THEMA_HYMNE = {
             98,0,0,0, 110,0,0,0, 131,0,98,0, 131,0,0,0]
 };
 let themaPos = 0;
+/* ---------- Klangkulisse: leise Umgebungsgeräusche je Bildschirm ---------- */
+function sMoewe(){
+  if(muted) return;
+  try{
+    const ac = audioCtx();
+    for(let i=0; i<ri(1,2); i++){
+      const t = ac.currentTime + i*rf(0.18,0.35);
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = "sawtooth";
+      const f0 = rf(950,1250);
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(f0*0.62, t+0.22);
+      const vol = 0.016 * LAUT.fx;
+      if(vol <= 0.0005) return;
+      o.connect(g); g.connect(_master);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t+0.04);
+      g.gain.exponentialRampToValueAtTime(0.0005, t+0.26);
+      o.start(t); o.stop(t+0.3);
+    }
+  }catch(e){}
+}
+const sWelle    = () => rausch(rf(0.6,1.1), 0, 0.028, true);
+const sHammern  = () => { const n = ri(2,3); for(let i=0;i<n;i++){ rausch(.05, i*rf(0.16,0.26), .05, true); beep(190+ri(-30,40), .05, i*0.2, "square", .02); } };
+const sGemurmel = () => { rausch(rf(0.5,0.9), 0, 0.024, true); if(Math.random()<0.4) beep(rf(160,260), .08, rf(0,0.4), "sine", .012); };
+const sKnistern = () => { for(let i=0;i<ri(3,5);i++) rausch(.025, rf(0,0.8), .03, true); };
+const sBrise    = () => rausch(rf(0.9,1.5), 0, 0.02, false);
+let _ambNext = 0;
+function ambientTick(t){
+  if(muted || EINST.amb === false || LAUT.fx <= 0.01) return;
+  const s2 = G.screen;
+  if(s2 === "handel" || s2 === "angebote") sGemurmel();
+  else if(s2 === "bauen"){ if(Math.random() < 0.6) sHammern(); else if(Math.random() < 0.4) sVogel(); }
+  else if(s2 === "status" || s2 === "korn"){ if(Math.random() < 0.55) sVogel(); }
+  else if(s2 === "stadt"){ const w2 = Math.random(); if(w2 < 0.35) sVogel(); else if(w2 < 0.6) sHammern(); else if(w2 < 0.8) sGemurmel(); }
+  else if(s2 === "welt") sBrise();
+  else if(s2 === "expedition" || s2 === "seegefecht"){ if(Math.random() < 0.55) sWelle(); else sMoewe(); }
+  else if(s2 === "bilanz" || s2 === "zwbilanz") sKnistern();
+}
 function starteMusik(){
   clearInterval(musikIv);
   let pos = 3;
@@ -1749,6 +1794,27 @@ function jahresschluss(p){
     }
   }
   r.routenGeld = routenZoll(p);
+  /* Piraten lauern auf den Seerouten, Kriegsschiffe geben Geleit */
+  const idxSee = G.spieler.indexOf(p);
+  const seeRouten = routenVon(idxSee).filter(routeZurSee);
+  if(seeRouten.length && r.routenGeld > 0){
+    const gefahr = Math.max(0.03, 0.16 - (p.schiffe||0)*0.05);
+    if(Math.random() < gefahr){
+      if((p.schiffe||0) > 0 && Math.random() < 0.5){
+        r.ereignisse.push({ t:`🏴‍☠️ Piraten fallen über Eure Seeroute her — doch Euer <b>Geleitschutz</b> schlägt sie in die Flucht! Die Koggen kommen durch.`, c:"good" });
+      } else {
+        const verlust = Math.round(r.routenGeld * 0.5);
+        p.geld -= verlust;
+        if((p.schiffe||0) > 0 && Math.random() < 0.3){
+          p.schiffe--;
+          r.ereignisse.push({ t:`🏴‍☠️ <b>Piraten!</b> Eine Kogge wird gekapert, ein Kriegsschiff sinkt im Gefecht: −${fmt(verlust)} Taler Seezoll. Mehr Geleitschiffe schrecken ab.`, c:"bad" });
+        } else {
+          r.ereignisse.push({ t:`🏴‍☠️ <b>Piraten!</b> Ohne ausreichenden Geleitschutz kapern Freibeuter Eure Koggen: −${fmt(verlust)} Taler Seezoll. Kriegsschiffe schrecken ab.`, c:"bad" });
+        }
+        geschichte("🏴‍☠️", `Piraten plündern ${p.name}s Seehandel.`);
+      }
+    }
+  }
   p.geld += r.routenGeld;
   p.geld += r.steuern;
   p.stat.steuern += r.steuern;
@@ -5282,7 +5348,135 @@ function audienzWuerfeln(p){
     txt: p2 => `Eine Audienz am Hofe: Die ${a.w?"":""}${a.rolle} ` + a.txt(p2),
     wahl: a.wahl };
 }
+/* ---------- Mehrjährige Ereignis-Ketten: Geschichten in drei Teilen ---------- */
+function ketteWeiter(p, jahre){ p.kette.teil++; p.kette.faellig = G.jahr + (jahre || ri(1,2)); }
+function ketteEnde(p){ if(p.kette){ p._kettenFertig = (p._kettenFertig||[]).concat(p.kette.id); p.kette = null; } }
+const ketteFlag = (p, k) => { p.kette.flags = p.kette.flags || {}; p.kette.flags[k] = true; };
+const KETTEN = [
+  { id:"siegelring", n:"Der Fremde mit dem Siegelring", teile:[
+    { ico:"💍", txt:p=>`Ein abgerissener Fremder erscheint am Tor und trägt — daran ist kein Zweifel — den <b>Siegelring Eures Großvaters</b>. Er nennt sich einen verschollenen Vetter Eures Hauses, seit Jahrzehnten in fremden Kriegen verschollen.`,
+      wahl:[
+        { t:"An den Hof laden und bewirten (500 T)", fx:p=>{ p.geld-=500; ketteWeiter(p); return "Der Fremde speist an Eurer Tafel. Seine Geschichten aus fernen Feldzügen klingen wahr — zu wahr, raunt der Kämmerer. Die Sache wird sich weisen …"; } },
+        { t:"Vom Hof jagen lassen", fx:p=>{ p.stimmung=clamp(p.stimmung-3,5,100); ketteEnde(p); return "Die Wachen schaffen ihn fort. Auf den Gassen munkelt man, Ihr hättet Euer eigen Blut verstoßen."; } }
+      ]},
+    { ico:"💍", txt:p=>`Der Fremde gewinnt Monat um Monat Freunde am Hof, das Gesinde hängt an seinen Lippen. Nur der alte Kämmerer warnt: „Der Ring mag echt sein, ${p.w?"Herrin":"Herr"} — aber ist es der Mann?“`,
+      wahl:[
+        { t:"Heimlich Nachforschungen anstellen (800 T)", fx:p=>{ p.geld-=800; ketteWeiter(p); return "Eure Kundschafter reiten zu den Schlachtfeldern seiner Erzählungen und befragen alte Veteranen. Bald werdet Ihr Gewissheit haben."; } },
+        { t:"Ihm blind vertrauen und Gemächer zuweisen", fx:p=>{ ketteFlag(p,"blind"); ketteWeiter(p); return "Ihr schenkt ihm Vertrauen und eigene Gemächer nahe der Schatzkammer. Der Kämmerer verbeugt sich schweigend."; } }
+      ]},
+    { ico:"💍", txt:p=>`Die Stunde der Wahrheit: ${p.kette&&p.kette.flags&&p.kette.flags.blind ? "Nachts rumort es in den Gemächern des Fremden." : "Eure Kundschafter sind zurück und bitten um Gehör."}`,
+      wahl:[
+        { t:"Die Wahrheit ans Licht bringen", fx:p=>{
+            const blind = p.kette && p.kette.flags && p.kette.flags.blind;
+            const echt = Math.random() < (blind ? 0.4 : 0.6);
+            ketteEnde(p);
+            if(echt){
+              if(!p.erbe){
+                p.erbe = { name: p.w?"Roderich":"Roderich", w:false, geb: G.jahr-17, zug:"kriegerisch" };
+                geschichte("💍", `${p.name}s verschollener Vetter Roderich wird als echt erkannt und in die Erbfolge aufgenommen.`);
+                return "Er ist es wirklich! Alte Veteranen beschwören seine Narben und Taten. <b>Roderich</b> wird ins Haus aufgenommen — Euer Erbe, sollte das Schicksal es fordern.";
+              }
+              p.stimmung = clamp(p.stimmung+6,5,100); p.geld += 1200;
+              geschichte("💍", `${p.name}s Haus feiert die Heimkehr des verschollenen Vetters.`);
+              return "Er ist es wirklich! Das Volk feiert die Heimkehr tagelang (+6 Stimmung), und der Vetter legt 1.200 ersparte Kriegstaler in Eure Truhe.";
+            }
+            if(blind){
+              const schaden = ri(2000,4000);
+              p.geld -= schaden; p.stimmung = clamp(p.stimmung-6,5,100);
+              geschichte("🚨", `Ein Hochstapler prellt ${p.name}s Hof um ${fmt(schaden)} Taler.`);
+              return `Ein Betrüger! Bei Nacht räumt er die Silberkammer aus und verschwindet: <b>−${fmt(schaden)} Taler</b>. Der Kämmerer sagt kein Wort, aber sein Blick spricht Bände.`;
+            }
+            p.stimmung = clamp(p.stimmung+4,5,100);
+            return "Ein Hochstapler! Ein gehenkter Knecht hatte ihm Ring und Geschichten verkauft. Dank Eurer Vorsicht verliert Ihr nichts — der Hof preist Eure Klugheit (+4 Stimmung).";
+          } }
+      ]}
+  ]},
+  { id:"falschmuenzer", n:"Die Falschmünzer", teile:[
+    { ico:"🪙", txt:p=>`Auf dem Wochenmarkt fliegen falsche Taler auf — vortrefflich geprägt, doch das Silber ist gestreckt. Die Händler beginnen, jede Münze dreimal zu wenden, der Handel stockt.`,
+      wahl:[
+        { t:"Die Büttel ermitteln lassen (400 T)", fx:p=>{ p.geld-=400; ketteWeiter(p); return "Die Büttel kaufen verdeckt auf allen Märkten und verfolgen jede falsche Münze zurück. Erste Spuren zeichnen sich ab."; } },
+        { t:"Nicht mein Silber, nicht meine Sorge", fx:p=>{ const s=ri(600,1200); p.geld-=s; p.stimmung=clamp(p.stimmung-4,5,100); ketteEnde(p); return `Das Falschgeld frisst sich durch Eure Kassen: <b>−${fmt(s)} Taler</b> über das Jahr, und das Volk schimpft auf die schlechte Münze.`; } }
+      ]},
+    { ico:"🪙", txt:p=>`Die Spur führt zu einer abgelegenen Mühle am Fluss: Nachts glüht dort die Esse, und es riecht nach Metall statt nach Mehl. Der Anführer, heißt es, war einst Münzmeister eines fremden Hofes.`,
+      wahl:[
+        { t:"Mit der Miliz zugreifen", fx:p=>{ ketteWeiter(p,1); return "Im Morgengrauen umstellt die Miliz die Mühle. Was sich darin findet, wird das Urteil sprechen."; } },
+        { t:"Die Werkstatt heimlich übernehmen …", fx:p=>{ ketteFlag(p,"gier"); ketteWeiter(p,1); return "Ihr lasst dem Münzmeister ein Angebot zukommen, das er nicht ablehnen kann: Er prägt fortan für Euch — im Verborgenen."; } }
+      ]},
+    { ico:"🪙", txt:p=>p.kette&&p.kette.flags&&p.kette.flags.gier
+        ? "Monatelang füllt die verborgene Prägewerkstatt Eure Truhen. Doch je mehr Münzen zirkulieren, desto lauter werden die Fragen der Nachbarhöfe."
+        : "Die Falschmünzerbande steht gefesselt im Hof, ihre Prägestöcke liegen auf dem Tisch. Das eingezogene Silber wartet auf Euren Spruch.",
+      wahl:[
+        { t:p=>p.kette&&p.kette.flags&&p.kette.flags.gier?"Das Spiel zu Ende spielen":"Das Urteil sprechen", fx:p=>{
+            const gier = p.kette && p.kette.flags && p.kette.flags.gier;
+            ketteEnde(p);
+            if(!gier){
+              const beute = ri(1500,3000);
+              p.geld += beute; p.stimmung = clamp(p.stimmung+6,5,100);
+              geschichte("🪙", `${p.name} hebt eine Falschmünzerbande aus, das Volk jubelt.`);
+              return `Die Bande wandert in den Turm, das eingeschmolzene Silber (<b>+${fmt(beute)} Taler</b>) fließt in Eure Kasse. Auf den Märkten zahlt man wieder mit Vertrauen (+6 Stimmung).`;
+            }
+            if(Math.random() < 0.55){
+              const beute = ri(2500,4500);
+              p.geld += beute;
+              geschichte("🪙", `In ${p.name}s Landen zirkuliert auffallend viel frisch geprägtes Silber.`);
+              return `Der Münzmeister arbeitet sauber: <b>+${fmt(beute)} Taler</b> aus der stillen Werkstatt, und kein Hahn kräht danach. Vorerst.`;
+            }
+            p.stimmung = clamp(p.stimmung-10,5,100);
+            lebende().map(x=>x.p).filter(z=>z!==p).forEach(z=>bezAendern(z, p, -6));
+            geschichte("🚨", `Skandal: ${p.name}s Hof wird mit einer Falschmünzer-Werkstatt in Verbindung gebracht!`);
+            return "Ein gefasster Geselle singt vor fremden Bütteln: <b>Euer Hof prägt falsches Silber!</b> Die Höfe rücken ab (−6 Ansehen überall), das eigene Volk schämt sich (−10 Stimmung).";
+          } }
+      ]}
+  ]},
+  { id:"wunder", n:"Das Wunder von der Dorfkirche", teile:[
+    { ico:"⛪", txt:p=>`Aus einem Dorf an der Grenze kommt Kunde: Das Marienbild der kleinen Kirche soll <b>Tränen weinen</b>. Schon ziehen die ersten Pilger über die Straßen, und der Dorfpfarrer bittet um Weisung.`,
+      wahl:[
+        { t:"Gelehrte prüfen lassen (300 T)", fx:p=>{ p.geld-=300; ketteWeiter(p); return "Zwei Gelehrte und ein alter Abt reisen ins Dorf, um das Bild bei Tag und Nacht zu bewachen. Ihr Urteil braucht Zeit."; } },
+        { t:"Sofort zum Wallfahrtsort ausrufen", fx:p=>{ ketteFlag(p,"eifer"); p.stimmung=clamp(p.stimmung+3,5,100); ketteWeiter(p); return "Herolde verkünden das Wunder in alle Richtungen. Das Volk jubelt (+3 Stimmung) — und die Pilgerströme schwellen an."; } }
+      ]},
+    { ico:"⛪", txt:p=>`Das Pilgerlager vor dem Dorf wächst von Woche zu Woche. Herbergen sind überfüllt, Händler wittern Geschäfte, und der Vogt fragt, wie mit dem Strom der Frommen zu verfahren sei.`,
+      wahl:[
+        { t:"Pilgerzoll erheben", fx:p=>{ const z=ri(500,900); p.geld+=z; p.stimmung=clamp(p.stimmung-2,5,100); ketteWeiter(p,1); return `Der Zoll spült <b>+${fmt(z)} Taler</b> in die Kasse, doch manch frommer Wanderer murrt über Mautstellen am Gnadenort (−2 Stimmung).`; } },
+        { t:"Eine freie Pilgerherberge stiften (600 T)", fx:p=>{ p.geld-=600; ketteFlag(p,"mild"); p.stimmung=clamp(p.stimmung+4,5,100); ketteWeiter(p,1); return "Eure Herberge gibt Suppe, Stroh und Segen umsonst. Die Pilger tragen Euren Namen dankbar in alle Lande (+4 Stimmung)."; } }
+      ]},
+    { ico:"⛪", txt:p=>p.kette&&p.kette.flags&&p.kette.flags.eifer
+        ? "Ein durchreisender Domherr besteht darauf, das weinende Bild mit eigenen Augen zu prüfen — vor allem Volk, am hellen Tag."
+        : "Die Gelehrten sind zurück und bitten um eine Audienz. Ihre Mienen verraten nichts.",
+      wahl:[
+        { t:"Das Urteil vernehmen", fx:p=>{
+            const eifer = p.kette && p.kette.flags && p.kette.flags.eifer;
+            const mild = p.kette && p.kette.flags && p.kette.flags.mild;
+            const echt = Math.random() < (eifer ? 0.5 : 0.7);
+            ketteEnde(p);
+            if(echt){
+              const segen = ri(1500,2500);
+              p.geld += segen; p.stimmung = clamp(p.stimmung+10,5,100);
+              if(mild) lebende().map(x=>x.p).filter(z=>z!==p).forEach(z=>bezAendern(z, p, 4));
+              geschichte("⛪", `Das Wunder von der Dorfkirche in ${p.name}s Landen wird feierlich bestätigt.`);
+              return `Kein Trug ist zu finden — das Wunder wird <b>bestätigt</b>! Opfergaben und Pilgersegen bringen +${fmt(segen)} Taler, das Volk ist selig (+10 Stimmung)${mild?", und die Höfe rühmen Eure Milde (+4 Ansehen überall)":""}.`;
+            }
+            p.stimmung = clamp(p.stimmung - (eifer ? 8 : 3), 5, 100);
+            if(eifer) lebende().map(x=>x.p).filter(z=>z!==p).forEach(z=>bezAendern(z, p, -4));
+            geschichte("🕯️", `Das „Wunder" in ${p.name}s Landen entpuppt sich als Küster mit einer Ölkanne.`);
+            return eifer
+              ? "Vor allem Volk zieht der Domherr eine <b>Ölkanne</b> hinter dem Altar hervor — der Küster gesteht schluchzend. Ganz Europa spottet über Euren voreiligen Wallfahrtsort (−8 Stimmung, −4 Ansehen überall)."
+              : "Die Gelehrten fanden eine Ölkanne und einen sehr verlegenen Küster. Dank der stillen Prüfung bleibt Euch der Spott erspart, nur die enttäuschten Pilger drücken die Stimmung (−3).";
+          } }
+      ]}
+  ]}
+];
+function ketteEreignis(p){
+  const K = KETTEN.find(k => k.id === p.kette.id);
+  if(!K || !K.teile[p.kette.teil]){ p.kette = null; return null; }
+  const teil = K.teile[p.kette.teil];
+  return { ...teil, id:"kette-"+K.id, kette:{ n:K.n, teil: p.kette.teil+1, von: K.teile.length } };
+}
 function ereignisWuerfeln(p){
+  /* Laufende Geschichte: die Fortsetzung kommt pünktlich, kein Würfeln */
+  if(!p.ki && p.kette && G.jahr >= p.kette.faellig){
+    const ek = ketteEreignis(p);
+    if(ek) return ek;
+  }
   if(Math.random() >= 0.20) return null;
   if(p.maerkte >= 2 && Math.random() < 0.10) return EREIGNIS_STADTBRAND;
   if(p.muehlen >= 2 && Math.random() < 0.08) return EREIGNIS_HOCHWASSER;
@@ -5290,6 +5484,15 @@ function ereignisWuerfeln(p){
   if((p.haefen||0) > 0 && Math.random() < 0.16) return EREIGNIS_PIRATEN;
   if((p.bruch||0) > 0 && Math.random() < 0.10) return EREIGNIS_GOLDADER;
   if((p.forst||0) > 0 && Math.random() < 0.10) return EREIGNIS_WALDBRAND;
+  /* Eine neue Geschichte beginnt (eine zur Zeit, jede nur einmal je Regentschaft) */
+  if(!p.ki && !p.kette && Math.random() < 0.10){
+    const offen = KETTEN.filter(k => !(p._kettenFertig||[]).includes(k.id));
+    if(offen.length){
+      p.kette = { id: offen[ri(0, offen.length-1)].id, teil: 0, faellig: G.jahr, flags: {} };
+      const ek = ketteEreignis(p);
+      if(ek) return ek;
+    }
+  }
   if(!p.ki && Math.random() < 0.35) return audienzWuerfeln(p);
   return EREIGNISSE[ri(0, EREIGNISSE.length-1)];
 }
@@ -5348,7 +5551,14 @@ function diploAktion(art){
     if(richtung === "verkauf" && menge > p.korn){ alertMsg("So viel Korn habt Ihr nicht."); return; }
     if(ziel.ki){
       if(kiAngebotPruefen(ziel, angebot)){ angebotAusfuehren(angebot); toast(`🤝 ${ziel.name} schlägt ein!`); erfolg("handel"); }
-      else toast(`❌ ${ziel.name} lehnt das Angebot ab.`);
+      else {
+        const gegen = kiGegenangebot(ziel, angebot);
+        if(gegen){
+          G._gegenangebot = gegen;
+          toast(`🗣️ ${ziel.name} feilscht: ${fmt(gegen.menge)} Fuder zu ${fmt(gegen.preis)} Talern — Euer Wort?`, 7000);
+        }
+        else toast(`❌ ${ziel.name} lehnt das Angebot ab.`);
+      }
     } else {
       G.angebote.push(angebot);
       toast(`📜 Angebot an ${ziel.name} übermittelt. Antwort zu Beginn ${ziel.w?"ihres":"seines"} Zuges.`);
@@ -5496,6 +5706,52 @@ function gegenspioneToggle(an){
   cur().gegenspione = !!an;
   toast(an ? "🛡️ Eure Gegenspione durchkämmen fortan Gasthöfe und Häfen (500 T/Jahr)."
            : "Die Gegenspione werden entlassen.");
+}
+/* ---------- Kaperbriefe: Freibeuterei unter falscher Flagge ---------- */
+function kapern(){
+  const p = cur();
+  const zi = +$("#dipZiel").value;
+  const ziel = G.spieler[zi];
+  if(!ziel || ziel.tot) return;
+  if(p.kaperJahr === G.jahr){ alertMsg("Eure Freibeuter sind heuer bereits ausgelaufen."); return; }
+  if((p.schiffe||0) < 1){ alertMsg("Ohne Kriegsschiffe keine Kaperfahrt (Heer-Bildschirm: Schiffe bauen)."); return; }
+  if((ziel.haefen||0) < 1 && !routenVon(zi).length){ alertMsg(`${ziel.name} treibt keinen nennenswerten See- oder Routenhandel.`); return; }
+  if(p.geld < 1000){ alertMsg("Der Kaperbrief samt Heuer kostet 1.000 Taler."); return; }
+  p.geld -= 1000;
+  p.kaperJahr = G.jahr;
+  const chance = clamp(0.5 + ((p.schiffe||0) - (ziel.schiffe||0)) * 0.08, 0.15, 0.85);
+  if(Math.random() < chance){
+    const beute = Math.round(Math.max(0, ziel.geld) * rf(0.03, 0.06)) + 300;
+    const kornBeute = Math.min(ziel.korn, Math.round(ziel.korn * 0.05));
+    ziel.geld -= beute; p.geld += beute;
+    ziel.korn -= kornBeute; p.korn += kornBeute;
+    if(Math.random() < 0.35){
+      bezAendern(p, ziel, -20);
+      geschichte("🏴‍☠️", `${ziel.name}s Kauffahrer werden gekapert — und ein Gefangener nennt ${p.name}s Namen!`);
+      toast(`🏴‍☠️ Fette Beute: ${fmt(beute)} T und ${fmt(kornBeute)} Fuder! Doch ein Matrose plaudert — ${ziel.name} kennt Euren Namen.`, 9000);
+      if(ziel.ki){
+        const q = botAntwortText(ziel, "verrat"); parleyLog(q, ziel.name);
+        if(Math.random() < 0.3 && botKriegserklaerung(zi, G.aktiv)){
+          toast(`⚔️ ${ziel.name} erklärt Euch wegen der Kaperei den Krieg!`, 8000); sTrommel();
+        }
+      }
+    } else {
+      geschichte("🏴‍☠️", `Unbekannte Freibeuter plündern ${ziel.name}s Kauffahrer.`);
+      toast(`🏴‍☠️ Eure Freibeuter kehren schwer beladen zurück: <b>${fmt(beute)} Taler</b> und ${fmt(kornBeute)} Fuder — und niemand ahnt Eure Hand.`, 8000);
+    }
+    if(!ziel.ki) toast(`🏴‍☠️ Piraten haben ${ziel.name}s Handelsschiffe geplündert!`, 7000);
+  } else {
+    if(Math.random() < 0.5 && (p.schiffe||0) > 0) p.schiffe--;
+    if(Math.random() < 0.4){
+      bezAendern(p, ziel, -20);
+      geschichte("🚨", `${p.name}s Kaperfahrer werden vor ${ziel.name}s Küste gestellt, ein Skandal!`);
+      toast(`🚨 Die Kaperfahrt scheitert${(p.schiffe||0)<1?", ein Schiff sinkt":""} — und ${ziel.name}s Geschwader fischt Euren Kaperbrief aus dem Wrack!`, 9000);
+      if(ziel.ki){ const q = botAntwortText(ziel, "verrat"); parleyLog(q, ziel.name); }
+    } else {
+      toast(`🌊 Die Kaperfahrt verläuft im Sande${(p.schiffe||0)<1?", ein Schiff ging verloren":""}. Wenigstens ahnt niemand etwas.`, 7000);
+    }
+  }
+  mpSync(); render();
 }
 /* ---------- Hofintrigen: Günstlinge, Skandale, Attentate ---------- */
 const guenstlingAktiv = (p, zi) => p.guenstlinge && p.guenstlinge[zi] && p.guenstlinge[zi] >= G.jahr;
@@ -5670,6 +5926,49 @@ function angebotAusfuehren(a){
   verkaeufer.korn -= a.menge; kaeufer.korn += a.menge;
   verkaeufer.stat.kornErloes += summe;
   bezAendern(von, an, 6);
+}
+/* Feilschen: statt glatt abzulehnen, nennt die KI ihren Preis */
+function kiGegenangebot(ki, a){
+  const markt = G.kornMarkt || 100;
+  const bez = bezWert(ki, G.spieler[a.von]);
+  const toleranz = (ki.kiTyp==="haendler" ? 0.18 : 0.06) + bez/500;
+  const feilschlust = ki.kiTyp==="haendler" ? 0.9 : ki.kiTyp==="baumeister" ? 0.65 : 0.45;
+  if(Math.random() > feilschlust) return null;
+  /* Der Gegenpreis liegt knapp auf der guenstigen Seite der eigenen Schmerzgrenze */
+  let preis2, menge2 = a.menge;
+  if(a.richtung === "kauf"){                 /* Anbieter kauft, KI verkauft: sie will MEHR */
+    preis2 = Math.ceil(markt * (1 - toleranz) + markt * (ki.kiTyp==="haendler" ? 0.06 : 0.03));
+    if(preis2 <= a.preis) return null;       /* dann waere das Angebot ja angenommen worden */
+    menge2 = Math.min(menge2, Math.max(0, Math.floor(ki.korn - noetigKorn(ki)*1.5)));
+    if(menge2 < 10) return null;
+  } else {                                   /* Anbieter verkauft, KI kauft: sie will WENIGER zahlen */
+    preis2 = Math.floor(markt * (1 + toleranz) - markt * (ki.kiTyp==="haendler" ? 0.06 : 0.03));
+    if(preis2 >= a.preis || preis2 < 1) return null;
+    menge2 = Math.min(menge2, Math.max(0, Math.floor((ki.geld - 4000) / preis2)));
+    if(menge2 < 10) return null;
+  }
+  return { von: a.an, an: a.von, richtung: a.richtung, menge: menge2, preis: preis2,
+           urMenge: a.menge, urPreis: a.preis, jahr: G.jahr };
+}
+function gegenangebotAntwort(ja){
+  const g = G._gegenangebot;
+  G._gegenangebot = null;
+  if(!g){ render(); return; }
+  const p = cur(), ki = G.spieler[g.von];
+  if(ja){
+    /* Der Handel kommt zum KI-Preis zustande. Richtung aus Sicht des Menschen */
+    const a = { von: g.an, an: g.von, richtung: g.richtung, menge: g.menge, preis: g.preis, jahr: G.jahr };
+    if(g.richtung === "kauf" && a.menge * a.preis > p.geld){ alertMsg("Inzwischen fehlt Euch das Geld dafür."); render(); return; }
+    if(g.richtung === "verkauf" && a.menge > p.korn){ alertMsg("So viel Korn habt Ihr nicht mehr."); render(); return; }
+    angebotAusfuehren(a);
+    bezAendern(p, ki, 2);
+    toast(`🤝 Eingeschlagen! ${ki.name} ${g.richtung==="kauf"?"liefert":"nimmt"} ${fmt(g.menge)} Fuder zu ${fmt(g.preis)} Talern.`);
+    erfolg("handel");
+  } else {
+    bezAendern(p, ki, -2);
+    toast(`❌ Ihr lehnt ab. ${ki.name} zuckt mit den Schultern: „Dann eben nicht.“`);
+  }
+  mpSync(); render();
 }
 function kiAngebotPruefen(ki, a){
   const markt = G.kornMarkt || 100;
@@ -5971,6 +6270,30 @@ function kiZug(p){
     const m = p.korn - Math.ceil(noetigKorn(p)*2);
     p.korn -= m; p.geld += Math.round(m*p.kornPreis*0.9);
     G.marktDruck = (G.marktDruck||0) + m;
+  }
+  /* Kaperfahrten: wer Schiffe hat und wenig Skrupel, plündert fremden Seehandel */
+  if((p.schiffe||0) >= 2 && p.kaperJahr !== G.jahr && (p.kiTyp === "aggressor" || kiStufe(p) >= 3)
+     && Math.random() < 0.06){
+    const opfer = lebende().map(x=>x.p).filter(z => z !== p && ((z.haefen||0) > 0 || routenVon(G.spieler.indexOf(z)).length)
+      && !buendnisAktiv(p, z) && !paktAktiv(p, z) && bezWert(p, z) < 25)
+      .sort((a,b) => b.geld - a.geld)[0];
+    if(opfer && p.geld > 3000){
+      p.geld -= 1000;
+      p.kaperJahr = G.jahr;
+      const chance2 = clamp(0.5 + ((p.schiffe||0) - (opfer.schiffe||0)) * 0.08, 0.15, 0.85);
+      if(Math.random() < chance2){
+        const beute2 = Math.round(Math.max(0, opfer.geld) * rf(0.03, 0.05)) + 300;
+        opfer.geld -= beute2; p.geld += beute2;
+        geschichte("🏴‍☠️", `Unbekannte Freibeuter plündern ${opfer.name}s Kauffahrer.`);
+        if(!opfer.ki) toast(`🏴‍☠️ Piraten kapern Eure Handelsschiffe: −${fmt(beute2)} Taler! Wer mag dahinterstecken?`, 8000);
+        if(Math.random() < 0.3){
+          bezAendern(p, opfer, -15);
+          geschichte("🚨", `Gerüchte machen die Runde: ${p.name} soll die Freibeuter gedungen haben.`);
+          if(!opfer.ki) toast(`🚨 Gerüchte am Hafen: ${p.name} soll hinter den Piraten stecken!`, 8000);
+          bericht.push(`wird der Freibeuterei gegen ${opfer.name} verdächtigt`);
+        } else bericht.push("schickt heimlich Freibeuter aus");
+      } else if(Math.random() < 0.5 && (p.schiffe||0) > 0) p.schiffe--;
+    }
   }
   /* Intrigen: gerissene Bots streuen Skandale gegen den stärksten Rivalen */
   if(kiStufe(p) >= 3 && Math.random() < 0.07 && p.geld > 8000){
@@ -6474,6 +6797,7 @@ function beginneZug(){
   p.ausgabe = 0;
   p.turnStart = Date.now();
   G._handelUndo = null;
+  G._gegenangebot = null;
   G._kiBerichte = [];
   G._donnerte = false;
   /* Feindliche Heere im Anmarsch? Erst wird verteidigt! */
@@ -7276,6 +7600,234 @@ function zeichneExpedition(t){
     if(erg) erg.style.display = "block";
     if(wtr) wtr.style.display = "inline-block";
   }
+}
+function stadtAuf(){
+  G._vorStadt = G.screen;
+  zeige("stadt");
+}
+/* ---------- Das Stadt-Panorama: die Residenz wächst mit dem Reich ---------- */
+function zeichneStadt(t){
+  const c = document.getElementById("stadtBild");
+  if(!c) return;
+  const p = cur();
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  const rng = mulberry(101 + G.aktiv*13);
+  const sn = saison();
+  const boden = H*0.78;
+  ctx.clearRect(0,0,W,H);
+  /* Himmel nach Jahreszeit */
+  const himmel = ctx.createLinearGradient(0,0,0,boden);
+  const sky = { "Frühling":["#3d5a78","#8fb0c8"], "Sommer":["#33587e","#a8c8de"],
+                "Herbst":["#4a4460","#c89a6e"], "Winter":["#333d4e","#8e9bac"] }[sn.n] || ["#3d5a78","#8fb0c8"];
+  himmel.addColorStop(0, sky[0]); himmel.addColorStop(1, sky[1]);
+  ctx.fillStyle = himmel; ctx.fillRect(0,0,W,boden);
+  /* Sonne und ziehende Wolken */
+  ctx.fillStyle = sn.n==="Winter" ? "rgba(235,240,248,.85)" : "rgba(255,228,140,.9)";
+  ctx.beginPath(); ctx.arc(W*0.16, H*0.16, 22, 0, 7); ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.22)";
+  for(let wk=0; wk<4; wk++){
+    const wx = ((t/(80+wk*26) + wk*260) % (W+260)) - 130;
+    ctx.beginPath(); ctx.ellipse(wx, 34+wk*20, 58+wk*8, 11, 0, 0, 7);
+    ctx.ellipse(wx+36, 40+wk*20, 36, 8, 0, 0, 7); ctx.fill();
+  }
+  /* Vögel */
+  ctx.strokeStyle = "rgba(40,50,66,.5)"; ctx.lineWidth = 1.2;
+  for(let m=0;m<3;m++){
+    const mx = ((t/(24+m*9) + m*320) % (W+60)) - 30;
+    const my = 40 + m*16 + Math.sin(t/340+m)*6;
+    ctx.beginPath(); ctx.moveTo(mx-5,my); ctx.quadraticCurveTo(mx,my-4,mx+5,my); ctx.stroke();
+  }
+  /* Ferne Hügel */
+  ctx.fillStyle = sn.n==="Winter" ? "#75808f" : sn.n==="Herbst" ? "#6e6250" : "#4e6a52";
+  ctx.beginPath(); ctx.moveTo(0, boden);
+  for(let x=0; x<=W; x+=40) ctx.lineTo(x, boden - 46 - Math.sin(x/130+2)*22);
+  ctx.lineTo(W, boden); ctx.closePath(); ctx.fill();
+  /* Mühlen auf dem Hügel rechts */
+  const mZahl = Math.min(4, p.muehlen);
+  for(let mi2=0; mi2<mZahl; mi2++){
+    const mx = W*0.68 + mi2*62, my = boden - 58 - Math.sin((W*0.68+mi2*62)/130+2)*22;
+    ctx.fillStyle = "#5a4630";
+    ctx.beginPath(); ctx.moveTo(mx-9,my); ctx.lineTo(mx+9,my); ctx.lineTo(mx+6,my-30); ctx.lineTo(mx-6,my-30); ctx.closePath(); ctx.fill();
+    ctx.save();
+    ctx.translate(mx, my-32);
+    ctx.rotate(t/900 + mi2*1.7);
+    ctx.strokeStyle = "#e8dcc0"; ctx.lineWidth = 3;
+    for(let fl=0; fl<4; fl++){ ctx.rotate(Math.PI/2); ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-20); ctx.stroke(); }
+    ctx.restore();
+  }
+  /* Hafen links, wenn vorhanden */
+  if((p.haefen||0) > 0){
+    ctx.fillStyle = "#1c3046";
+    ctx.fillRect(0, boden-18, W*0.17, 18);
+    ctx.strokeStyle = "rgba(180,205,230,.25)"; ctx.lineWidth = 1;
+    for(let wl=0; wl<3; wl++){
+      ctx.beginPath();
+      for(let x=0; x<=W*0.17; x+=10) ctx.lineTo(x, boden-14+wl*5 + Math.sin(x/18 + t/420 + wl)*1.4);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#3c2c18";
+    ctx.fillRect(W*0.05, boden-24, 52, 6);
+    /* Masten vertäuter Koggen (Kriegsschiffe) */
+    ctx.strokeStyle = "#4a361f"; ctx.lineWidth = 2.5;
+    for(let s2=0; s2<Math.min(5, p.schiffe||0); s2++){
+      const sx2 = W*0.03 + s2*16;
+      ctx.beginPath(); ctx.moveTo(sx2, boden-16); ctx.lineTo(sx2, boden-44 + Math.sin(t/500+s2)*1.5); ctx.stroke();
+      ctx.fillStyle = p.farbe;
+      ctx.beginPath(); ctx.moveTo(sx2, boden-44); ctx.lineTo(sx2+8, boden-41); ctx.lineTo(sx2, boden-38); ctx.closePath(); ctx.fill();
+    }
+  }
+  /* Boden */
+  const wiese = ctx.createLinearGradient(0,boden,0,H);
+  wiese.addColorStop(0, sn.n==="Winter" ? "#c8ccd4" : sn.n==="Herbst" ? "#8a7448" : "#5d7a4a");
+  wiese.addColorStop(1, sn.n==="Winter" ? "#a8aeb8" : "#3c5232");
+  ctx.fillStyle = wiese; ctx.fillRect(0, boden, W, H-boden);
+  /* Haeuser: aus Maerkten wachsen Gassen */
+  const hZahl = Math.min(26, 3 + p.maerkte*2);
+  const mitte = W*0.5;
+  for(let h2=0; h2<hZahl; h2++){
+    const streu = (rng()-0.5) * (W*0.62);
+    const hx = mitte + streu + (h2%2 ? 30 : -30);
+    const tiefe2 = 0.75 + rng()*0.5;
+    const hw = 26*tiefe2, hh = 24*tiefe2;
+    const hy = boden - hh + 6;
+    ctx.fillStyle = ["#7a6248","#6e5a44","#83705a"][h2%3];
+    ctx.fillRect(hx-hw/2, hy, hw, hh);
+    ctx.fillStyle = sn.n==="Winter" ? "#e8ecf2" : ["#8e3c34","#7a4a3a","#96543c"][h2%3];
+    ctx.beginPath(); ctx.moveTo(hx-hw/2-3, hy); ctx.lineTo(hx+hw/2+3, hy); ctx.lineTo(hx, hy-hh*0.7); ctx.closePath(); ctx.fill();
+    /* warm erleuchtete Fenster flackern */
+    if(rng() < 0.75){
+      const fl2 = 0.7 + Math.sin(t/300 + h2*2.7)*0.3;
+      ctx.fillStyle = `rgba(255,206,110,${0.55*fl2})`;
+      ctx.fillRect(hx-4*tiefe2, hy+6*tiefe2, 5*tiefe2, 6*tiefe2);
+    }
+    /* Schornsteinrauch */
+    if(h2 % 5 === 0){
+      ctx.fillStyle = "rgba(200,205,214,.16)";
+      for(let r2=0; r2<3; r2++){
+        const ry = hy - hh*0.7 - 6 - r2*9 - (t/60 % 9);
+        ctx.beginPath(); ctx.arc(hx + Math.sin(t/700+r2+h2)*3, ry, 2.4+r2*1.4, 0, 7); ctx.fill();
+      }
+    }
+  }
+  /* Ruinen: verkohlte Reste */
+  for(let ru=0; ru<Math.min(3, p._ruinen||0); ru++){
+    const rx = mitte + (rng()-0.5)*W*0.5;
+    ctx.fillStyle = "#26201a";
+    ctx.fillRect(rx-12, boden-14, 8, 14); ctx.fillRect(rx+2, boden-9, 9, 9);
+    ctx.fillStyle = "rgba(60,60,66,.35)";
+    for(let r2=0; r2<3; r2++){
+      const ry = boden - 20 - r2*12 - (t/45 % 12);
+      ctx.beginPath(); ctx.arc(rx + Math.sin(t/500+r2)*4, ry, 3+r2*2, 0, 7); ctx.fill();
+    }
+  }
+  /* Palast (Mitte links) */
+  if(p.palast > 0){
+    const px2 = mitte - 120, teile = Math.min(p.palast, PALAST_TEILE);
+    const pw = 24 + teile*14;
+    ctx.fillStyle = "#b8a888";
+    ctx.fillRect(px2-pw/2, boden-52, pw, 52);
+    ctx.fillStyle = "#8e8068";
+    ctx.fillRect(px2-pw/2-6, boden-58, pw+12, 8);
+    ctx.fillStyle = "#5d4a6e";
+    ctx.beginPath(); ctx.moveTo(px2-pw/2-6, boden-58); ctx.lineTo(px2+pw/2+6, boden-58); ctx.lineTo(px2, boden-78 - teile*2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "rgba(255,214,120,.5)";
+    for(let f2=0; f2<teile; f2++) ctx.fillRect(px2-pw/2+8+f2*14, boden-40, 6, 10);
+    if(teile >= PALAST_TEILE){
+      ctx.fillStyle = p.farbe;
+      ctx.beginPath(); ctx.moveTo(px2, boden-80-teile*2); ctx.lineTo(px2+12, boden-76-teile*2); ctx.lineTo(px2, boden-72-teile*2); ctx.closePath(); ctx.fill();
+    }
+  }
+  /* Dom (Mitte rechts): waechst in den Himmel, Geruest solange unfertig */
+  if(p.dom > 0){
+    const dx2 = mitte + 120, teile = Math.min(p.dom, DOM_TEILE);
+    const dh = 40 + teile*9, fertig = teile >= DOM_TEILE;
+    ctx.fillStyle = "#a89878";
+    ctx.fillRect(dx2-26, boden-dh, 52, dh);
+    ctx.fillStyle = "#8e8068";
+    ctx.fillRect(dx2-32, boden-dh-8, 64, 10);
+    /* Turm */
+    ctx.fillStyle = "#a89878";
+    ctx.fillRect(dx2-9, boden-dh-34, 18, 34);
+    if(fertig){
+      ctx.fillStyle = "#6e5a44";
+      ctx.beginPath(); ctx.moveTo(dx2-11, boden-dh-34); ctx.lineTo(dx2+11, boden-dh-34); ctx.lineTo(dx2, boden-dh-62); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#e0b458"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(dx2, boden-dh-62); ctx.lineTo(dx2, boden-dh-72); ctx.moveTo(dx2-4, boden-dh-68); ctx.lineTo(dx2+4, boden-dh-68); ctx.stroke();
+    } else {
+      /* Baugeruest */
+      ctx.strokeStyle = "rgba(90,70,40,.8)"; ctx.lineWidth = 1.4;
+      for(let g2=0; g2<3; g2++){
+        ctx.beginPath(); ctx.moveTo(dx2-30, boden-dh+8+g2*12); ctx.lineTo(dx2+30, boden-dh+8+g2*12); ctx.stroke();
+      }
+      ctx.beginPath(); ctx.moveTo(dx2-30, boden); ctx.lineTo(dx2-30, boden-dh); ctx.moveTo(dx2+30, boden); ctx.lineTo(dx2+30, boden-dh); ctx.stroke();
+    }
+    /* Rosette */
+    ctx.fillStyle = fertig ? "rgba(160,120,220,.65)" : "rgba(70,60,50,.5)";
+    ctx.beginPath(); ctx.arc(dx2, boden-dh+18, 7, 0, 7); ctx.fill();
+  }
+  /* Burg auf dem Huegel hinten */
+  if((p.burg||0) > 0){
+    const bx2 = W*0.24, by2 = boden - 64;
+    ctx.fillStyle = "#6e6658";
+    ctx.beginPath(); ctx.ellipse(bx2, boden-30, 90, 34, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "#84796a";
+    for(let tu=0; tu<Math.min(3, p.burg); tu++){
+      const tx2 = bx2 - 26 + tu*26;
+      ctx.fillRect(tx2-8, by2-26-tu*4, 16, 40+tu*4);
+      ctx.fillStyle = "#5d5346";
+      ctx.beginPath(); ctx.moveTo(tx2-10, by2-26-tu*4); ctx.lineTo(tx2+10, by2-26-tu*4); ctx.lineTo(tx2, by2-42-tu*4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#84796a";
+    }
+    ctx.fillStyle = p.farbe;
+    ctx.beginPath(); ctx.moveTo(bx2, by2-46); ctx.lineTo(bx2+10+Math.sin(t/260)*2, by2-42); ctx.lineTo(bx2, by2-38); ctx.closePath(); ctx.fill();
+  }
+  /* Stadtmauer im Vordergrund */
+  if((p.mauer||0) > 0){
+    const mh = 16 + p.mauer*8;
+    ctx.fillStyle = "#7d7466";
+    ctx.fillRect(0, boden+16, W, mh*0.8);
+    ctx.fillStyle = "#8e8577";
+    for(let z2=0; z2<W; z2+=26) ctx.fillRect(z2, boden+16-7, 14, 7);
+    /* Stadttor */
+    ctx.fillStyle = "#6e6455";
+    ctx.fillRect(mitte-30, boden+8, 60, mh*0.8+8);
+    ctx.fillStyle = "#2c2418";
+    ctx.beginPath(); ctx.arc(mitte, boden+16+mh*0.8, 18, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "#8e8577";
+    ctx.fillRect(mitte-38, boden-2, 12, mh*0.8+18); ctx.fillRect(mitte+26, boden-2, 12, mh*0.8+18);
+  }
+  /* Fest: Wimpelketten und Konfetti */
+  if(p.festJahr === G.jahr || (p.turnierJahr === G.jahr)){
+    ctx.strokeStyle = "rgba(120,90,50,.6)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(W*0.3, boden-70); ctx.quadraticCurveTo(mitte, boden-40, W*0.7, boden-70); ctx.stroke();
+    for(let wp=0; wp<11; wp++){
+      const q = wp/10;
+      const wx = W*0.3 + (W*0.4)*q;
+      const wy = boden-70 + Math.sin(Math.PI*q)*28 + 2;
+      ctx.fillStyle = [p.farbe, "#e0b458", "#e5636f", "#4cc38a"][wp%4];
+      ctx.beginPath(); ctx.moveTo(wx-4, wy); ctx.lineTo(wx+4, wy); ctx.lineTo(wx, wy+9); ctx.closePath(); ctx.fill();
+    }
+  }
+  /* Unruhen: Rauch und roter Schein */
+  if((p.unruheJahre||0) > 0 || p.stimmung < 15){
+    ctx.fillStyle = "rgba(200,70,40,.10)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(40,40,46,.4)";
+    for(let r2=0; r2<4; r2++){
+      const ry = boden - 30 - r2*22 - (t/40 % 22);
+      ctx.beginPath(); ctx.arc(mitte + 80 + Math.sin(t/400+r2)*8, ry, 5+r2*3, 0, 7); ctx.fill();
+    }
+  }
+  /* Winter: Schneetreiben */
+  if(sn.n === "Winter"){
+    ctx.fillStyle = "rgba(240,244,250,.7)";
+    const srng = mulberry(Math.floor(t/90));
+    for(let fl2=0; fl2<40; fl2++){
+      ctx.beginPath(); ctx.arc(srng()*W, srng()*H, 1 + srng()*1.4, 0, 7); ctx.fill();
+    }
+  }
+  malKartenRahmen(ctx, W, H);
 }
 /* ---------- Das Chronik-Buch der Partie ---------- */
 function chronikBuchAuf(von){
@@ -8089,6 +8641,26 @@ const SCREENS = {
       <button class="btn-primary btn-lg" onclick="zeige(G._vorErf || (G.spieler.length?'handoff':'title'))">Zurück</button>`;
   },
 
+  stadt(){
+    const p = cur();
+    return `
+      <h2>🏙️ ${p.name}${/[sxz]$/.test(p.name)?"’":"s"} Residenz · Anno ${G.jahr}</h2>
+      <p class="muted small" style="margin-bottom:8px">Die Stadt wächst mit Eurem Reich: Märkte werden Gassen,
+      Mühlen drehen sich auf den Hügeln, Mauer, Burg, Palast und Dom prägen die Silhouette.</p>
+      <canvas id="stadtBild" width="920" height="420" style="display:block;width:100%;border-radius:12px;border:1px solid var(--border)"></canvas>
+      <div class="rowflex" style="margin-top:8px;flex-wrap:wrap">
+        <span class="res-chip">🏘️ ${fmt(p.maerkte)} Märkte</span>
+        <span class="res-chip">🌾 ${fmt(p.muehlen)} Mühlen</span>
+        ${p.mauer?`<span class="res-chip">🧱 Mauer ${p.mauer}</span>`:""}
+        ${p.burg?`<span class="res-chip">🏰 Burg ${p.burg}</span>`:""}
+        ${p.palast?`<span class="res-chip">🏛️ Palast ${p.palast}/${PALAST_TEILE}</span>`:""}
+        ${p.dom?`<span class="res-chip">⛪ Dom ${p.dom}/${DOM_TEILE}</span>`:""}
+        ${(p.haefen||0)?`<span class="res-chip">⚓ ${p.haefen} ${p.haefen>1?"Häfen":"Hafen"}</span>`:""}
+        ${(p._ruinen||0)?`<span class="res-chip red">🔥 ${p._ruinen} Ruine${p._ruinen>1?"n":""}</span>`:""}
+      </div>
+      <button class="btn-primary btn-lg" onclick="zeige(G._vorStadt || 'status')">Zurück</button>`;
+  },
+
   einstellungen(){
     return `
       <h2>⚙️ Einstellungen</h2>
@@ -8101,6 +8673,10 @@ const SCREENS = {
           <p class="muted small" style="margin-top:10px">🔔 Effekte</p>
           <input type="range" min="0" max="1" step="0.05" style="width:100%" value="${LAUT.fx}"
             oninput="lautSetzen('fx', this.value)">
+          <label class="small" style="cursor:pointer;display:block;margin-top:10px">
+            <input type="checkbox" ${EINST.amb!==false?'checked':''} onchange="einstSetzen('amb', this.checked)">
+            🌾 Klangkulisse (Marktgemurmel, Möwen, Baustellen, Kaminfeuer)
+          </label>
           <p class="muted small" style="margin-top:8px">Die Regler gelten sofort und bleiben auf diesem Gerät gespeichert.</p>
         </div>
         <div class="card">
@@ -8510,6 +9086,7 @@ const SCREENS = {
           <h2 style="margin-bottom:4px">${anrede(p)}, ${titelName(p)} ${p.name}</h2>
           <p class="muted">${alterJahre(p)} Jahre alt · Anno ${G.jahr} · ${saison().n}</p>
           <button class="btn-sm" onclick="weltAuf()" style="margin-top:8px">🗺️ Gesamtkarte</button>
+          <button class="btn-sm" onclick="stadtAuf()" style="margin-top:8px">🏙️ Stadtansicht</button>
           <button class="btn-sm" onclick="statAuf()" style="margin-top:8px">📈 Statistik</button>
         </div>
       </div>
@@ -8704,7 +9281,8 @@ const SCREENS = {
           <canvas id="audienzBild" width="110" height="136" style="border-radius:10px;border:2px solid rgba(90,64,44,.5);box-shadow:0 6px 18px rgba(0,0,0,.4)"></canvas>
           <p class="muted small" style="margin-top:4px">Die ${e.audienz.rolle} bittet um Gehör</p>
         </div>` : `<div class="center"><span class="ereignis-ico">${e.ico}</span></div>`}
-        <h2 class="center" style="padding-bottom:4px">${e.audienz?"Audienz am Hofe":"Eine Entscheidung, "+titelName(p)+"!"}</h2>
+        <h2 class="center" style="padding-bottom:4px">${e.audienz?"Audienz am Hofe":e.kette?e.kette.n:"Eine Entscheidung, "+titelName(p)+"!"}</h2>
+        ${e.kette?`<p class="center gold small" style="letter-spacing:2px;margin-bottom:2px">📜 FORTLAUFENDE GESCHICHTE · TEIL ${e.kette.teil} VON ${e.kette.von}</p>`:""}
         <div class="zierlinie"></div>
         <p style="font-size:16px;text-align:center;max-width:560px;margin:10px auto">${e.txt(p)}</p>
         <div class="rowflex center" style="justify-content:center;margin-top:12px">
@@ -8915,6 +9493,7 @@ const SCREENS = {
       <button class="btn-danger" onclick="zeige('kriegPlan')" ${kriegOk?'':'disabled'}>⚔️ Krieg führen</button>
       <button onclick="zeige('diplo')" ${lebende().length>1?'':'disabled'}>🤝 Diplomatie</button>
       <button onclick="weltAuf()">🗺️ Gesamtkarte</button>
+      <button onclick="stadtAuf()">🏙️ Stadtansicht</button>
       <button class="btn-primary btn-lg" onclick="jahrAbschliessen()">Jahr abschließen</button>
       ${!kriegOk?`<p class="muted small" style="max-width:640px;margin-top:6px">⚔️ Feldzüge werden möglich, sobald Ihr habt: ${kannKrieg(p).fehlt.join(" · ")}.</p>`:''}`;
   },
@@ -8961,6 +9540,18 @@ const SCREENS = {
             <input type="number" id="dipPreis" min="1" value="${G.kornMarkt||100}" style="width:80px" title="Taler je Fuder">
             <button onclick="diploAktion('handel')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>Anbieten</button>
           </div>
+          ${G._gegenangebot && G._gegenangebot.an === G.aktiv ? (()=>{ const g = G._gegenangebot, ki = G.spieler[g.von]; return `
+          <div class="event" style="border-color:var(--gold);margin:8px 0">
+            🗣️ <b>${ki.name} feilscht:</b> „${g.richtung==="kauf"
+              ? `Ich verkaufe Euch ${fmt(g.menge)} Fuder — aber zu <b>${fmt(g.preis)} Talern</b> das Fuder${g.menge<g.urMenge?`, mehr als ${fmt(g.menge)} gebe ich nicht her`:""}.`
+              : `Ich nehme Euch ${fmt(g.menge)} Fuder ab — aber nur zu <b>${fmt(g.preis)} Talern</b> das Fuder${g.menge<g.urMenge?`, mehr brauche ich nicht`:""}.`}
+              Schlagt ein, oder lasst es.“
+            <span class="muted small">(Euer Gebot war ${fmt(g.urPreis)} T)</span>
+            <div class="rowflex" style="margin-top:6px">
+              <button class="btn-sm btn-primary" onclick="gegenangebotAntwort(true)">🤝 Einschlagen (${fmt(g.menge*g.preis)} T)</button>
+              <button class="btn-sm" onclick="gegenangebotAntwort(false)">Ablehnen</button>
+            </div>
+          </div>`; })() : ""}
           <div class="rowflex">
             <button onclick="diploAktion('pakt')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>🕊️ Nichtangriffspakt anbieten (5 Jahre)</button>
             <button onclick="diploAktion('buendnis')" ${(p.diploZaehler||0)>=diploLimit(p)?'disabled':''}>🛡️ Bündnis anbieten (8 Jahre, 1.000 T)</button>
@@ -9004,6 +9595,13 @@ const SCREENS = {
               onchange="gegenspioneToggle(this.checked)"> 🛡️ Gegenspione unterhalten (500 T/Jahr) ·
               fremde Spione scheitern bei Euch deutlich öfter</label>
           </div>
+          <div class="rowflex">
+            <button onclick="kapern()" ${p.kaperJahr===G.jahr||(p.schiffe||0)<1?'disabled':''}>🏴‍☠️ Kaperbrief ausstellen (1.000 T)</button>
+            <span class="muted small">${(p.schiffe||0)<1?"braucht Kriegsschiffe":p.kaperJahr===G.jahr?"Freibeuter heuer schon ausgelaufen":"Eure Schiffe plündern unter falscher Flagge den Handel des Partners"}</span>
+          </div>
+          <p class="muted small">Gelingt die Kaperfahrt unerkannt, fließen Beute und Korn — fliegt sie auf,
+          leidet das Verhältnis schwer, und mancher Regent zieht in den Krieg. Je mehr Schiffe Ihr habt
+          (und je weniger das Ziel), desto besser stehen die Chancen.</p>
           ${lebende().filter(x=>x.i!==G.aktiv).map(z=>spionBericht(p, z.i)).join("")}
         </div>
         <div class="card">
@@ -10982,6 +11580,7 @@ function animLoop(t){
   if(t - _animLast < 40) return;   /* ~25 fps genügen */
   _animLast = t;
   if(document.hidden) return;
+  if(t > _ambNext){ ambientTick(t); _ambNext = t + rf(2400, 5600); }
   if(G.screen === "title")        zeichneTitel(t);
   else if(G.screen === "bauen")   zeichneKarte(cur(), "karte", t);
   else if(G.screen === "status"){ zeichneKarte(cur(), "karteS", t); zeichnePortraet("portraitS", cur(), t); }
@@ -10996,12 +11595,13 @@ function animLoop(t){
   else if(G.screen === "seegefecht") zeichneSeegefecht(t);
   else if(G.screen === "expedition") zeichneExpedition(t);
   else if(G.screen === "chronikbuch") zeichneChronikBuch(t);
+  else if(G.screen === "stadt") zeichneStadt(t);
   else if(G.screen === "intro") zeichneIntro(t);
 }
 requestAnimationFrame(animLoop);
 
 /* ---------- Update-Prüfung: neue Version auf dem Server? ---------- */
-const APP_CACHE = "kaiser-v36";
+const APP_CACHE = "kaiser-v37";
 function updatePruefen(){
   if(location.protocol === "file:" || !navigator.onLine || G._updateGemeldet) return;
   fetch("sw.js?u=" + Date.now(), { cache: "no-store" })
