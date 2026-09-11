@@ -400,3 +400,11 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Krönung ausgebaut:** Schwingende Glocken, rotierende Lichtstrahlen aus der Rosette, jubelnder Hof mit erhobenen Armen, Blütenregen und ein Schlussbanner mit Wappen.
 - **Weltkarte mit Zoom & Schwenk:** Mausrad oder Fingerzoom vergrößert bis 3-fach, Ziehen verschiebt; Rahmen und Kompass bleiben fest, Klicks treffen auch im Zoom.
 - **Update-Hinweis:** Das Spiel prüft im Hintergrund auf neue Versionen und bietet Ein-Klick-Aktualisierung an, statt im Offline-Cache zu verharren.
+
+## Version 3.9.1 — Der letzte Schliff an UI und Bewegung
+
+- **Übergänge:** Der goldene Lichtstreif läuft jetzt bei jedem Bildschirmwechsel über die Seite (nicht mehr nur zwischen Phasen), das Systemmenü klappt animiert auf.
+- **Phasen-Stepper:** Die Schritte sind mit feinen Linien verbunden, der aktive Schritt glimmt sanft.
+- **Saison-Färbung:** Die Goldlinie unter dem Kopfbalken nimmt die Farbe der Jahreszeit an — Frühlingsgrün, Sommergold, Herbstbernstein, Wintereis.
+- **Kampf-Dramatik:** Wenn die eigene Moral in der Schlacht zu brechen droht, pulsiert ein roter Vignetten-Rand um den ganzen Bildschirm.
+- **Kleinigkeiten mit Wirkung:** Kachel-Werte machen beim Hochzählen einen kleinen Satz, Tabellen haben Zebra-Streifen, Toasts stapeln sich auf höchstens vier, und alle Szenen-Bilder (Saison, Wetter, Turnier, Krönung, Seegefecht, Titel, Karten) tragen jetzt denselben gestochenen Goldrahmen.

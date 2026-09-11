@@ -38,7 +38,8 @@
     border-bottom:1px solid var(--border);
   }
   header::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
-    background:linear-gradient(90deg,transparent 0%,rgba(224,180,88,.55) 50%,transparent 100%);}
+    background:linear-gradient(90deg,transparent 0%,rgba(var(--saisonTint,224,180,88),.6) 50%,transparent 100%);
+    transition:background .8s ease;}
   .brand{font-weight:800;font-size:20px;letter-spacing:2px;color:var(--gold);
     font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;}
   /* --- Systemmenü --- */
@@ -51,6 +52,7 @@
   details.menu summary::-webkit-details-marker{display:none;}
   details.menu[open] summary{border-color:var(--gold);}
   .menu-inhalt{
+    animation:menuAuf .18s cubic-bezier(.2,.9,.3,1) both;transform-origin:top right;
     position:absolute;right:0;top:calc(100% + 6px);z-index:60;
     background:var(--panel2);border:1px solid var(--border);border-radius:12px;
     padding:8px;min-width:200px;box-shadow:0 14px 40px rgba(0,0,0,.55);
@@ -133,7 +135,12 @@
   .stat .val{font-size:19px;font-weight:700;}
   .bar{height:8px;background:var(--border);border-radius:99px;overflow:hidden;margin-top:8px;}
   .bar>div{height:100%;border-radius:99px;background:var(--gold);transition:width .5s;}
-  .stepper{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;}
+  .stepper{display:flex;gap:0;flex-wrap:wrap;margin-bottom:18px;align-items:center;}
+  .stepper .step + .step{margin-left:14px;position:relative;}
+  .stepper .step + .step::before{content:"";position:absolute;left:-11px;top:50%;width:8px;height:1px;
+    background:var(--border);}
+  .step.act{box-shadow:0 0 14px rgba(224,180,88,.4);animation:stepGlow 2.2s ease-in-out infinite;}
+  @keyframes stepGlow{0%,100%{box-shadow:0 0 8px rgba(224,180,88,.25);}50%{box-shadow:0 0 18px rgba(224,180,88,.5);}}
   .step{
     font-size:12px;letter-spacing:.5px;padding:6px 12px;border-radius:999px;
     border:1px solid var(--border);color:var(--muted);background:var(--panel);
@@ -188,6 +195,13 @@
     .setuprow{gap:5px;}
     .setuprow .s-name{flex:1 1 100%;order:5;}
   }
+  @keyframes menuAuf{from{opacity:0;transform:scale(.92) translateY(-4px);}to{opacity:1;transform:none;}}
+  .val.bump{animation:valBump .45s cubic-bezier(.2,1.3,.4,1);}
+  @keyframes valBump{0%{transform:scale(1.14);}100%{transform:scale(1);}}
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:80;opacity:0;transition:opacity .8s ease;
+    background:radial-gradient(ellipse at center, transparent 55%, rgba(180,30,40,.28) 100%);}
+  #vignette.an{opacity:1;animation:vignettePuls 1.6s ease-in-out infinite;}
+  @keyframes vignettePuls{0%,100%{filter:brightness(.9);}50%{filter:brightness(1.25);}}
   @keyframes unruhePuls{0%,100%{box-shadow:0 0 0 rgba(229,99,111,0);}50%{box-shadow:0 0 18px rgba(229,99,111,.45);}}
   @keyframes moralPuls{0%,100%{filter:brightness(1);}50%{filter:brightness(1.6);}}
   .titelmenu{display:grid;gap:9px;max-width:380px;margin:0 auto;}
@@ -254,6 +268,7 @@
   td.r,th.r{text-align:right;font-variant-numeric:tabular-nums;}
   tr+tr td{border-top:1px solid var(--border);}
   tbody tr:hover td, table tr:hover td{background:rgba(224,180,88,.035);}
+  table tr:nth-child(even) td{background:rgba(255,255,255,.014);}
   th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:1px;}
   #map{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 12px;}
   .tile{
@@ -526,9 +541,10 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.9 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.9.1 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
+<div id="vignette"></div>
 <div id="wipe"></div>
 <script>
 "use strict";
@@ -1286,9 +1302,11 @@ function starteMusik(){
 
 /* ---------- Toasts & Erfolge ---------- */
 function toast(html, ms=4500){
+  const box = $("#toasts");
+  while(box.children.length >= 4) box.removeChild(box.firstChild);
   const d = document.createElement("div");
   d.className = "toast"; d.innerHTML = html;
-  $("#toasts").appendChild(d);
+  box.appendChild(d);
   setTimeout(()=>{ d.style.opacity="0"; d.style.transition="opacity .4s"; setTimeout(()=>d.remove(),400); }, ms);
 }
 const ERFOLGE = [
@@ -2606,6 +2624,7 @@ function zeichneSaisonband(t){
   const vig = ctx.createRadialGradient(W/2, H/2, H*0.3, W/2, H/2, W*0.62);
   vig.addColorStop(0, "rgba(10,13,20,.18)"); vig.addColorStop(1, "rgba(10,13,20,.42)");
   ctx.fillStyle = vig; ctx.fillRect(0,0,W,H);
+  malKartenRahmen(ctx, W, H);
 }
 const band = (H, v) => v * (H/64) * 0.55;
 
@@ -3793,6 +3812,7 @@ function zeichneWetter(t=0){
   }
   /* Textzeile */
   /* Der Wettertitel liegt als großes HTML-Overlay über dem Bild */
+  malKartenRahmen(ctx, W, H);
 }
 function weltAuf(){ G._vorWelt = G.screen; G._dossier = null; G._wz = { z:1, x:0, y:0 }; zeige("welt"); }
 function weltWheel(ev){
@@ -6242,7 +6262,7 @@ const alleTot = () => G.spieler.every(p=>p.tot);
 let timerIv = null;
 const PHASEN_WIPE = ["status","korn","handel","zwbilanz","steuern","bauen","bilanz"];
 function zeige(s){
-  if(PHASEN_WIPE.includes(G.screen) && PHASEN_WIPE.includes(s) && G.screen !== s){
+  if(G.screen !== s && !["schlacht","warten"].includes(s)){
     const w = $("#wipe");
     if(w){ w.classList.remove("an"); void w.offsetWidth; w.classList.add("an");
            setTimeout(()=>w.classList.remove("an"), 500); }
@@ -6251,8 +6271,11 @@ function zeige(s){
   G.screen = s; render();
 }
 
+const SAISON_TINT = { "Frühling":"122,190,120", "Sommer":"224,180,88", "Herbst":"214,140,70", "Winter":"140,180,220" };
 function kopf(){
   const inSpiel = G.spieler.length>0;
+  document.documentElement.style.setProperty("--saisonTint",
+    inSpiel ? (SAISON_TINT[saison().n] || "224,180,88") : "224,180,88");
   $("#hJahr").style.display = inSpiel ? "" : "none";
   $("#btnExport").style.display = inSpiel ? "" : "none";
   if(inSpiel) $("#hJahr").innerHTML = `Anno <b>${G.jahr}</b>${MP&&MP.aktiv?' · 🌐':''}`;
@@ -6339,6 +6362,15 @@ function render(){
       `<div class="card tut">💡 <b>Berater:</b> ${TIPPS[G.screen]}
        <div><button class="btn-sm" onclick="tippZu('${G.screen}')">Verstanden</button></div></div>`);
   }
+  const vig = $("#vignette");
+  if(vig){
+    let not = false;
+    if(G.screen === "schlacht" && G._s && !G._s.fertig && G._kr){
+      const meineSeite = G._kr.a === G.aktiv ? "A" : G._kr.d === G.aktiv ? "D" : null;
+      if(meineSeite) not = (meineSeite === "A" ? G._s.moralA : G._s.moralD) < 38;
+    }
+    vig.classList.toggle("an", not);
+  }
   if(G.screen === "schlacht") zeichneFeld();
   else if(G._frischerScreen) window.scrollTo(0,0);
   G._frischerScreen = false;
@@ -6363,6 +6395,7 @@ function zaehlerAnimieren(){
   document.querySelectorAll("[data-cnt]").forEach(el=>{
     const ziel = +el.dataset.cnt, suf = el.dataset.suf || "";
     if(!isFinite(ziel)) return;
+    if(el.classList.contains("val")){ el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); }
     const start = ziel * 0.85, t0 = performance.now(), dauer = 450;
     const step = t => {
       const q = Math.min(1,(t-t0)/dauer), e = 1-Math.pow(1-q,3);
@@ -6546,6 +6579,7 @@ function zeichneKroenung(t){
     ctx.arc(W/2 + Math.sin(q2*6 + wr2*2)*70, H*0.6 - q2*H*0.4, 18 + q2*30, 0, 7);
     ctx.fill();
   }
+  malKartenRahmen(ctx, W, H);
 }
 /* Erzähltes Intro: eine Feder schreibt die Ausgangslage, dann fällt das Siegel */
 const SZENARIO_TEXT = {
@@ -6804,6 +6838,7 @@ function zeichneTjost(t){
       ctx.stroke();
     }
   }
+  malKartenRahmen(ctx, W, H);
   /* Ergebnis einblenden */
   if(seit > 2600){
     const sieger = G.spieler[t2.sieger];
@@ -9891,7 +9926,7 @@ function animLoop(t){
 requestAnimationFrame(animLoop);
 
 /* ---------- Update-Prüfung: neue Version auf dem Server? ---------- */
-const APP_CACHE = "kaiser-v33";
+const APP_CACHE = "kaiser-v34";
 function updatePruefen(){
   if(location.protocol === "file:" || !navigator.onLine || G._updateGemeldet) return;
   fetch("sw.js?u=" + Date.now(), { cache: "no-store" })
