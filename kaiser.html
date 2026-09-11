@@ -293,6 +293,14 @@
     background:var(--panel);border-radius:0 10px 10px 0;font-size:14.5px;
   }
   .event.bad{border-color:var(--red);} .event.good{border-color:var(--green);}
+  .event{animation:eventEin .38s cubic-bezier(.2,.9,.3,1) both;}
+  .event:nth-of-type(2){animation-delay:.07s;} .event:nth-of-type(3){animation-delay:.14s;}
+  .event:nth-of-type(4){animation-delay:.21s;} .event:nth-of-type(5){animation-delay:.28s;}
+  @keyframes eventEin{from{opacity:0;transform:translateX(-12px);}to{opacity:1;transform:none;}}
+  .battlelog p:last-child{animation:logNeu .3s ease both;}
+  @keyframes logNeu{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:none;}}
+  .chip.anno-neu{animation:annoPuls .8s cubic-bezier(.2,1.2,.4,1);}
+  @keyframes annoPuls{0%{transform:scale(1);}35%{transform:scale(1.16);box-shadow:0 0 18px rgba(224,180,88,.5);border-color:var(--gold);}100%{transform:scale(1);}}
   .rowflex{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0;}
   .sliderrow{display:grid;grid-template-columns:170px 1fr 64px;gap:12px;align-items:center;margin:12px 0;}
   .sliderrow .v{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;}
@@ -414,6 +422,11 @@
     padding:11px 16px;box-shadow:0 8px 30px rgba(0,0,0,.55), 0 0 22px rgba(224,180,88,.08);max-width:330px;
     animation:toastIn .38s cubic-bezier(.2,1.3,.4,1);font-size:14px;line-height:1.45;}
   @keyframes toastIn{from{opacity:0;transform:translateX(26px) scale(.96);}to{opacity:1;transform:none;}}
+  .toast{position:relative;overflow:hidden;}
+  .toast::after{content:"";position:absolute;left:0;bottom:0;height:2.5px;width:100%;
+    background:linear-gradient(90deg,var(--gold),rgba(224,180,88,.2));
+    transform-origin:left;animation:toastZeit var(--tdauer,4.5s) linear forwards;}
+  @keyframes toastZeit{from{transform:scaleX(1);}to{transform:scaleX(0);}}
   .tut{border-color:var(--cyan) !important;background:rgba(95,184,212,.06);}
   .erfolg-k{display:flex;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--border);
     border-radius:12px;background:var(--panel);position:relative;overflow:hidden;
@@ -543,7 +556,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.12 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.12.1 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="vignette"></div>
@@ -1481,6 +1494,7 @@ function toast(html, ms=4500){
   while(box.children.length >= 4) box.removeChild(box.firstChild);
   const d = document.createElement("div");
   d.className = "toast"; d.innerHTML = html;
+  d.style.setProperty("--tdauer", ms + "ms");
   box.appendChild(d);
   setTimeout(()=>{ d.style.opacity="0"; d.style.transition="opacity .4s"; setTimeout(()=>d.remove(),400); }, ms);
 }
@@ -3746,19 +3760,39 @@ function zeichneWelt(t=0){
   for(const r of (G.routen||[])){
     const A = pos[r.a], B = pos[r.b];
     if(!A || !B || G.spieler[r.a].tot || G.spieler[r.b].tot) continue;
-    ctx.strokeStyle = "rgba(224,180,88,.55)"; ctx.lineWidth = 2.5;
+    const see = routeZurSee(r);
+    ctx.strokeStyle = see ? "rgba(115,190,235,.55)" : "rgba(224,180,88,.55)";
+    ctx.lineWidth = 2.5;
+    if(see){ ctx.setLineDash([8,6]); ctx.lineDashOffset = -t/90; }
     ctx.beginPath(); ctx.moveTo(A[0], A[1]);
     ctx.quadraticCurveTo(cx, cy, B[0], B[1]); ctx.stroke();
-    /* Karawane pendelt auf der Kurve */
+    ctx.setLineDash([]);
+    /* Karawane bzw. Kogge pendelt auf der Kurve */
     const phase = (Math.sin(t/1400 + (r.a*3+r.b)) + 1) / 2;
     const q = 1-phase;
     const kx = q*q*A[0] + 2*q*phase*cx + phase*phase*B[0];
     const ky = q*q*A[1] + 2*q*phase*cy + phase*phase*B[1];
-    ctx.fillStyle = "#e0b458";
-    ctx.fillRect(kx-4, ky-3, 8, 5);
-    ctx.fillStyle = "#8a5a2a";
-    ctx.beginPath(); ctx.arc(kx-2.5, ky+3, 1.6, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(kx+2.5, ky+3, 1.6, 0, 7); ctx.fill();
+    if(see){
+      const richt = Math.cos(t/1400 + (r.a*3+r.b)) >= 0 ? 1 : -1;
+      ctx.save();
+      ctx.translate(kx, ky + Math.sin(t/420 + r.a)*1.2);
+      if(richt < 0) ctx.scale(-1,1);
+      ctx.fillStyle = "#5c4426";
+      ctx.beginPath(); ctx.moveTo(-7,0); ctx.lineTo(7,0); ctx.lineTo(4.5,3.4); ctx.lineTo(-4.5,3.4); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "#8a6a40"; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-10); ctx.stroke();
+      ctx.fillStyle = "#e2ddd0";
+      ctx.beginPath(); ctx.moveTo(0,-10); ctx.quadraticCurveTo(5.5+Math.sin(t/380)*1.1,-6,0,-2); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(200,225,250,.3)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-8,2); ctx.lineTo(-13,1.4); ctx.stroke();
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "#e0b458";
+      ctx.fillRect(kx-4, ky-3, 8, 5);
+      ctx.fillStyle = "#8a5a2a";
+      ctx.beginPath(); ctx.arc(kx-2.5, ky+3, 1.6, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(kx+2.5, ky+3, 1.6, 0, 7); ctx.fill();
+    }
   }
   /* Ehen und Bündnisse als Verbindungslinien mit Siegel in der Mitte */
   const siegel = [];
@@ -3956,6 +3990,43 @@ function zeichneWelt(t=0){
     ctx.restore();
   }
   ctx.restore();
+  /* Vorboten des Unheils: Komet, Aschehimmel oder Regenschleier ueber der ganzen Welt */
+  if(G.katastrophe && G.katastrophe.jahr >= G.jahr){
+    const naht = G.katastrophe.jahr === G.jahr;
+    const art3 = G.katastrophe.art;
+    if(art3 === "komet"){
+      const komX = W*0.14 + ((t/900) % (W*0.2)), komY = H*0.12 + Math.sin(t/2200)*6;
+      const schweif = ctx.createLinearGradient(komX, komY, komX-90, komY+34);
+      schweif.addColorStop(0, `rgba(210,230,255,${naht?0.75:0.45})`);
+      schweif.addColorStop(1, "rgba(210,230,255,0)");
+      ctx.strokeStyle = schweif; ctx.lineWidth = 5; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(komX, komY); ctx.lineTo(komX-88, komY+33); ctx.stroke();
+      ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.moveTo(komX, komY+4); ctx.lineTo(komX-66, komY+30); ctx.stroke();
+      ctx.lineCap = "butt";
+      const kern = ctx.createRadialGradient(komX, komY, 1, komX, komY, 12);
+      kern.addColorStop(0, "#fff"); kern.addColorStop(1, "rgba(200,225,255,0)");
+      ctx.fillStyle = kern; ctx.beginPath(); ctx.arc(komX, komY, 12, 0, 7); ctx.fill();
+    } else if(art3 === "vulkan"){
+      ctx.fillStyle = `rgba(120,60,30,${naht?0.16:0.09})`;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = `rgba(30,26,24,${naht?0.5:0.3})`;
+      for(let aw=0; aw<3; aw++){
+        const ax2 = ((t/(140+aw*50) + aw*380) % (W+340)) - 170;
+        ctx.beginPath(); ctx.ellipse(ax2, 28+aw*20, 120+aw*20, 16+aw*4, 0, 0, 7);
+        ctx.ellipse(ax2+90, 40+aw*20, 80, 12, 0, 0, 7); ctx.fill();
+      }
+    } else if(art3 === "flut"){
+      ctx.fillStyle = `rgba(60,110,170,${naht?0.12:0.06})`;
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = `rgba(170,200,235,${naht?0.30:0.16})`; ctx.lineWidth = 1;
+      const rrng2 = mulberry(Math.floor(t/80));
+      for(let rr=0; rr<(naht?40:20); rr++){
+        const rx2 = rrng2()*W, ry2 = rrng2()*H*0.6;
+        ctx.beginPath(); ctx.moveTo(rx2, ry2); ctx.lineTo(rx2-3, ry2+12); ctx.stroke();
+      }
+    }
+  }
   /* Kartenrahmen wie auf alten Seekarten: Doppellinie mit Eckzier */
   ctx.strokeStyle = "rgba(224,180,88,.5)"; ctx.lineWidth = 2;
   ctx.strokeRect(6, 6, W-12, H-12);
@@ -7020,7 +7091,14 @@ function kopf(){
     inSpiel ? (SAISON_TINT[saison().n] || "224,180,88") : "224,180,88");
   $("#hJahr").style.display = inSpiel ? "" : "none";
   $("#btnExport").style.display = inSpiel ? "" : "none";
-  if(inSpiel) $("#hJahr").innerHTML = `Anno <b>${G.jahr}</b>${MP&&MP.aktiv?' · 🌐':''}`;
+  if(inSpiel){
+    $("#hJahr").innerHTML = `Anno <b>${G.jahr}</b>${MP&&MP.aktiv?' · 🌐':''}`;
+    if(G._annoAlt !== undefined && G._annoAlt !== G.jahr){
+      const ch = $("#hJahr");
+      ch.classList.remove("anno-neu"); void ch.offsetWidth; ch.classList.add("anno-neu");
+    }
+    G._annoAlt = G.jahr;
+  }
   const turnScreens = ["status","korn","handel","zwbilanz","steuern","bauen","kriegPlan","diplomatie","schlacht","kriegErgebnis","kriegAbbruch"];
   const p = inSpiel ? cur() : null;
   $("#hSpieler").style.display = (inSpiel && p && !p.tot && turnScreens.concat(["bilanz"]).includes(G.screen)) ? "" : "none";
@@ -7796,6 +7874,55 @@ function zeichneStadt(t){
     ctx.beginPath(); ctx.arc(mitte, boden+16+mh*0.8, 18, Math.PI, 0); ctx.fill();
     ctx.fillStyle = "#8e8577";
     ctx.fillRect(mitte-38, boden-2, 12, mh*0.8+18); ctx.fillRect(mitte+26, boden-2, 12, mh*0.8+18);
+  }
+  /* Leben vor den Toren: Passanten schlendern, ein Fuhrwerk rollt */
+  const gehY = H - 16;
+  for(let pa=0; pa<5; pa++){
+    const tempo2 = 26 + pa*7;
+    const richt2 = pa % 2 ? 1 : -1;
+    let px3 = ((t/tempo2 + pa*230) % (W+60)) - 30;
+    if(richt2 < 0) px3 = W - px3;
+    const schritt = Math.sin(t/110 + pa*2.1);
+    ctx.fillStyle = ["#5d4a6e","#6e4a3a","#3a5d4a","#6e5d3a","#4a3a5d"][pa];
+    ctx.fillRect(px3-3.5, gehY-14, 7, 12);
+    ctx.fillStyle = "#d8b28c";
+    ctx.beginPath(); ctx.arc(px3, gehY-18, 3.6, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#2c2418"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px3, gehY-3); ctx.lineTo(px3 + schritt*3.4, gehY);
+    ctx.moveTo(px3, gehY-3); ctx.lineTo(px3 - schritt*3.4, gehY); ctx.stroke();
+  }
+  {
+    const fx3 = ((t/34) % (W+220)) - 110;
+    const holper = Math.sin(t/130)*0.8;
+    ctx.save();
+    ctx.translate(fx3, gehY - 6 + holper);
+    /* Pferd */
+    ctx.fillStyle = "#6e5236";
+    ctx.beginPath(); ctx.ellipse(20, -6, 11, 5.5, 0, 0, 7); ctx.fill();
+    ctx.fillRect(27, -14, 4.5, 9);
+    ctx.beginPath(); ctx.ellipse(31, -14, 4, 2.8, 0.4, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#4a361f"; ctx.lineWidth = 2;
+    const tritt = Math.sin(t/95);
+    ctx.beginPath();
+    ctx.moveTo(14, -2); ctx.lineTo(14 + tritt*2.6, 5);
+    ctx.moveTo(26, -2); ctx.lineTo(26 - tritt*2.6, 5);
+    ctx.stroke();
+    /* Deichsel und Karren */
+    ctx.strokeStyle = "#4a361f"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(9, -6); ctx.lineTo(-6, -5); ctx.stroke();
+    ctx.fillStyle = "#6a5030";
+    ctx.fillRect(-24, -12, 20, 9);
+    ctx.fillStyle = "#8a6a40";
+    ctx.fillRect(-22, -15, 16, 4);
+    /* Raeder mit Speichen drehen */
+    for(const rx3 of [-19, -8]){
+      ctx.strokeStyle = "#3c2c18"; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(rx3, 1, 5, 0, 7); ctx.stroke();
+      ctx.save(); ctx.translate(rx3, 1); ctx.rotate(t/120);
+      ctx.beginPath(); ctx.moveTo(-5,0); ctx.lineTo(5,0); ctx.moveTo(0,-5); ctx.lineTo(0,5); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
   }
   /* Fest: Wimpelketten und Konfetti */
   if(p.festJahr === G.jahr || (p.turnierJahr === G.jahr)){
@@ -10238,7 +10365,8 @@ const SCREENS = {
         ${G._wz && G._wz.z > 1 ? `<button class="btn-sm" onclick="G._wz={z:1,x:0,y:0}">🔍 Ansicht zurücksetzen</button>` : `<span class="muted small">🔍 Mausrad/Fingerzoom vergrößert die Karte, Ziehen verschiebt sie.</span>`}
         <p class="muted small">Die Sitzreihenfolge bildet den Nachbarschaftskreis, blasse Wege verbinden
         Nachbarn, <span class="gold">goldene Wege mit Karawanen</span> sind aktive Handelsrouten (jährlicher
-        Zoll für beide Seiten). Euer Reich trägt den goldenen Ring.</p>
+        Zoll für beide Seiten), <span class="cyan">blaue Wellenlinien mit Kogge</span> sind Seerouten
+        zwischen Hafenstädten (+60 % Zoll, Piratengefahr). Euer Reich trägt den goldenen Ring.</p>
       </div>
       <div class="card">
         <h3>Die Konkurrenz</h3>
@@ -11601,7 +11729,7 @@ function animLoop(t){
 requestAnimationFrame(animLoop);
 
 /* ---------- Update-Prüfung: neue Version auf dem Server? ---------- */
-const APP_CACHE = "kaiser-v37";
+const APP_CACHE = "kaiser-v38";
 function updatePruefen(){
   if(location.protocol === "file:" || !navigator.onLine || G._updateGemeldet) return;
   fetch("sw.js?u=" + Date.now(), { cache: "no-store" })

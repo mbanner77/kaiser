@@ -433,3 +433,9 @@ automatisch. Die Seite ist als PWA installierbar (Browser-Menü → „App insta
 - **Stadt-Panorama:** Die neue Stadtansicht (aus Status und Bauen) zeigt Eure Residenz als wachsendes Gemälde — Gassen aus Märkten mit erleuchteten Fenstern, drehende Mühlen, Hafen mit vertäuten Koggen, Burghügel, Palast, Dom samt Baugerüst, Stadtmauer mit Tor. Feste hängen Wimpelketten auf, Ruinen qualmen, Unruhen legen roten Schein über die Stadt, im Winter schneit es.
 - **Feilschende Bots:** Wer beim Kornhandel zu knapp bietet, bekommt keine platte Absage mehr, sondern ein Gegenangebot nach Charakter („80 Fuder zu 110 Talern — schlagt ein oder lasst es"). Einschlagen kostet keine zweite Diplomatie-Aktion.
 - **Klangkulisse:** Dezente Umgebungsgeräusche je Bildschirm — Marktgemurmel, Baustellenklopfen, Vogelzwitschern, Möwen und Wellen im Hafen, Kaminknistern in der Bilanz. Über den Effekte-Regler und einen eigenen Schalter in den Einstellungen steuerbar.
+
+## Version 3.12.1 — Feinschliff für Auge und Ohr
+
+- **Weltkarte:** Seerouten erscheinen jetzt als blaue, wandernde Wellenlinien mit segelnder Kogge (Landrouten behalten ihre Karawane); die Kartenlegende erklärt beides. Droht eine Katastrophe, kündigt die Karte sie sichtbar an: ein Komet mit Schweif zieht über den Himmel, Aschewolken und rötlicher Dunst künden vom Vulkanwinter, Regenschleier von der Flut — im Katastrophenjahr selbst noch deutlicher.
+- **Stadt-Panorama:** Vor den Toren ist jetzt Leben — Passanten schlendern in beide Richtungen, ein Pferdefuhrwerk mit drehenden Speichenrädern rollt vorbei.
+- **Oberfläche:** Toasts zeigen einen ablaufenden Zeitbalken; der Anno-Chip in der Kopfzeile pulst golden beim Jahreswechsel; Ereignis-Meldungen in den Bilanzen gleiten gestaffelt herein; neue Zeilen im Schlachtenlog blenden sanft ein.
