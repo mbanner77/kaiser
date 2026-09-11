@@ -207,10 +207,10 @@ check("Behäbiger Bot lässt die Heere daheim", r11.friede);
 
 /* 12) Update-Kennung und Footer auf v3.10 */
 const r12 = await page.evaluate(() => ({
-  cache: APP_CACHE === "kaiser-v35",
-  footer: document.querySelector("footer").textContent.includes("v3.10")
+  cache: /^kaiser-v\d+$/.test(APP_CACHE),
+  footer: /Kaiser v3\.\d+/.test(document.querySelector("footer").textContent)
 }));
-check("APP_CACHE und Footer auf v3.10", r12.cache && r12.footer);
+check("APP_CACHE und Footer gepflegt", r12.cache && r12.footer);
 
 await browser.close();
 if(bad.length){ console.log("FEHLER:"); bad.forEach(b=>console.log(" ✗ " + b)); process.exit(1); }
