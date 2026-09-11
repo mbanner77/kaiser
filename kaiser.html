@@ -190,6 +190,7 @@
   .setuprow .s-name{flex:1 1 130px;min-width:110px;}
   .setuprow .s-anrede{flex:0 1 80px;min-width:72px;}
   .setuprow .s-ki{flex:0 1 108px;min-width:96px;}
+  .setuprow .s-stark{flex:0 1 128px;min-width:112px;}
   .setuprow select, .setuprow input{margin:0;}
   @media (max-width:820px){
     .setuprow{gap:5px;}
@@ -541,7 +542,7 @@
   </div>
 </noscript>
 <div id="screen"></div>
-<footer>Kaiser v3.9.1 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
+<footer>Kaiser v3.10 · Hommage an den C64-Klassiker von 1984 · eigenständige Neuimplementierung</footer>
 </main>
 <div id="toasts"></div>
 <div id="vignette"></div>
@@ -794,7 +795,7 @@ function botKriegserklaerung(ai, di){
   if(p.titel < 1 || heerStaerke(p.heer) + miliz(p)*0.8 < 150) return false;
   if((G._angriffe||[]).some(x=>x.kr.a===ai && x.kr.d===di)) return false;
   const kr = { a:ai, d:di, weg:wegZwischen(ai,di), fragen:[], wahl:{},
-               aufA: kiAufstellung(p.heer), resA: p.kiTyp==="aggressor" ? 0 : 0.2,
+               aufA: kiAufstellung(p.heer, kiStufe(p)>=3), resA: kiStufe(p)>=4 ? 0.15 : p.kiTyp==="aggressor" ? 0 : 0.2,
                gelaende: wuerfleGelaende() };
   kr.fragen = lebende().map(x=>x.i).filter(i2=>i2!==ai && i2!==di);
   for(const i2 of kr.fragen){
@@ -847,6 +848,43 @@ function botAntwortText(z, kat){
       h:["„Jetzt sprecht Ihr meine Sprache! Legt ein Angebot auf den Tisch, die Waage steht bereit.“"],
       a:["„Handel? Meinetwegen. Aber betrügt mich nicht, sonst hole ich mir den Rest mit Gewalt.“"],
       b:["„Gern. Stein gegen Korn, Korn gegen Gold. Nutzt die Handels-Angebote, der Hof prüft jeden Antrag.“"]
+    },
+    angriff: {
+      a:["„Ihr wagt es, gegen MICH zu marschieren? Kommt nur, meine Klingen dürsten schon lange!“",
+         "„Endlich zeigt Ihr Euer wahres Gesicht. Ich werde Euch lehren, was Krieg bedeutet!“"],
+      h:["„Krieg?! Wisst Ihr, was das kostet — Euch wie mich? Ihr werdet jeden Taler bereuen!“",
+         "„Ihr zerschlagt Handel und Wohlstand für ein Stück Land? Dann sollen Eure Kaufleute darben!“"],
+      b:["„So kommt doch! An meinen Mauern haben sich schon ganz andere die Zähne ausgebissen.“",
+         "„Ihr bringt Feuer über friedliche Dörfer. Gott sieht es — und meine Bogenschützen auch.“"]
+    },
+    sieg: {
+      a:["„HA! Kriecht heim und leckt Eure Wunden. Das nächste Mal nehme ich mir Euer ganzes Reich!“",
+         "„Sagte ich nicht, Ihr solltet mich nicht reizen? Eure Gefallenen künden nun davon.“"],
+      h:["„Der Krieg hat Euch mehr gekostet, als jeder Handel je gebracht hätte. Lernt daraus.“",
+         "„Die Rechnung ist beglichen — mit Blut statt Silber. Nächstes Mal verhandelt lieber.“"],
+      b:["„Meine Mauern stehen, Euer Heer nicht mehr. Zieht heim und baut lieber, statt zu brennen.“",
+         "„Wir wollten diesen Krieg nie. Doch wer uns angreift, den weisen wir blutig ab.“"]
+    },
+    niederlage: {
+      a:["„Genießt den Sieg, solange Ihr könnt. Ich schwöre bei meinem Schwert: Ich komme wieder!“",
+         "„Ein verlorener Tag, mehr nicht. Meine Schmieden glühen schon für die Revanche.“"],
+      h:["„Ihr habt gewonnen, gut. Nennt Euren Preis für den Frieden — alles ist billiger als dieser Krieg.“",
+         "„Meine Kassen sind tief, mein Groll ist tiefer. Doch rechnen kann ich besser als Ihr.“"],
+      b:["„Ihr habt Felder verwüstet, die ich in Jahrzehnten bestellt habe. Das vergisst mein Haus Euch nie.“",
+         "„Zerbrochene Mauern kann man neu errichten. Zerbrochenes Vertrauen nicht.“"]
+    },
+    verrat: {
+      a:["„VERRAT! Nur Feiglinge schicken Schatten statt Schwerter. Betet, dass ich Gnade kenne!“",
+         "„Euer Meuchler hat gesungen wie ein Vogel. Jedes Wort davon werdet Ihr bezahlen.“"],
+      h:["„Man hintergeht keinen Geschäftspartner! Von heute an zahlt Ihr an meinen Toren doppelt.“",
+         "„Hinterlist ist schlechte Münze. Wer damit zahlt, dem schließt sich jeder ehrliche Markt.“"],
+      b:["„Wir gaben Euch die Hand, Ihr grifft nach dem Dolch. Der Herrgott vergelte Euch diese Schande.“",
+         "„In unsere Stadt schlich Euer Verrat. Unsere Tore sind Euch fortan verschlossen.“"]
+    },
+    kassiert: {
+      a:["„Klug gezahlt. Silber hält meine Heere daheim — vergesst das nie.“"],
+      h:["„Sieh an, Ihr könnt rechnen. Ein fairer Preis für ein ruhiges Jahr.“"],
+      b:["„Der Hof nimmt Eure Zahlung an. Möge sie Frieden kaufen, nicht bloß Zeit.“"]
     }
   };
   const liste = (R[kat] && (R[kat][wer] || R[kat].b || Object.values(R[kat])[0])) || ["„…“"];
@@ -1554,6 +1592,7 @@ function jahresschluss(p){
             + p.zoll*p.maerkte*6 + p.maerkte*150 + staedte(p)*2000 + (p.haefen||0)*700;
   if(p.berater && p.berater.schatz) r.steuern = Math.round(r.steuern * 1.08);
   if(hatPrivileg(p,1)) r.steuern = Math.round(r.steuern * 1.05);   /* Baronale Steuerhoheit */
+  if(p.ki && kiStufe(p) !== 2) r.steuern = Math.round(r.steuern * [0, 0.9, 1, 1.06, 1.14][kiStufe(p)]);
   r.routenGeld = routenZoll(p);
   p.geld += r.routenGeld;
   p.geld += r.steuern;
@@ -1667,6 +1706,13 @@ function kriegVorbereiten(zielIdx){
     G._ringSturm = null;
   }
   G._kr = kr;
+  /* Der angegriffene Bot meldet sich zu Wort */
+  const zielB = G.spieler[d];
+  if(zielB.ki && !G.spieler[a].ki){
+    const zitat = botAntwortText(zielB, "angriff");
+    parleyLog(zitat, zielB.name);
+    toast(`🗣️ ${zielB.name}: ${zitat}`, 8000);
+  }
   diploWeiter();
 }
 function diploWeiter(){
@@ -1686,6 +1732,11 @@ function diploWahl(wahl){
   if(wahl !== "def" && buendnisAktiv(frag, ver)){
     buendnisBrechen(frag, ver, "der Beistand wurde verweigert");
     toast(`🪓 Ihr habt den Beistand verweigert, das Bündnis mit ${ver.name} ist zerbrochen.`, 7000);
+    if(ver.ki && !frag.ki){
+      const zitat = botAntwortText(ver, "verrat");
+      parleyLog(zitat, ver.name);
+      toast(`🗣️ ${ver.name}: ${zitat}`, 8000);
+    }
   }
   kr.wahl[kr.fragen[kr.frageIdx]] = wahl;
   kr.frageIdx++;
@@ -1746,7 +1797,12 @@ function aufstellungReserve(v){
 function aufstellungAFertig(){
   G._kr.aufA = [...G._aufW];
   G._kr.resA = G._aufRes || 0;
-  if(G.spieler[G._kr.d].ki){ G._kr.aufD = kiAufstellung(G.spieler[G._kr.d].heer); schlachtStarten(); }
+  if(G.spieler[G._kr.d].ki){
+    const verKI = G.spieler[G._kr.d];
+    G._kr.aufD = kiAufstellung(verKI.heer, kiStufe(verKI)>=3);
+    if(kiStufe(verKI)>=3) G._kr.resD = kiStufe(verKI)>=4 ? 0.25 : 0.15;
+    schlachtStarten();
+  }
   else if(mpMein(G._kr.d)){ G._aufW = [2,2,2,2,2]; G._aufRes = 0; zeige("aufstellungD"); }
   else mpPend("aufD", G._kr.d);
 }
@@ -4734,6 +4790,13 @@ function schlachtAbschliessen(){
     geschichte("🛡️", `${ver.name} schlägt ${ang.name}s Angriff zurück.`);
     if(!s.still) setTimeout(sNieder, 300);
   }
+  /* Der beteiligte Bot kommentiert den Ausgang, wenn ein Mensch mitkämpfte */
+  const botP = ang.ki && !ver.ki ? ang : (!ang.ki && ver.ki ? ver : null);
+  if(botP && !botP.tot){
+    const botGewann = (botP === ang) === (s.sieger === "A");
+    s.botStimme = { name: botP.name, wappen: botP.wappen,
+      text: botAntwortText(botP, botGewann ? "sieg" : "niederlage") };
+  }
   quicksave();
   mpSync();
 }
@@ -5279,6 +5342,11 @@ function spionEntsenden(){
     bezAendern(p, ziel, schwer ? -25 : -15);
     toast(`🚨 Euer Spion wurde in ${ziel.name}s Reich gefasst${schwer ? " und hat unter der Folter alles gestanden" : ""}! Das Verhältnis leidet schwer.`, 7000);
     geschichte("🚨", `${p.name}s Spion wird in ${ziel.name}s Reich gefasst, ein Skandal!`);
+    if(ziel.ki){
+      const zitat = botAntwortText(ziel, "verrat");
+      parleyLog(zitat, ziel.name);
+      toast(`🗣️ ${ziel.name}: ${zitat}`, 8000);
+    }
     if(schwer && ziel.ki && Math.random() < 0.3 && botKriegserklaerung(zi, G.aktiv)){
       toast(`⚔️ ${ziel.name} erklärt Euch wegen des Anschlags den Krieg!`, 8000);
       sTrommel();
@@ -5392,8 +5460,9 @@ function wuerfleGelaende(){
   });
 }
 /* Die KI stellt passend zu ihrer Truppenmischung auf statt rein zufällig */
-function kiAufstellung(heer2){
-  if(!heer2 || Math.random() < 0.25) return AUFSTELLUNGEN[ri(0,AUFSTELLUNGEN.length-1)].g;
+function kiAufstellung(heer2, schlau){
+  if(!heer2) return AUFSTELLUNGEN[ri(0,AUFSTELLUNGEN.length-1)].g;
+  if(!schlau && Math.random() < 0.25) return AUFSTELLUNGEN[ri(0,AUFSTELLUNGEN.length-1)].g;
   const ges = Math.max(1, heerGroesse(heer2));
   const kavAnteil = heer2.kav / ges, artAnteil = heer2.art / ges;
   if(artAnteil > 0.08) return AUFSTELLUNGEN[1].g;        /* massiertes Zentrum schützt die Kanonen */
@@ -5404,7 +5473,8 @@ function kiAufstellung(heer2){
 function kiSchlacht(a, d){
   if(routeAktiv(a, d)) routeTrennen(a, d, "durch die Kriegserklärung zerbrochen");
   const kr = { a, d, weg: wegZwischen(a,d), fragen: [], wahl: {},
-    aufA: kiAufstellung(G.spieler[a].heer), aufD: kiAufstellung(G.spieler[d].heer), gelaende: wuerfleGelaende() };
+    aufA: kiAufstellung(G.spieler[a].heer, kiStufe(G.spieler[a])>=3),
+    aufD: kiAufstellung(G.spieler[d].heer, kiStufe(G.spieler[d])>=3), gelaende: wuerfleGelaende() };
   if(((G.spieler[d].mauer||0) + (G.spieler[d].burg||0)) > 0)
     belagerungAnwenden(kr, G.spieler[a].heer.art >= 2 ? "beschuss" : "sturm");
   /* übrige KI-Regenten entscheiden, Menschen bleiben bei KI-Kriegen neutral */
@@ -5480,7 +5550,7 @@ function kiZug(p){
     const bel2 = G.spieler[eigenRing.a];
     const eigenS = heerStaerke(p.heer) + miliz(p)*0.8;
     const belS = heerStaerke(bel2.heer) + miliz(bel2)*0.8;
-    if(eigenS > belS * 0.9){
+    if(eigenS > belS * (kiStufe(p)>=4 ? 0.7 : kiStufe(p)===3 ? 0.8 : 0.9)){
       G.belagerungen = G.belagerungen.filter(b => b !== eigenRing);
       geschichte("⚔️", `${p.name} wagt den Ausfall gegen ${bel2.name}s Belagerer!`);
       if(bel2.ki){ kiSchlacht(idx, eigenRing.a); bericht.push(`bricht mit einem Ausfall ${bel2.name}s Belagerung`); }
@@ -5504,7 +5574,7 @@ function kiZug(p){
     return;
   }
   /* Feldherr: wer es sich leisten kann, holt sich einen passenden Kopf */
-  if(!p.feldherr && p.titel >= 2 && p.geld > 15000){
+  if(!p.feldherr && p.titel >= 2 && p.geld > (kiStufe(p)>=3 ? 9000 : 15000)){
     const id = p.kiTyp==="aggressor" ? "sturm" : p.heer.art >= 4 ? "belagerung" : "defensiv";
     p.geld -= 2500; p.feldherr = { id, ruhm:0 };
     bericht.push(`nimmt den Feldherrn ${feldherrArt(p).n} in Dienst`);
@@ -5547,7 +5617,8 @@ function kiZug(p){
   /* Festung: wer Nachbarn mit großen Heeren hat, mauert sich ein */
   const drohung = nachbarn(idx).map(i=>G.spieler[i]).filter(z=>!z.tot)
     .some(z => heerStaerke(z.heer) > heerStaerke(p.heer)*1.2 + 100);
-  if((p.mauer||0) < (drohung?2:1) && p.maerkte>=2 && p.geld > 16000 && kiMaterial("mauer")){
+  const mauerZiel = kiStufe(p)>=4 ? 3 : kiStufe(p)===3 ? 2 : (drohung?2:1);
+  if((p.mauer||0) < mauerZiel && p.maerkte>=2 && p.geld > 16000 && kiMaterial("mauer")){
     p.geld -= KOSTEN.mauer; zahleMaterial(p,"mauer"); p.mauer=(p.mauer||0)+1;
     bericht.push(`verstärkt die Stadtmauer (${p.mauer}/${MAUER_MAX})`);
   }
@@ -5557,12 +5628,23 @@ function kiZug(p){
   }
   if(p.land >= LAND.palast){ let t=0; while(p.geld > 25000 && p.palast < PALAST_TEILE && kiMaterial("palastTeil")){ p.geld-=KOSTEN.palastTeil; zahleMaterial(p,"palastTeil"); p.palast++; t++; } if(t) bericht.push(`baut am Palast (${p.palast}/${PALAST_TEILE})`); }
   if(p.palast >= PALAST_TEILE && p.land >= LAND.dom){ let t=0; while(p.geld > 112000 && p.dom < DOM_TEILE && kiMaterial("domTeil")){ p.geld-=KOSTEN.domTeil; zahleMaterial(p,"domTeil"); p.dom++; t++; } if(t) bericht.push(`baut an der Kathedrale (${p.dom}/${DOM_TEILE})`); }
-  /* Heer, der Eroberer rüstet stärker */
-  const heerZiel = (p.kiTyp==="aggressor" ? 260 : 130) + p.titel*80;
+  /* Heer, der Eroberer rüstet stärker, die Spielstärke skaliert Ziel und Eifer */
+  const stufenHeer = [0, 0.7, 1, 1.35, 1.8][kiStufe(p)];
+  const heerZiel = Math.round(((p.kiTyp==="aggressor" ? 260 : 130) + p.titel*80) * stufenHeer);
   if(p.titel>=1 && p.geld > (p.kiTyp==="aggressor" ? 14000 : 20000) && heerGroesse(p.heer) < heerZiel){
-    const rekruten = Math.min(40, Math.floor((p.geld-12000)/KOSTEN.inf));
+    const rekruten = Math.min(kiStufe(p)>=3 ? 60 : 40, Math.floor((p.geld-12000)/KOSTEN.inf));
     if(rekruten>0){ p.geld -= rekruten*KOSTEN.inf; p.heer.inf += rekruten; }
   }
+  /* Gerissene und gnadenlose Bots mischen Reiterei und Geschütze bei */
+  if(kiStufe(p)>=3 && p.titel>=1){
+    const zielKav = Math.round(heerZiel*0.12), zielArt = kiStufe(p)>=4 ? 6 : 3;
+    let schutz = 0;
+    while(p.heer.kav < zielKav && p.geld > 16000 && schutz++ < 20){ p.geld -= KOSTEN.kav; p.heer.kav++; }
+    while(p.heer.art < zielArt && p.geld > 22000 && schutz++ < 30){ p.geld -= KOSTEN.art; p.heer.art++; }
+    /* Gegenspione gegen Sabotage und Brandstifter */
+    if(!p.gegenspione && p.geld > 9000) p.gegenspione = true;
+  }
+  if(kiStufe(p)===1 && p.gegenspione) p.gegenspione = false;
   /* Der Händler pflegt Beziehungen und macht Geschäfte */
   if(p.kiTyp==="haendler" && Math.random() < 0.25 && p.geld > 18000){
     const partner = lebende().map(x=>x.p).filter(z=>z!==p)
@@ -5607,13 +5689,16 @@ function kiZug(p){
     G.marktDruck = (G.marktDruck||0) + m;
   }
   /* Krieg? Charakter, Beziehungen und Pakte entscheiden */
-  const kriegslust = p.kiTyp==="aggressor" ? 0.24 : p.kiTyp==="haendler" ? 0.04 : 0.08;
+  const kriegslust = (p.kiTyp==="aggressor" ? 0.24 : p.kiTyp==="haendler" ? 0.04 : 0.08)
+                   * [0, 0.35, 1, 1.5, 2.2][kiStufe(p)];
   if(p.titel>=1 && !(G.reichsfrieden && G.reichsfrieden >= G.jahr) && Math.random() < kriegslust){
     const nb = nachbarn(idx).filter(i=>!G.spieler[i].tot);
     const eigen = heerStaerke(p.heer) + miliz(p)*0.8;
-    const schwelle = p.kiTyp==="aggressor" ? 1.3 : 1.6;
+    const schwelle = Math.max(1.1, (p.kiTyp==="aggressor" ? 1.3 : 1.6)
+      * (kiStufe(p)>=4 ? 0.78 : kiStufe(p)===3 ? 0.9 : 1));
+    const bezGrenze = kiStufe(p)>=4 ? 60 : 35;
     const ziel = nb.map(i=>G.spieler[i])
-      .filter(z => !paktAktiv(p,z) && !buendnisAktiv(p,z) && bezWert(p,z) < 35
+      .filter(z => !paktAktiv(p,z) && !buendnisAktiv(p,z) && bezWert(p,z) < bezGrenze
                 && eigen > (heerStaerke(z.heer) + miliz(z)*0.8 + z.pop*0.025)*schwelle)
       .sort((x,y)=>heerStaerke(x.heer)-heerStaerke(y.heer))[0];
     if(ziel && eigen > 150){
@@ -5627,7 +5712,7 @@ function kiZug(p){
         /* Menschlicher Verteidiger: Krieg wird erklärt, die Schlacht schlägt
            der Verteidiger selbst zu Beginn seines nächsten Zuges */
         const kr = { a:idx, d:di, weg:wegZwischen(idx,di), fragen:[], wahl:{},
-                     aufA: kiAufstellung(p.heer), resA: p.kiTyp==="aggressor" ? 0 : 0.2,
+                     aufA: kiAufstellung(p.heer, kiStufe(p)>=3), resA: kiStufe(p)>=4 ? 0.15 : p.kiTyp==="aggressor" ? 0 : 0.2,
                      gelaende: wuerfleGelaende() };
         kr.fragen = lebende().map(x=>x.i).filter(i2=>i2!==idx && i2!==di);
         for(const i2 of kr.fragen){
@@ -6028,6 +6113,8 @@ function starteSpiel(anzahl, namen, geschlechter, tempo, kis, opts){
   const typen = ["aggressor","haendler","baumeister"];
   let tIdx = ri(0,2);
   for(const p of G.spieler) if(p.ki){ p.kiTyp = typen[tIdx % 3]; tIdx++; }
+  /* Spielstärke der Bots (1 behäbig · 2 ausgewogen · 3 gerissen · 4 gnadenlos) */
+  if(opts.staerken) G.spieler.forEach((p,i)=>{ if(p.ki) p.kiStufe = clamp(+opts.staerken[i]||2, 1, 4); });
   /* Szenario anwenden */
   G.szenario = opts.szenario || "frei";
   if(G.szenario === "erbe"){
@@ -6051,6 +6138,9 @@ function starteSpiel(anzahl, namen, geschlechter, tempo, kis, opts){
   else zeige("intro");
 }
 const diffFaktor = () => G.diff===1 ? 0.6 : G.diff===3 ? 1.35 : 1;
+/* Spielstärke eines Bots: 1 behäbig, 2 ausgewogen (Standard), 3 gerissen, 4 gnadenlos */
+const kiStufe = p => (p && p.kiStufe) || 2;
+const KI_STUFEN = ["", "Behäbig", "Ausgewogen", "Gerissen", "Gnadenlos"];
 function beginneZug(){
   const p = cur();
   p.kornPreis = saisonKornPreis();
@@ -6084,7 +6174,7 @@ function forderungZahlen(i){
   p.geld -= betrag; von.geld += betrag;
   bezAendern(p, von, 4);
   geschichte("💰", `${p.name} zahlt ${von.name} ${fmt(betrag)} Taler Tribut.`);
-  toast(`💰 Ihr zahlt ${fmt(betrag)} Taler. ${von.name} gibt Ruhe, vorerst.`);
+  toast(von.ki ? `🗣️ ${von.name}: ${botAntwortText(von, "kassiert")}` : `💰 Ihr zahlt ${fmt(betrag)} Taler. ${von.name} gibt Ruhe, vorerst.`, 7000);
   G.botschaften.splice(i,1); mpSync(); render();
 }
 function forderungAblehnen(i){
@@ -6097,7 +6187,7 @@ function forderungAblehnen(i){
     toast(`⚔️ ${von.name} nimmt die Absage nicht hin und erklärt Euch den Krieg!`, 8000);
     sTrommel();
   } else {
-    toast(`😠 ${von.name} tobt über Eure Absage, doch die Heere bleiben vorerst daheim.`);
+    toast(von.ki ? `🗣️ ${von.name}: ${botAntwortText(von, "trotzig")}` : `😠 ${von.name} tobt über Eure Absage, doch die Heere bleiben vorerst daheim.`, 7000);
   }
   mpSync(); render();
 }
@@ -6669,6 +6759,196 @@ function zeichneIntro(t){
   }
 }
 /* Seegefecht: zwei Segler tauschen Breitseiten, der Verlierer sinkt */
+function zeichneExpedition(t){
+  const c = document.getElementById("expBild");
+  const e = G._expHeim;
+  if(!c || !e || !G._expStart) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  const seit = performance.now() - G._expStart;
+  const trueb = e.art === "verloren";
+  ctx.clearRect(0,0,W,H);
+  /* Himmel: goldene Abendsonne oder bleigraues Trauerwetter */
+  const himmel = ctx.createLinearGradient(0,0,0,H);
+  if(trueb){
+    himmel.addColorStop(0,"#39414e"); himmel.addColorStop(0.58,"#4a5261");
+    himmel.addColorStop(0.59,"#1a2735"); himmel.addColorStop(1,"#101c29");
+  } else {
+    himmel.addColorStop(0,"#3d4a68"); himmel.addColorStop(0.35,"#8c6a4e");
+    himmel.addColorStop(0.58,"#d9a05c"); himmel.addColorStop(0.59,"#1c3046"); himmel.addColorStop(1,"#122334");
+  }
+  ctx.fillStyle = himmel; ctx.fillRect(0,0,W,H);
+  const wasserY = H*0.58;
+  if(!trueb){
+    /* tiefe Sonne mit Glitzerpfad auf dem Wasser */
+    const sx = W*0.38, sy = H*0.40;
+    const glut = ctx.createRadialGradient(sx,sy,4, sx,sy,90);
+    glut.addColorStop(0,"rgba(255,226,150,.95)"); glut.addColorStop(0.25,"rgba(255,196,110,.45)"); glut.addColorStop(1,"rgba(255,180,90,0)");
+    ctx.fillStyle = glut; ctx.beginPath(); ctx.arc(sx,sy,90,0,7); ctx.fill();
+    ctx.fillStyle = "#ffe9b0"; ctx.beginPath(); ctx.arc(sx,sy,15,0,7); ctx.fill();
+    ctx.fillStyle = "rgba(255,214,130,.14)";
+    for(let g=0; g<9; g++){
+      const gy = wasserY + 8 + g*(H-wasserY-16)/9;
+      const gw = 26 + g*8 + Math.sin(t/300+g)*6;
+      ctx.fillRect(sx-gw/2, gy, gw, 2.4);
+    }
+  }
+  /* Wolken ziehen */
+  ctx.fillStyle = trueb ? "rgba(30,36,46,.7)" : "rgba(60,52,64,.42)";
+  for(let wk=0; wk<4; wk++){
+    const wx = ((t/(90+wk*30) + wk*280) % (W+240)) - 120;
+    const wy = 24 + wk*22;
+    ctx.beginPath();
+    ctx.ellipse(wx, wy, 64+wk*10, 12+wk*2, 0, 0, 7);
+    ctx.ellipse(wx+40, wy+6, 40, 9, 0, 0, 7);
+    ctx.fill();
+  }
+  /* Wellenlinien */
+  ctx.strokeStyle = trueb ? "rgba(120,150,180,.14)" : "rgba(180,200,225,.16)";
+  ctx.lineWidth = 1.2;
+  for(let wl=0; wl<6; wl++){
+    const wy = wasserY + 6 + wl*(H-wasserY)/6.5;
+    ctx.beginPath();
+    for(let x=0; x<=W; x+=16) ctx.lineTo(x, wy + Math.sin(x/44 + t/520 + wl*1.7)*2.6);
+    ctx.stroke();
+  }
+  /* Hafenmole rechts: Pfaehle, Planken, Kran, Laterne */
+  const molX = W-190, molY = wasserY-14;
+  ctx.fillStyle = "#3c2c18";
+  for(let pf=0; pf<5; pf++) ctx.fillRect(molX+18+pf*38, molY+8, 7, H-molY-8);
+  ctx.fillStyle = "#54401f";
+  ctx.fillRect(molX, molY, W-molX, 12);
+  ctx.strokeStyle = "rgba(20,14,6,.5)"; ctx.lineWidth = 1;
+  for(let pl=0; pl<10; pl++){ ctx.beginPath(); ctx.moveTo(molX+pl*19, molY); ctx.lineTo(molX+pl*19, molY+12); ctx.stroke(); }
+  /* Kran */
+  ctx.strokeStyle = "#4a361f"; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(W-52, molY); ctx.lineTo(W-52, molY-64); ctx.lineTo(W-96, molY-46); ctx.stroke();
+  ctx.strokeStyle = "rgba(200,190,160,.5)"; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(W-96, molY-46); ctx.lineTo(W-96, molY-46 + 18 + Math.sin(t/700)*4); ctx.stroke();
+  /* Laterne (flackert) */
+  const lampX = molX+8, lampY = molY-26;
+  ctx.strokeStyle = "#4a361f"; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(lampX, molY); ctx.lineTo(lampX, lampY); ctx.stroke();
+  const flack = 0.75 + Math.sin(t/90)*0.12 + Math.sin(t/37)*0.08;
+  const lgl = ctx.createRadialGradient(lampX,lampY,1, lampX,lampY,30);
+  lgl.addColorStop(0,`rgba(255,214,130,${0.8*flack})`); lgl.addColorStop(1,"rgba(255,190,90,0)");
+  ctx.fillStyle = lgl; ctx.beginPath(); ctx.arc(lampX,lampY,30,0,7); ctx.fill();
+  ctx.fillStyle = "#ffd982"; ctx.fillRect(lampX-3, lampY-4, 6, 8);
+  /* Menschen auf der Mole warten / jubeln */
+  const daSeit = clamp((seit-2600)/900, 0, 1);
+  for(let f=0; f<6; f++){
+    const fx2 = molX + 30 + f*26;
+    const hop = (!trueb && daSeit>0.9) ? Math.abs(Math.sin(t/170 + f*1.3))*5 : 0;
+    const fy = molY - 16 - hop;
+    ctx.fillStyle = trueb ? "#1c2531" : ["#5d4a6e","#6e4a3a","#3a5d4a","#6e5d3a","#4a3a5d","#5d3a3a"][f];
+    ctx.fillRect(fx2-4, fy, 8, 16);
+    ctx.fillStyle = "#d8b28c";
+    ctx.beginPath(); ctx.arc(fx2, fy-5, 4.5, 0, 7); ctx.fill();
+    if(!trueb && daSeit>0.9){
+      ctx.strokeStyle = "#d8b28c"; ctx.lineWidth = 2.4;
+      const wink = Math.sin(t/150 + f)*0.5;
+      ctx.beginPath(); ctx.moveTo(fx2-4, fy+3); ctx.lineTo(fx2-10, fy-6+wink*4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(fx2+4, fy+3); ctx.lineTo(fx2+10, fy-6-wink*4); ctx.stroke();
+    }
+  }
+  /* Moewen */
+  ctx.strokeStyle = trueb ? "rgba(180,190,205,.3)" : "rgba(230,235,244,.55)"; ctx.lineWidth = 1.2;
+  for(let m=0;m<4;m++){
+    const mx = ((t/(24+m*8) + m*260) % (W+60)) - 30;
+    const my = 30 + m*13 + Math.sin(t/360+m)*6;
+    ctx.beginPath(); ctx.moveTo(mx-5,my); ctx.quadraticCurveTo(mx,my-4,mx+5,my); ctx.stroke();
+  }
+  if(trueb){
+    /* Regen und Treibgut statt eines Schiffes */
+    ctx.strokeStyle = "rgba(170,190,215,.20)"; ctx.lineWidth = 1;
+    const rrng = mulberry(Math.floor(t/70));
+    for(let r2=0; r2<46; r2++){
+      const rx = rrng()*W, ry = rrng()*H;
+      ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx-3, ry+11); ctx.stroke();
+    }
+    ctx.fillStyle = "#3a2c18";
+    const drift = Math.sin(t/900)*10;
+    ctx.save(); ctx.translate(W*0.32 + drift, wasserY+26 + Math.sin(t/600)*3); ctx.rotate(0.12);
+    ctx.fillRect(-30, 0, 60, 6); ctx.restore();
+    ctx.save(); ctx.translate(W*0.48 - drift, wasserY+44 + Math.sin(t/700+2)*3); ctx.rotate(-0.2);
+    ctx.fillRect(-18, 0, 36, 5); ctx.restore();
+    /* ein treibendes Fass */
+    ctx.save(); ctx.translate(W*0.40 + drift*0.6, wasserY+36 + Math.sin(t/650+1)*3);
+    ctx.fillStyle = "#54401f"; ctx.beginPath(); ctx.ellipse(0,0,13,8,0.3,0,7); ctx.fill();
+    ctx.strokeStyle = "#2c2010"; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(-9,-6); ctx.lineTo(-6,7); ctx.moveTo(4,-8); ctx.lineTo(7,6); ctx.stroke();
+    ctx.restore();
+  } else {
+    /* Das Schiff laeuft von links ein */
+    const fahrt = 1 - Math.pow(1 - clamp(seit/3400, 0, 1), 3);   /* sanft abbremsend */
+    const zielX = molX - 86;
+    const sx2 = -120 + (zielX + 120) * fahrt;
+    const bob = Math.sin(t/430)*2.5;
+    ctx.save();
+    ctx.translate(sx2, wasserY + bob);
+    ctx.rotate(Math.sin(t/520)*0.02);
+    /* Rumpf */
+    ctx.fillStyle = "#4a361f";
+    ctx.beginPath(); ctx.moveTo(-52,0); ctx.lineTo(52,0); ctx.lineTo(36,18); ctx.lineTo(-34,18); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#5f4626";
+    ctx.fillRect(-52,-7,104,8);
+    ctx.strokeStyle = "#2c2010"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-46,5); ctx.lineTo(44,5); ctx.moveTo(-40,11); ctx.lineTo(38,11); ctx.stroke();
+    /* Ladung an Deck je nach Ausgang */
+    if(e.art === "schatz"){
+      ctx.fillStyle = "#7a5a2a"; ctx.fillRect(6,-16,22,10);
+      ctx.fillStyle = "#e0b458"; ctx.fillRect(8,-13,18,3);
+    } else if(e.art === "waren"){
+      ctx.fillStyle = "#6a5030"; ctx.fillRect(2,-15,14,9); ctx.fillRect(18,-13,12,7);
+      ctx.strokeStyle = "#2c2010"; ctx.strokeRect(2,-15,14,9);
+    } else if(e.art === "karten"){
+      ctx.fillStyle = "#e8dcc0"; ctx.save(); ctx.translate(14,-12); ctx.rotate(-0.3); ctx.fillRect(-9,-2.5,18,5); ctx.restore();
+    }
+    /* Masten und geraffte Segel (das Schiff laeuft ein) */
+    const raff = clamp((seit-2900)/900, 0, 1);   /* Segel werden im Hafen eingeholt */
+    ctx.strokeStyle = "#6a4c2a"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-6,0); ctx.lineTo(-6,-62); ctx.moveTo(26,-4); ctx.lineTo(26,-44); ctx.stroke();
+    ctx.fillStyle = "#e8e2d2";
+    const s1 = 44*(1-raff*0.82), s2 = 30*(1-raff*0.82);
+    ctx.beginPath(); ctx.moveTo(-6,-60); ctx.quadraticCurveTo(-6-26 - Math.sin(t/300)*2, -60+s1*0.5, -6,-60+s1); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(26,-42); ctx.quadraticCurveTo(26-18, -42+s2*0.5, 26,-42+s2); ctx.closePath(); ctx.fill();
+    /* Flagge in der Farbe des Hauses */
+    ctx.fillStyle = e.farbe || "#6ea8dc";
+    ctx.beginPath(); ctx.moveTo(-6,-62); ctx.lineTo(-6+18+Math.sin(t/200)*2, -58); ctx.lineTo(-6,-54); ctx.closePath(); ctx.fill();
+    /* Bugwelle solange Fahrt im Schiff ist */
+    if(fahrt < 0.97){
+      ctx.strokeStyle = "rgba(220,235,250,.5)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(54,14); ctx.quadraticCurveTo(66,17,74,14); ctx.stroke();
+    }
+    ctx.restore();
+    /* Schatz-Funkeln nach der Ankunft */
+    if(e.art === "schatz" && seit > 3000){
+      const frng = mulberry(Math.floor(t/120));
+      ctx.fillStyle = "rgba(255,222,120,.9)";
+      for(let fu=0; fu<7; fu++){
+        const fux = sx2 - 30 + frng()*80, fuy = wasserY - 30 - frng()*40;
+        const gr = 1 + frng()*2;
+        ctx.beginPath();
+        ctx.moveTo(fux, fuy-gr*2); ctx.lineTo(fux+gr*0.7, fuy); ctx.lineTo(fux, fuy+gr*2); ctx.lineTo(fux-gr*0.7, fuy);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    /* Boeller-Salut: kleine Rauchwoelkchen vom Kai */
+    if(seit > 3200 && e.art !== "karten"){
+      ctx.fillStyle = "rgba(220,220,220,.25)";
+      const puff = ((t/600) % 1);
+      ctx.beginPath(); ctx.arc(molX+34, molY-30-puff*24, 5+puff*9, 0, 7); ctx.fill();
+    }
+  }
+  malKartenRahmen(ctx, W, H);
+  /* Ergebnis und Weiter-Knopf einblenden */
+  if(seit > 4200){
+    const erg = document.getElementById("expErgebnis");
+    const wtr = document.getElementById("expWeiter");
+    if(erg) erg.style.display = "block";
+    if(wtr) wtr.style.display = "inline-block";
+  }
+}
 function zeichneSeegefecht(t){
   const c = document.getElementById("seebild");
   const kr = G._kr;
@@ -7276,8 +7556,14 @@ const SCREENS = {
         <select id="pw${i}" class="s-anrede" ${i>1?'disabled':''}>
           <option value="0" ${i%2?'':'selected'}>Herr</option><option value="1" ${i%2?'selected':''}>Dame</option>
         </select>
-        <select id="pki${i}" class="s-ki" ${i>1?'disabled':''}>
+        <select id="pki${i}" class="s-ki" onchange="setupKiWechsel(${i})" ${i>1?'disabled':''}>
           <option value="0">Mensch</option><option value="1" ${i>0?'selected':''}>Computer</option>
+        </select>
+        <select id="pstark${i}" class="s-stark" title="Spielstärke des Computer-Regenten" ${i>1||i===0?'disabled':''}>
+          <option value="1">🐢 Behäbig</option>
+          <option value="2" selected>⚖️ Ausgewogen</option>
+          <option value="3">🦊 Gerissen</option>
+          <option value="4">🔥 Gnadenlos</option>
         </select></div>`;
     }
     return `
@@ -7290,7 +7576,7 @@ const SCREENS = {
               ${[1,2,3,4,5,6,7,8,9].map(n=>`<option ${n===2?'selected':''}>${n}</option>`).join("")}
             </select>
           </div>
-          <p class="muted small" style="margin:6px 0 2px">Schild · Wappen · Farbe · Name · Anrede · Regent</p>
+          <p class="muted small" style="margin:6px 0 2px">Schild · Wappen · Farbe · Name · Anrede · Regent · Spielstärke</p>
           <div class="setup-liste">${rows}</div>
           <p class="muted small" style="margin-top:8px">Die Reihenfolge bestimmt die Nachbarschaft:
           Reich 1 grenzt an Reich 2, Reich 2 an Reich 3 usw.. Kriege gegen Nicht-Nachbarn
@@ -8256,6 +8542,30 @@ const SCREENS = {
       <button class="btn-primary btn-lg" onclick="zeige('bauen')">Weiter</button>`;
   },
 
+  expedition(){
+    const e = G._expHeim;
+    if(!e){ setTimeout(()=>zeige("bilanz"), 10); return ""; }
+    if(!G._expStart) G._expStart = performance.now();
+    const texte = {
+      schatz:  `<b class="gold">Schwer beladen!</b> Gold und Gewürze im Wert von <b>${fmt(e.schatz||0)} Talern</b> werden an Land geschafft, der Hafen jubelt.`,
+      waren:   `<b class="green">Exotische Waren und Geschichten!</b> Das Volk staunt über fremde Tiere und Stoffe (+8 Stimmung), die Höfe sind beeindruckt.`,
+      karten:  `<b class="cyan">Kostbare Seekarten!</b> Die Steuerleute haben ferne Küsten vermessen, die nächste Fahrt wird kürzer und sicherer.`,
+      verloren:`<b class="red">Von der Expedition fehlt jede Spur.</b> Nur Treibholz findet den Weg zurück. Die Witwen tragen Schwarz.`
+    };
+    return `
+      <h2>⛵ ${e.art==="verloren" ? "Warten am Kai …" : "Ein Segel am Horizont!"}</h2>
+      <p class="muted small" style="margin-bottom:8px">${e.art==="verloren"
+        ? "Seit Tagen späht der Hafenmeister übers Meer, doch der Horizont bleibt leer."
+        : "Die vor Jahren ausgesandte Expedition kehrt in den Heimathafen zurück."}</p>
+      <canvas id="expBild" width="920" height="300" style="display:block;width:100%;max-width:780px;margin:0 auto;border-radius:12px;border:1px solid var(--border)"></canvas>
+      <div class="center" style="margin-top:12px">
+        <div class="pergament" style="max-width:560px;margin:0 auto 12px;padding:12px 18px;display:none" id="expErgebnis">
+          <p style="font-size:16px">${texte[e.art]}</p>
+        </div>
+        <button class="btn-primary btn-lg" id="expWeiter" style="display:none" onclick="expeditionWeiter()">Zur Jahresbilanz</button>
+      </div>`;
+  },
+
   seegefecht(){
     const kr = G._kr;
     if(!kr){ setTimeout(()=>zeige("bauen"), 10); return ""; }
@@ -8498,6 +8808,7 @@ const SCREENS = {
         ? `<div class="card" style="border-color:${s.sieger==='A'?'var(--green)':'var(--red)'}">
              <p class="${s.sieger==='A'?'green':'red'}" style="font-size:17px;font-weight:700">${s.ergebnis}</p>
              ${s.plünder?`<p class="small" style="margin-top:6px">🔥 ${s.plünder}</p>`:""}
+             ${s.botStimme?`<p class="small" style="margin-top:8px;padding:8px 10px;border-left:3px solid var(--gold);background:rgba(224,180,88,.07);border-radius:0 8px 8px 0">${s.botStimme.wappen} <b>${s.botStimme.name}:</b> <i>${s.botStimme.text}</i></p>`:""}
              <table style="margin-top:10px">
                <tr><th></th><th class="r">Angreifer</th><th class="r">Verteidiger</th></tr>
                <tr><td>Ausgerückt</td><td class="r">${fmt(s.startG.A)}</td><td class="r">${fmt(s.startG.D)}</td></tr>
@@ -8709,7 +9020,7 @@ const SCREENS = {
           <canvas id="dossierBild" width="84" height="104" style="border-radius:10px;border:1px solid ${d.farbe}66;flex:0 0 auto"></canvas>
           <div style="flex:1">
           <h3>${d.wappen} Dossier: ${titelName(d)} ${d.name}${d.tot?" †":""}
-            ${d.ki?`<span class="muted small">(${KI_TYP_NAMEN[d.kiTyp]||"KI"})</span>`:""}</h3>
+            ${d.ki?`<span class="muted small">(${KI_TYP_NAMEN[d.kiTyp]||"KI"}${d.kiStufe&&d.kiStufe!==2?` · ${KI_STUFEN[d.kiStufe]}`:""})</span>`:""}</h3>
           <p class="small">${fmt(d.land)} ha · ${fmt(d.pop)} Untertanen · ${staedte(d)} St${staedte(d)===1?"adt":"ädte"}
             · Festung ${(d.mauer||0)}/${(d.burg||0)} (Mauer/Burg) · Titelstufe ${d.titel}</p>
           <p class="small" style="margin-top:4px">Verhältnis:
@@ -9101,7 +9412,13 @@ function setupAnzahl(){
     $("#pki"+i).disabled = !on;
     if($("#pwap"+i)) $("#pwap"+i).disabled = !on;
     if($("#pfarbe"+i)) $("#pfarbe"+i).disabled = !on;
+    if($("#pstark"+i)) $("#pstark"+i).disabled = !on || $("#pki"+i).value !== "1";
   }
+}
+/* Die Spielstärke gilt nur für Computer-Regenten */
+function setupKiWechsel(i){
+  const st = $("#pstark"+i);
+  if(st) st.disabled = $("#pki"+i).value !== "1";
 }
 /* Live-Vorschau des Wappenschilds im Setup */
 function setupVorschau(i){
@@ -9115,13 +9432,14 @@ function setupVorschau(i){
 }
 function setupStart(){
   const n = +$("#anz").value;
-  const namen=[], w=[], kis=[], wapArr=[], farbArr=[];
+  const namen=[], w=[], kis=[], wapArr=[], farbArr=[], starkArr=[];
   for(let i=0;i<n;i++){
     namen.push(($("#pname"+i).value.trim()||("Spieler "+(i+1))));
     w.push($("#pw"+i).value==="1");
     kis.push($("#pki"+i).value==="1");
     wapArr.push(wappenFrei()[+($("#pwap"+i)?$("#pwap"+i).value:i)] || WAPPEN[i]);
     farbArr.push(FARBEN[+($("#pfarbe"+i)?$("#pfarbe"+i).value:i)] || FARBEN[i]);
+    starkArr.push(+($("#pstark"+i)?$("#pstark"+i).value:2) || 2);
   }
   if(kis.every(k=>k)){ alertMsg("Mindestens ein Reich braucht einen menschlichen Regenten."); return; }
   starteSpiel(n, namen, w, +$("#tempo").value, kis, {
@@ -9130,7 +9448,7 @@ function setupStart(){
     diff: +$("#diff").value,
     szenario: $("#szenario").value,
     dynastie: $("#optDynastie").checked,
-    wappen: wapArr, farben: farbArr
+    wappen: wapArr, farben: farbArr, staerken: starkArr
   });
 }
 function kornAusgeben(){
@@ -9330,23 +9648,34 @@ function expeditionAufloesen(p, r){
   const karten = p.expedition.karten ? 0.08 : 0;
   const wurf = Math.random();
   p.expedition = null;
+  let heim = null;
   if(wurf < 0.42 + hafen + karten){
     const schatz = ri(3000, 9000);
     p.geld += schatz;
     r.ereignisse.push({ t:`⛵ Die Expedition kehrt schwer beladen zurück: <b>${fmt(schatz)} Taler</b> in Gold und Gewürzen!`, c:"good" });
     geschichte("💰", `${p.name}s Expedition kehrt mit ${fmt(schatz)} Talern Schätzen heim.`);
     if(!p.ki) sMuenze();
+    heim = { art:"schatz", schatz };
   } else if(wurf < 0.67 + hafen){
     p.stimmung = clamp(p.stimmung + 8, 5, 100);
     G.spieler.forEach(z=>{ if(z!==p && !z.tot) bezAendern(p, z, 2); });
     r.ereignisse.push({ t:"⛵ Die Expedition bringt exotische Waren und Geschichten, das Volk staunt (+8 Stimmung), die Höfe sind beeindruckt.", c:"good" });
+    heim = { art:"waren" };
   } else if(wurf < 0.84){
     p._seekarten = true;
     r.ereignisse.push({ t:"⛵ Die Expedition kehrt mit kostbaren Seekarten zurück, die nächste Fahrt wird kürzer und sicherer.", c:"good" });
+    heim = { art:"karten" };
   } else {
     p.stimmung = clamp(p.stimmung - 3, 5, 100);
     r.ereignisse.push({ t:"🌊 Von der Expedition fehlt jede Spur. Die Witwen tragen Schwarz.", c:"bad" });
     geschichte("🌊", `${p.name}s Expedition bleibt verschollen.`);
+    heim = { art:"verloren" };
+  }
+  /* Menschliche Regenten erleben die Heimkehr als eigene Szene am Hafen */
+  if(!p.ki && heim){
+    heim.farbe = p.farbe || "#6ea8dc";
+    heim.wappen = p.wappen || "🦅";
+    G._expHeim = heim;
   }
 }
 function turnierStarten(){
@@ -9410,7 +9739,13 @@ function entlassen(){
 }
 function jahrAbschliessen(){
   G._bauModus = null;
+  G._expHeim = null;
   jahresschluss(cur());
+  if(G._expHeim){ G._expStart = null; zeige("expedition"); }
+  else zeige("bilanz");
+}
+function expeditionWeiter(){
+  G._expHeim = null; G._expStart = null;
   zeige("bilanz");
 }
 function nachBilanz(){
@@ -9921,12 +10256,13 @@ function animLoop(t){
   else if(G.screen === "turnier") zeichneTjost(t);
   else if(G.screen === "kroenung") zeichneKroenung(t);
   else if(G.screen === "seegefecht") zeichneSeegefecht(t);
+  else if(G.screen === "expedition") zeichneExpedition(t);
   else if(G.screen === "intro") zeichneIntro(t);
 }
 requestAnimationFrame(animLoop);
 
 /* ---------- Update-Prüfung: neue Version auf dem Server? ---------- */
-const APP_CACHE = "kaiser-v34";
+const APP_CACHE = "kaiser-v35";
 function updatePruefen(){
   if(location.protocol === "file:" || !navigator.onLine || G._updateGemeldet) return;
   fetch("sw.js?u=" + Date.now(), { cache: "no-store" })
